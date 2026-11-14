@@ -317,3 +317,17 @@ button.link:hover { text-decoration: underline; }
 .ph-catcher { position: absolute; inset: 0; z-index: 3; cursor: crosshair; }
 .stage.is-measuring { outline: 2px dashed var(--accent); outline-offset: 2px; }
 .ph-marker { fill: none; stroke: var(--warn); stroke-width: 2; }
+/* T63 spectrum context */
+.ph-toggles { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 2px 0 6px; }
+.ph-toggle { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.ph-base { fill: none; stroke: var(--text); stroke-width: 1.5; opacity: 0.75; }
+.ph-base-x { stroke-dasharray: 5 4; }
+.ph-base-poor .ph-base { opacity: 0.35; }
+.ph-flag { fill: none; stroke: var(--warn); stroke-width: 2; }
+.ph-feature { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.8; }
+.ph-feature-hit { stroke: transparent; stroke-width: 9; }
+.ph-feature-g:hover .ph-feature { stroke: var(--text); opacity: 1; }
+.ph-context { border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; margin: 8px 0; }
+.ph-context h4 { margin: 4px 0; }
+.ph-context p { margin: 6px 0; }
+.ph-hint-mark { color: var(--warn); }
