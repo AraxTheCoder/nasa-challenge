@@ -215,9 +215,11 @@ function tipDismissed() {
   }
 }
 
-function showTip() {
-  if (!tipEnabled() || tipDismissed() || app.dataRoot) return;
+/** force: the "?" button opens it even when automatic showing is off or "Got it" was clicked. */
+function showTip({ force = false } = {}) {
+  if (app.dataRoot || (!force && (!tipEnabled() || tipDismissed()))) return;
   $("#form-tip").hidden = false;
+  $("#form-help").setAttribute("aria-expanded", "true");
   placeTip();
 }
 
@@ -243,6 +245,7 @@ function placeTip() {
 
 function hideTip({ remember = false } = {}) {
   $("#form-tip").hidden = true;
+  $("#form-help").setAttribute("aria-expanded", "false");
   if (!remember) return;
   try {
     localStorage.setItem(TIP_DISMISSED_KEY, "1");
@@ -353,6 +356,7 @@ function bindPage() {
     if (e.target.name === "ra" || e.target.name === "dec") showTip();
   });
   $("#form-tip-close").addEventListener("click", () => hideTip({ remember: true }));
+  $("#form-help").addEventListener("click", () => ($("#form-tip").hidden ? showTip({ force: true }) : hideTip()));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideTip(); });
   window.addEventListener("resize", placeTip);
   $("#field-form").addEventListener("input", (e) => {
