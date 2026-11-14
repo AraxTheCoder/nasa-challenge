@@ -83,7 +83,6 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T45 | C: Play the series like a video (core Objective): Play/Pause through all frames in the filter or one per epoch at matched wavelength, speed + loop | Mati | done | `mati/T45-play` | [tasks/T45](tasks/T45-play-series.md). "▶ Play all" / key `P`; modes: all frames in the filter, 1 per epoch at A's λ |
 | T46 | All: tests on every push (GitHub Actions): pytest + browser test (fixture mode) + fixture schema check | Mati | done | `mati/T46-ci` | [tasks/T46](tasks/T46-ci.md). `.github/workflows/tests.yml`; first run: check the Actions tab |
 | T47 | All: Live tile generator (`tilegen/`) on Google Cloud `us-east4` next to the AWS SPHEREx bucket; viewer/API/builds stay local (EU); Tiles switch local/US VM | Jonathan | done | `jonathan/T47-gcp` | From Jonathan's idea. Measure S3 throughput on the VM first |
-
 | T48 | C: Cached Allsky fallback at deep zoom so pending/failed live tiles never erase available overview imagery | Joerg | done | `joerg/T48-map-overview-fallback` | [tasks/T48](tasks/T48-map-overview-fallback.md). User approved implementation + push; investigate repeated tile errors |
 | T49 | A/C: Light curves + spectra on the fly at any position: aperture photometry on the cached SPHEREx FITS (pipeline + `/api/targets/<id>/photometry` + viewer charts); for the variable test stars RW Aur / R Dra | Mati | done | `mati/T49-photometry` | [tasks/T49](tasks/T49-photometry.md). `/api/targets/<id>/photometry`; panel under the timeline; CONTRACTS v0.10 |
 | T50 | All: `web/dev.py --host ADDR`: serve viewer + Live API on one address only (e.g. WireGuard 10.0.0.2) instead of all interfaces (`--lan`) | Joerg | done | `joerg/T50-dev-host` | [tasks/T50](tasks/T50-dev-host.md). Joerg's new host serves the team over WireGuard 10.0.0.0/24 |
@@ -731,3 +730,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   epochs stay at level 7); base map under the passes capped at order 5 (IRSA cube, no competing live renders);
   pass labels list each visit ("Apr & Oct 2025": near a pass boundary one pass holds two visits;
   `/api/pass-dates` gains `visits`, CONTRACTS v0.19); stale highlight on the pass labels fixed.
+- 2026-11-14 [Joerg] Board: removed a blank line between T47 and T48 that split the table (GitHub showed every row after T47 as plain text).
