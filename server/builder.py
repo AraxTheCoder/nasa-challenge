@@ -33,6 +33,7 @@ class Job:
     progress: dict = field(default_factory=lambda: {"step": "query", "done": None, "total": None,
                                                     "message": "queued"})
     message: str | None = None
+    refresh: bool = False
 
     def body(self) -> dict:
         b: dict = {"status": self.status, "id": self.id}
@@ -95,7 +96,7 @@ class Builder:
                 return job
             if not refresh and self.is_cached(tid):
                 return Job(tid, ra, dec, size, status="ready")
-            job = Job(tid, ra, dec, size)
+            job = Job(tid, ra, dec, size, refresh=refresh)
             self._jobs[tid] = job
         threading.Thread(target=self._run, args=(job,), daemon=True, name=f"build-{tid}").start()
         return job
@@ -142,31 +143,25 @@ class Builder:
     # -- live mode -----------------------------------------------------------------------------
 
     def _build_live(self, job: Job) -> None:
-        from pipeline.query import find_exposures  # track A, imported lazily (needs astropy/pyvo)
+        # Track A, imported lazily (needs astropy/pyvo). build_target queries IRSA itself (with a
+        # cached exposure list, T27) and raises LookupError when there is no data.
+        from pipeline.build import build_target
 
         self._set(job, "query", "searching IRSA for SPHEREx images")
-        exposures, _prov = find_exposures(job.ra_deg, job.dec_deg)
-        if not exposures:
-            raise NoData(f"no SPHEREx images cover RA {job.ra_deg} Dec {job.dec_deg}")
-
-        try:
-            from pipeline.build import build_target
-        except ImportError:
-            raise RuntimeError(
-                f"found {len(exposures)} SPHEREx images, but pipeline.build (T02-T04) is not "
-                f"available yet; run the server with --fixture meanwhile") from None
-
-        self._set(job, "download", f"building from {len(exposures)} SPHEREx images",
-                  0, len(exposures))
         kwargs = {}
+        if "refresh" in inspect.signature(build_target).parameters:
+            kwargs["refresh"] = job.refresh
         if "progress" in inspect.signature(build_target).parameters:
             kwargs["progress"] = lambda step, done=None, total=None, message="": \
                 self._set(job, step, message or step, done, total)
         # Build into a temp root so a half-finished build is never served from the cache.
         tmp_root = self.cache_root / ".building"
         tmp_root.mkdir(exist_ok=True)
-        built = Path(build_target(job.id, job.ra_deg, job.dec_deg, job.size_arcmin,
-                                  out_root=tmp_root, **kwargs))
+        try:
+            built = Path(build_target(job.id, job.ra_deg, job.dec_deg, job.size_arcmin,
+                                      out_root=tmp_root, **kwargs))
+        except LookupError as e:  # pipeline.build: no usable SPHEREx images here
+            raise NoData(str(e)) from None
 
         try:
             from detect.run import detect

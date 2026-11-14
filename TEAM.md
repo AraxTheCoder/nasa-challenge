@@ -38,9 +38,9 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
 | T01 | A: IRSA query: list all SPHEREx exposures covering an RA/Dec (SIA/TAP), with time, detector, access URL | Joerg | done | `joerg/T01-irsa-query` | `python -m pipeline.query --ra .. --dec ..`; COSMOS: 214 images, 3 epochs |
-| T02 | A: Download cutouts for one target into `data/`, with a cache so re-runs don't re-download | Jonathan | doing | `jonathan/T02-T04-build` | Needs T01 |
-| T03 | A: Align cutouts to one common WCS grid (north up) and get the wavelength at the target position per frame | Jonathan | doing | `jonathan/T02-T04-build` | Needs T02. Wavelength varies across a SPHEREx image |
-| T04 | A: Render frames to PNG/WebP and write `target.json` per CONTRACTS, validated against the schema | Jonathan | doing | `jonathan/T02-T04-build` | Needs T03. First real target = end-to-end milestone |
+| T02 | A: Download cutouts for one target into `data/`, with a cache so re-runs don't re-download | Jonathan | done | `jonathan/T02-T04-build` | Needs T01 |
+| T03 | A: Align cutouts to one common WCS grid (north up) and get the wavelength at the target position per frame | Jonathan | done | `jonathan/T02-T04-build` | Needs T02. Wavelength varies across a SPHEREx image |
+| T04 | A: Render frames to PNG/WebP and write `target.json` per CONTRACTS, validated against the schema | Jonathan | done | `jonathan/T02-T04-build` | Needs T03. First real target = end-to-end milestone |
 | T05 | A: Batch-bake 3–5 demo targets and publish them to `web/targets/` (size budget in CONTRACTS) | | open | | Needs T04 and the target list from T10 |
 | T06 | B: Mover detection v0 on the fixture: source extraction per frame, match across frames, keep what moves | Jonathan | doing | `jonathan/T06-mover-detection` | Start on `fixtures/`, switch to real data after T04 |
 | T07 | B: JPL SB Identification cross-match: known small bodies in the field per frame time → `known_objects` | | open | | Needs SPHEREx position from Horizons (-163182) as observer |
@@ -62,10 +62,13 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T23 | A: Labelling over time: labels that follow moving objects, motion summary + motion class per object, trail image, shift-and-stack | Joerg | doing | `joerg/T23-labels-over-time` | [task file](tasks/T23-labels-over-time.md). Umbrella for T19 (done) + T22; from 4 Ideas |
 | T24 | All: Pin exact dependency versions so everyone runs the same | Joerg | done | `joerg/T24-pin-deps` | Lock files at root; README "Dependencies". Python 3.12+ |
 | T25 | C: Default field in the form (Barnard's Star) + hint that RA/Dec/field of view can be changed | Mati | done | `mati/T25-form-defaults` | [tasks/T25](tasks/T25-form-defaults.md). Default = `"default": true` in `web/presets.json` |
-| T26 | A: Builds survive IRSA throttling: retry 503/timeouts with backoff, one shared download limit across concurrent builds (no frames dropped) | Jonathan | doing | `jonathan/T26-T28-speed` | Measured: IRSA answers `503 Server busy`, frames were silently dropped |
-| T27 | A: Cache the IRSA exposure list per position (disk, TTL) and drop the server's duplicate query, so FOV changes skip TAP | Jonathan | doing | `jonathan/T26-T28-speed` | TAP took 19 s for a trivial query today |
-| T28 | A: Reuse cached cutouts across FOV changes (a larger cached cutout serves a smaller FOV; minimum size bucket) | Jonathan | doing | `jonathan/T26-T28-speed` | 82% of each 4.6 MB cutout is the EPSF table, independent of FOV |
+| T26 | A: Builds survive IRSA throttling: retry 503/timeouts with backoff, one shared download limit across concurrent builds (no frames dropped) | Jonathan | done | `jonathan/T26-T28-speed` | Measured: IRSA answers `503 Server busy`, frames were silently dropped |
+| T27 | A: Cache the IRSA exposure list per position (disk, TTL) and drop the server's duplicate query, so FOV changes skip TAP | Jonathan | done | `jonathan/T26-T28-speed` | TAP took 19 s for a trivial query today |
+| T28 | A: Reuse cached cutouts across FOV changes (a larger cached cutout serves a smaller FOV; minimum size bucket) | Jonathan | done | `jonathan/T26-T28-speed` | 82% of each 4.6 MB cutout is the EPSF table, independent of FOV |
 | T29 | C: RA/Dec help as a popup bubble under the form (built, switched off for now; on for the demo) | Mati | done | `mati/T29-form-tip` | [tasks/T29](tasks/T29-form-tip.md). Off: `FORM_TIP_ENABLED` in `web/app.js`; preview `?tip=1`; switch on for T16 |
+| T30 | C: Explore mode (R1): Aladin Lite v3 in the viewer with the CDS SPHEREx HiPS (`CDS/P/SPHEREx/QR2/D1`..`D6`, all-sky, combined epochs) + Gaia/WISE overlays; click a spot → per-epoch blink via the Live API | Jonathan | doing | `jonathan/T30-explore` | Instant pan/zoom today; HiPS is not split by epoch |
+| T31 | A: Local mirror of the SPHEREx image index (1.6 M ObsCore rows: footprint, time, detector, wavelength, FITS URL) in SQLite with a HEALPix index, refreshed per data release (R4) | Jonathan | doing | `jonathan/T31-index-mirror` | TAP: 9-19 s per search today, 136 s for a COUNT(*) |
+| T32 | A: Per-epoch HiPS tiles (R2/R3): build HEALPix tiles per epoch x detector from full images for chosen regions (warm the 5 official fields first), served by `server/` as extra Aladin layers, epoch switch = blink | Jonathan | doing | `jonathan/T32-epoch-hips` | Full images cover ~12 deg2 each, far less waste than 36 cutouts per 15' |
 
 ## Decisions
 
@@ -116,6 +119,15 @@ Dated, one line each, with why.
   plain pip, `pytest server` 11 passed, `web/dev.py` serves API + viewer. Updating: README "Dependencies".
 - 2026-11-14 [Joerg] Ideas "Draw paths", "Motion classification", "Trail image" and
   "Shift-and-stack" are on the Board now: T22 (paths) and T23 (the rest).
+- 2026-11-14 [Jonathan] **REQUIREMENT: Google-Earth-style exploring.** Users pan/zoom freely over the
+  sky and blink epochs anywhere. Targets: (R1) after a pan/zoom, visible tiles in <= 0.5 s anywhere on
+  the sky; (R2) switching epoch <= 0.1 s (preloaded); (R3) per-epoch SPHEREx detail at a new spot:
+  first frames <= 10 s, complete <= 60 s, FOV change <= 2 s; (R4) image search <= 0.2 s.
+  Why/maths: a 1600x1000 px view at native 6.15"/px is 2.7 x 1.7 deg = 4.7 deg2, i.e. ~75x a 15'
+  field. Cutouts today: 166 MB per 15' field, 434 s cold (IRSA throttles to ~0.4 MB/s), so one
+  full view live would take hours: ~10^4x too slow. Pan/zoom must come from pre-tiled HiPS
+  (12-30 tiles of 512 px, ~150 KB each per view, ~5 MB/s while panning); live cutouts only for
+  the per-epoch detail. Plan: T30-T32.
 
 ## Ideas
 
@@ -243,3 +255,15 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 [Mati + Claude] Done: T29 merged. RA/Dec help is now a popup bubble under the form instead
   of a permanent line, switched OFF for now (`FORM_TIP_ENABLED` in `web/app.js`); `?tip=1` previews it.
   Gotcha for T16 (demo): switch it on before recording.
+- 2026-11-14 [Jonathan + Claude] Done: T02-T04 (`pipeline/build.py`: query → cutouts with cache →
+  align on the CONTRACTS grid + wavelength from WCS-WAVE → PNG with alpha → target.json + labels),
+  server live mode, T26-T28 speed-ups. Measured on Barnard's Star 15': cold build 434 s (IRSA
+  throttles with `503 Server busy`, now retried), FOV change 5-17 s, rebuild with new TAP query 30 s.
+  Bottleneck = cutout downloads (4.6 MB each, 82% EPSF table), not the query (9 s). Found: CDS has
+  SPHEREx HiPS per detector (`CDS/P/SPHEREx/QR2/D1`..`D6`, order 7) and IRSA a DR1 cube HiPS:
+  usable for Google-Earth-style pan/zoom (Aladin Lite), but not split by epoch. T10 WIP merged
+  (`detect/test_fields.py`): all 5 official fields have 2-4 epochs, fast movers shift 1-1.7 px.
+- 2026-11-14 [joerg + Claude] Jonathan's `pipeline.build` is in and already calls `add_labels`, so
+  `pipeline/reference/bake_target.py` is superseded (marked so). My local stopgap bakes were replaced
+  by real builds via `?refresh=1`. Still missing in builds: `pairs` (T17, open). T22 movement paths +
+  hover info are merged; the viewer draws `labels`, `known_objects` and `detections` tracks.
