@@ -248,6 +248,7 @@ Dated, one line each, with why.
 - 2026-11-14 [Mati] CONTRACTS v0.18 (T64): frames carry `collection` (SPHEREx release), target.json `source_exposures` (images known at build time), new `GET /api/targets/<id>/updates` (newer images / new release → the viewer offers Rebuild). Image searches no longer use a fixed list of four collections: `pipeline/releases.py` lists the bucket's release folders (cached a day) and adds new ones (`spherex_<rel>`, `_deep`), duplicates across releases dedupe to the newest. Why: the challenge asks for a tool that is easy to update with the latest data releases; with the fixed list a QR4 / DR2 would never have appeared.
 - 2026-11-14 [Jonathan] CONTRACTS v0.19: `visits` per pass in `/api/pass-dates`. Why: near a pass boundary a pass holds two visits half a year apart (Epsilon Indi B: Apr & Oct 2025); the map labels them separately.
 - 2026-11-14 [Jonathan] CONTRACTS v0.20 (T89): `&detector=` on `/api/target`, epoch layers `e<n>d<det>` / `e<n>c`, sky layers `spherex-live-p<n>-rgb`, live-order slices rounded to the detector. Why: the band slider did nothing for field epochs (mean of all detectors) and re-rendered identical pass tiles for each of a detector's 17 channels; a one-detector field builds in 31 s instead of ~100 s.
+- 2026-11-14 [Jonathan] CONTRACTS v0.21 (T89): `spherex-live-rgb` (false-colour map at every zoom) and IRSA's blank cube slices 50/51 served from 49/52. Why: false colour did nothing zoomed out, and the band 2.399 µm (slice 50) left the zoomed-out map black.
 
 ## Ideas
 
@@ -744,3 +745,6 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   epochs per band (auto builds only the band's detector, 31 s instead of ~100 s; another detector = another
   cached build); "false colour" switch next to the band: passes from `spherex-live-p<n>-rgb`, field epochs from
   `e<n>c` (all-detector build). `pipeline/build.py` gained `detectors=` (my T02-T04 code; [FYI Joerg]).
+- 2026-11-14 Jonathan (Claude): T89 follow-up: false colour now at every zoom (base map `spherex-live-rgb`: IRSA cube
+  one channel per detector to order 5, live tiles above); cube slices 50/51 (blank at IRSA) from 49/52; Debug says
+  "NO DATA" instead of "SHARP" when no visible tile has data.

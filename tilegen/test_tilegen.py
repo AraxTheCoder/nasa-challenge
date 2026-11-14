@@ -269,3 +269,36 @@ def test_live_tiles_one_per_detector_and_false_colour(tmp_path, monkeypatch):
     assert tuple(px) == (55, 35, 15, 255)                # R = (50+60)/2, G = (30+40)/2, B = (10+20)/2
     props = sky.get("spherex-live-p1-rgb", "properties").decode()
     assert "false colour" in props and "hips_cube_depth" not in props
+
+
+def test_blank_cube_slices_and_false_colour_map(tmp_path):
+    """T89: IRSA cube slices 50/51 are blank -> neighbours; spherex-live-rgb composes cube slices."""
+    import io
+
+    import numpy as np
+    from PIL import Image
+
+    from server.skycache import SkyCache, cube_path, with_slice
+
+    assert cube_path("Norder3/Allsky_50.png") == "Norder3/Allsky_49.png"
+    assert cube_path("Norder2/Dir0/Npix7_51.png") == "Norder2/Dir0/Npix7_52.png"
+    assert cube_path("Norder2/Dir0/Npix7_49.png") == "Norder2/Dir0/Npix7_49.png"
+    assert with_slice("Norder2/Dir0/Npix7.png", 25) == "Norder2/Dir0/Npix7_25.png"
+    assert with_slice("Norder3/Allsky_4.png", 0) == "Norder3/Allsky.png"
+
+    sky = SkyCache(tmp_path)
+    asked = []
+
+    def fake_get(survey, path, _orig=sky.get):
+        if survey != "spherex-cube":
+            return _orig(survey, path)
+        asked.append(path)
+        sl = int(path.rsplit("_", 1)[1].split(".")[0])
+        b = io.BytesIO()
+        Image.fromarray(np.full((4, 4), sl, np.uint8), "L").save(b, "PNG")
+        return b.getvalue()
+    sky.get = fake_get
+    rgb = sky.get("spherex-live-rgb", "Norder2/Dir0/Npix7.png")
+    px = np.asarray(Image.open(io.BytesIO(rgb)).convert("RGBA"))[0, 0]
+    assert tuple(px) == ((76 + 93) // 2, (42 + 59) // 2, (8 + 25) // 2, 255)
+    assert sorted(asked) == sorted(f"Norder2/Dir0/Npix7_{s}.png" for s in (8, 25, 42, 59, 76, 93))

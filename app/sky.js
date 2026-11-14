@@ -560,12 +560,14 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     const texel = TEXEL_ARCSEC_ORDER0 / 2 ** s.order;
     const screen = (st.fov * 3600) / (st.w * st.dpr);
     const atMax = s.wanted > s.maxOrder;
-    const allSharp = s.visible > 0 && s.sharp + s.empty === s.visible;
+    const allSharp = s.visible > 0 && s.sharp > 0 && s.sharp + s.empty === s.visible;
+    const noData = s.visible > 0 && s.empty === s.visible;
     const lines = [
       `${s.name}: order ${s.order} of max ${s.maxOrder}  (screen wants ${s.wanted})`,
       `texel ${texel.toFixed(1)}"  screen px ${screen.toFixed(2)}"`,
       atMax ? "MAX ZOOM: the map has no finer tiles here" : "more detail available when zooming in",
-      allSharp ? "SHARP: all visible tiles at this order loaded" : `loading: ${s.sharp}/${s.visible} sharp, ${s.blurry} blurry, ${s.empty} empty`,
+      noData ? "NO DATA: no visible tile has data here (blank band or not loaded yet)"
+        : allSharp ? "SHARP: all visible tiles at this order loaded" : `loading: ${s.sharp}/${s.visible} sharp, ${s.blurry} blurry, ${s.empty} empty`,
       `in flight ${st.loads} (${[...st.inflight].filter((j) => j.slow).length} live, ${[...st.inflight].filter((j) => j.t.prio >= PRELOAD).length} preload), `
         + `queued ${st.queue.filter((j) => j.t.prio < PRELOAD).length} visible + ${st.queue.filter((j) => j.t.prio >= PRELOAD).length} preload, errors ${st.errors}`,
     ];
@@ -573,7 +575,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(8, 8, w, h);
     lines.forEach((l, i) => {
-      ctx.fillStyle = i === 2 && atMax ? "#ff9a6c" : i === 3 && allSharp ? "#7fe38a" : "#e8eef7";
+      ctx.fillStyle = i === 2 && atMax ? "#ff9a6c" : i === 3 && noData ? "#ff6b6b" : i === 3 && allSharp ? "#7fe38a" : "#e8eef7";
       ctx.fillText(l, 14, 22 + 14 * i);
     });
     ctx.restore();
@@ -789,7 +791,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       return layer;
     },
     setSlice(i) {
-      if (!st.base || st.base.depth <= 1) return;
+      if (!st.base || st.base.depth <= 1) return;   // (false-colour map: no bands)
       st.base.slice = Math.max(0, Math.min(st.base.depth - 1, i));
       for (const l of st.overlays) if (l.depth > 1) l.slice = Math.min(l.depth - 1, st.base.slice);   // T82: pass layers
       markDirty();

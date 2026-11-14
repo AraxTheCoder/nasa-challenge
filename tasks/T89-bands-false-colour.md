@@ -29,6 +29,9 @@ while blinking. Field epoch builds get faster by fetching only what the shown ba
 - 2026-11-14: pass tile, 2nd channel of the same detector: 0.01 s (was a new 1-4 s render); false-colour tile
   first time 7.3 s (6 grey tiles side by side), then 0.04 s; switching back to any band of it is instant.
 
+- 2026-11-14: IRSA cube slices 50/51 are blank (404 for every tile; 2.399 µm left the zoomed-out map black):
+  served from 49/52. False colour also for the base map (`spherex-live-rgb`): Allsky 4.2 s first time, tiles ~1.8 s.
+
 ## Questions / needs from others
 
 ## Handoff

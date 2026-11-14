@@ -1,4 +1,8 @@
-# Contracts (v0.20)
+# Contracts (v0.21)
+
+v0.21 (T89): sky layer `spherex-live-rgb` (the whole map in false colour: IRSA cube slices 8/25/42/59/76/93
+to order 5, the live grey tiles at 6-7); `spherex-live` serves IRSA's blank cube slices 50/51 (dichroic channels)
+from their neighbours 49/52 instead of 404. Additive.
 
 v0.20 (T89): bands on the map. `GET /api/target` takes `&detector=<1-6>` (only that detector's images, id
 `…-d<n>`); epoch layers `e<n>d<det>` (one detector) and `e<n>c` (false colour); sky layers
@@ -506,6 +510,8 @@ level-2 images in the AWS bucket, `tilegen/`), `spherex-live-p<n>` (T82: the sam
 pass n's images only, orders 6-7; pass n = images from 2025-05-01 + (n-1) x 182.625 d), `spherex-live-p<n>-rgb`
 (v0.20: the same in false colour, RGBA, R = D5+D6, G = D3+D4, B = D1+D2, composed from the 6 grey tiles), `2mass`, `allwise`.
 At the live orders a requested slice is rounded down to its detector's first, `(d-1)*17` (v0.20).
+`spherex-live-rgb` (v0.21): the whole map in false colour, no bands; IRSA's blank cube slices 50/51 are
+served from slices 49/52 (v0.21).
 404 = upstream has no such tile; 503 + `Retry-After` = the local image index is still being built;
 502 = upstream or tile generator down. `spherex-live/properties` lists the passes the image index has
 images from: `x_survey_passes = 1 2 3` (v0.14).

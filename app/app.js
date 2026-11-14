@@ -525,9 +525,19 @@ function setupBand(layer) {
       : "Blinking images show this detector's whole range: SPHEREx's filter changes wavelength across each detector, so one image is not one channel. Zoomed out (IRSA cube) the map shows the exact channel.";
   };
   input.oninput = () => { explore.setBand(Number(input.value)); show(); decideSource(); };
-  colour.onchange = async () => { show(); await passes.setColour(colour.checked); decideSource(); };
+  colour.onchange = async () => {
+    show();
+    // the base map too, so false colour shows at every zoom (zoomed out: IRSA cube, one channel per detector)
+    await explore.setSurvey(colour.checked ? "spherex-live-rgb" : explore.DEFAULT_SURVEY);
+    if (!colour.checked) explore.setBand(Number(input.value));     // the grey map starts on its default band
+    await passes.setColour(colour.checked);
+    decideSource();
+  };
   show();
 }
+
+/** T89: the base map in use (grey with the band, or false colour). */
+const currentSurvey = () => ($("#band-colour")?.checked ? "spherex-live-rgb" : explore.DEFAULT_SURVEY);
 
 async function startExplore() {
   const f = readForm();
@@ -578,7 +588,8 @@ async function setupTilesSwitch() {
       const now = await res.json();
       if (!res.ok) throw new Error(now.error ?? `HTTP ${res.status}`);
       mode.value = now.tiles;
-      setupBand(await explore.setSurvey(explore.DEFAULT_SURVEY));   // fresh layer: re-asks failed tiles
+      const layer = await explore.setSurvey(currentSurvey());      // fresh layer: re-asks failed tiles
+      if (currentSurvey() === explore.DEFAULT_SURVEY) setupBand(layer);
     } catch (err) {
       showMessage(`Could not switch tiles: ${err.message}`, "warn");
     }

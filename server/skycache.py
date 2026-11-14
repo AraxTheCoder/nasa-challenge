@@ -28,6 +28,8 @@ SURVEYS = {
     **{f"spherex-live-p{n}": [] for n in range(1, 7)},
     # T89: the same in false colour (R = D5+D6, G = D3+D4, B = D1+D2), composed from the 6 grey tiles
     **{f"spherex-live-p{n}-rgb": [] for n in range(1, 7)},
+    # T89: the whole map in false colour: one IRSA cube slice per detector to order 5, live tiles at 6-7
+    "spherex-live-rgb": [],
     "2mass": ["https://irsa.ipac.caltech.edu/data/hips/CDS/2MASS/Color"],
     "allwise": ["https://irsa.ipac.caltech.edu/data/hips/CDS/AllWISE/RGB-W4-W2-W1"],
 }
@@ -35,6 +37,28 @@ TILE_RE = re.compile(r"^Norder(\d+)/Dir(\d+)/Npix(\d+)(_\d+)?\.(png|jpg|jpeg)$")
 ALLSKY_RE = re.compile(r"^Norder3/Allsky(_\d+)?\.(png|jpg|jpeg)$")
 MISSING = b"MISSING"
 TIMEOUT_S = 30
+
+
+# T89: IRSA cube slices 50 and 51 (the dichroic channels, band 3 ch 17 / band 4 ch 1) are blank: the
+# neighbouring channel stands in. One middle channel per detector for the false-colour map.
+BLANK_CUBE = {50: 49, 51: 52}
+CUBE_COLOUR_SLICES = (8, 25, 42, 59, 76, 93)
+
+
+def cube_path(path: str) -> str:
+    """IRSA cube tile / Allsky path with a blank slice replaced by its neighbour."""
+    import re as _re
+    m = _re.match(r"^(.*_)(\d+)(\.\w+)$", path)
+    if not m or int(m.group(2)) not in BLANK_CUBE:
+        return path
+    return f"{m.group(1)}{BLANK_CUBE[int(m.group(2))]}{m.group(3)}"
+
+
+def with_slice(path: str, sl: int) -> str:
+    """Tile or Allsky path with its slice suffix set to sl (0 = none)."""
+    import re as _re
+    m = _re.match(r"^(.*?)(_\d+)?(\.\w+)$", path)
+    return f"{m.group(1)}{f'_{sl}' if sl else ''}{m.group(3)}"
 
 
 def live_path(path: str) -> str:
@@ -122,6 +146,8 @@ class SkyCache:
         spherex-live-p<n> (T82): the same, but orders <= 5 are empty (no per-pass cube)."""
         from tilegen.render import LIVE_ORDERS, survey_passes
 
+        if survey == "spherex-live-rgb":            # T89: false-colour map
+            return self._live_rgb_route(path)
         if survey != "spherex-live":
             rgb = survey.endswith("-rgb")
             n = survey.removesuffix("-rgb").rsplit("-p", 1)[1]
@@ -157,11 +183,39 @@ class SkyCache:
                 return ("\n".join(lines) + "\n").encode()
             return props
         if ALLSKY_RE.match(path):
-            return lambda: self.get("spherex-cube", path)
+            return lambda: self.get("spherex-cube", cube_path(path))
         m = TILE_RE.match(path)
         if m and int(m.group(1)) not in LIVE_ORDERS:
-            return lambda: self.get("spherex-cube", path)
+            return lambda: self.get("spherex-cube", cube_path(path))
         return None                                   # live order: cached on disk like any tile
+
+    def _live_rgb_route(self, path: str):
+        """T89 spherex-live-rgb: properties of the live map without bands; orders <= 5 and the Allsky composed
+        from one IRSA cube slice per detector; orders 6-7 from the live grey tiles (cached on disk like any)."""
+        from tilegen.render import LIVE_ORDERS
+
+        if path == "properties":
+            def props():
+                live = (self._live_route("properties")() or b"").decode("utf-8", "replace").splitlines()
+                drop = ("obs_title", "creator_did", "hips_cube", "data_cube", "dataproduct_type", "custom_tile_format")
+                keep = [l for l in live if not l.startswith(drop)]
+                keep += ["obs_title            = SPHEREx false colour (R = D5+D6, G = D3+D4, B = D1+D2): IRSA cube to order 5, live tiles above",
+                         "creator_did          = ivo://spherex-blink/live-rgb"]
+                return ("\n".join(keep) + "\n").encode()
+            return props
+        m = TILE_RE.match(path)
+        if ALLSKY_RE.match(path) or (m and int(m.group(1)) not in LIVE_ORDERS):
+            def cube():
+                f = self.root / "spherex-live-rgb" / path
+                if f.exists():
+                    data = f.read_bytes()
+                    return None if data == MISSING else data
+                data = self._compose([("spherex-cube", with_slice(path, s)) for s in CUBE_COLOUR_SLICES])
+                f.parent.mkdir(parents=True, exist_ok=True)
+                f.write_bytes(data if data is not None else MISSING)
+                return data
+            return cube
+        return None
 
     def _fetch(self, survey: str, path: str) -> bytes | None:
         if survey.endswith("-rgb"):                   # T89: false colour from the 6 per-detector tiles
@@ -202,6 +256,8 @@ class SkyCache:
         m = TILE_RE.match(path)
         if not m:
             return
+        if survey == "spherex-live-rgb":             # T89: composed on demand (6 sources each): no prefetch
+            return
         if survey.startswith("spherex-live-p"):     # T82: pass layers: nothing below the live orders
             if not survey.endswith("-rgb"):
                 self.prefetch_passes(survey, live_path(path))
@@ -231,25 +287,32 @@ class SkyCache:
                 self._prefetch.submit(self._quiet_get, survey, sub)
 
     def _compose_rgb(self, grey_survey: str, path: str) -> bytes | None:
-        """RGBA PNG: R = mean(D5, D6), G = mean(D3, D4), B = mean(D1, D2) of the grey live tiles."""
+        """RGBA PNG of the 6 per-detector grey live tiles (see _compose)."""
+        m = TILE_RE.match(path)
+        base = f"Norder{m.group(1)}/Dir{m.group(2)}/Npix{m.group(3)}"
+        return self._compose([(grey_survey, f"{base}{f'_{(d - 1) * 17}' if d > 1 else ''}.png") for d in range(1, 7)])
+
+    def _compose(self, sources: list[tuple[str, str]]) -> bytes | None:
+        """T89: RGBA PNG from 6 grey images, one per detector (D1 ... D6): R = mean(D5, D6), G = mean(D3, D4),
+        B = mean(D1, D2), each over the pixels it covers; alpha = covered by any (grey > 0 without alpha)."""
         import io
 
         import numpy as np
         from PIL import Image
 
-        m = TILE_RE.match(path)
-        base = f"Norder{m.group(1)}/Dir{m.group(2)}/Npix{m.group(3)}"
-        paths = [f"{base}{f'_{(d - 1) * 17}' if d > 1 else ''}.png" for d in range(1, 7)]
-        tiles = list(self._rgb.map(lambda p: self.get(grey_survey, p), paths))      # rendered side by side
+        tiles = list(self._rgb.map(lambda sp: self.get(*sp), sources))             # fetched side by side
         if not any(tiles):
             return None
+        shape = next(np.asarray(Image.open(io.BytesIO(t))).shape[:2] for t in tiles if t)
         grey, alpha = [], []
         for t in tiles:
             if t is None:
-                grey.append(np.zeros((512, 512), np.float32)); alpha.append(np.zeros((512, 512), bool))
+                grey.append(np.zeros(shape, np.float32)); alpha.append(np.zeros(shape, bool))
                 continue
-            a = np.asarray(Image.open(io.BytesIO(t)).convert("LA"), np.float32)
-            grey.append(a[..., 0]); alpha.append(a[..., 1] > 0)
+            im = Image.open(io.BytesIO(t))
+            has_alpha = im.mode in ("LA", "RGBA", "PA") or "transparency" in im.info
+            a = np.asarray(im.convert("LA"), np.float32)
+            grey.append(a[..., 0]); alpha.append(a[..., 1] > 0 if has_alpha else a[..., 0] > 0)
         chans = []
         for pair in ((5, 6), (3, 4), (1, 2)):
             acc = sum(np.where(alpha[d - 1], grey[d - 1], 0) for d in pair)

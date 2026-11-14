@@ -9,6 +9,8 @@ export const SURVEYS = [
   // T42: IRSA cube up to order 5, deeper zoom = live tiles from the AWS level-2 images (our server)
   { id: "spherex-live", label: "SPHEREx · 102 bands · live deep zoom",
     urls: [], fallback: ["https://irsa.ipac.caltech.edu/data/hips/SPHEREx/spherex_allsky_cube"] },
+  // T89: the same map in false colour (R = D5+D6, G = D3+D4, B = D1+D2), only through our Live API
+  { id: "spherex-live-rgb", label: "SPHEREx · false colour · live deep zoom", urls: [] },
 ];
 export const DEFAULT_SURVEY = "spherex-live";
 
