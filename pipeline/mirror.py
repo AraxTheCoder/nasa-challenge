@@ -28,13 +28,18 @@ from pathlib import Path
 
 import numpy as np
 
-from .query import DEFAULT_COLLECTIONS, IRSA_ROOT, TAP_URL, Exposure, assign_epochs
+from .query import IRSA_ROOT, TAP_URL, Exposure, assign_epochs
 
 MIRROR = Path("data/mirror")
-COLS = "'" + "', '".join(DEFAULT_COLLECTIONS) + "'"
 FOOTPRINT_RADIUS_DEG = 1.74
-JOBS = {f"obscore_d{d}": f"""SELECT obs_id, obs_collection, t_min, t_max, t_exptime, em_min, em_max,
-        s_ra, s_dec FROM spherex.obscore WHERE obs_collection IN ({COLS})
+
+
+def jobs() -> dict[str, str]:
+    """ObsCore per detector, for every release in use, new ones included (T64: pipeline.releases)."""
+    from .releases import collections
+    cols = "'" + "', '".join(collections()) + "'"
+    return {f"obscore_d{d}": f"""SELECT obs_id, obs_collection, t_min, t_max, t_exptime, em_min, em_max,
+        s_ra, s_dec FROM spherex.obscore WHERE obs_collection IN ({cols})
         AND dataproduct_type = 'image' AND energy_bandpassname = 'SPHEREx-D{d}'""" for d in range(1, 7)}
 # A sample of FITS paths (one per week folder is enough) to learn the processing version per week.
 # One FITS path per week folder (first exposure of each), so most paths can be derived offline.
@@ -111,9 +116,9 @@ def harvest(root: Path = MIRROR) -> None:
     from concurrent.futures import ThreadPoolExecutor
 
     root.mkdir(parents=True, exist_ok=True)
-    jobs = dict(JOBS, uri_sample=URI_SAMPLE, uri_weeks=URI_WEEKS)
-    with ThreadPoolExecutor(len(jobs)) as pool:
-        futs = {pool.submit(run_async, q, root / f"{name}.csv"): name for name, q in jobs.items()}
+    jobs_ = dict(jobs(), uri_sample=URI_SAMPLE, uri_weeks=URI_WEEKS)
+    with ThreadPoolExecutor(len(jobs_)) as pool:
+        futs = {pool.submit(run_async, q, root / f"{name}.csv"): name for name, q in jobs_.items()}
         failed = []
         for f, name in futs.items():
             try:
@@ -342,7 +347,8 @@ def find_exposures_local(ra_deg: float, dec_deg: float, index: Index | None = No
         wave_max_um=round(float(d["em_max"][k]) * 1e6, 4), epoch=int(epochs[i]),
         fits_url=url or resolved.get(did, ""), publisher_did=did)
         for i, k, coll, obs, det, did, url in rows]
-    exposures = [e for e in exposures if e.fits_url]
+    from .releases import dedupe
+    exposures = dedupe([e for e in exposures if e.fits_url])   # T64: one per exposure across releases
     exposures.sort(key=lambda e: (e.mjd_mid, e.detector))
     harvested = min((p["retrieved_utc"] for p in index.provenance), default="unknown")
     prov = {"service": "local mirror of IRSA SPHEREx ObsCore (pipeline.mirror)",

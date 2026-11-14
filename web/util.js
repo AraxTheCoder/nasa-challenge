@@ -38,6 +38,23 @@ export function fmtElapsed(ms) {
 }
 
 /** Only http(s) links may become hrefs (target.json is data, not trusted markup). */
+/** T64: SPHEREx release of a collection: "spherex_qr3_deep" -> "QR3 deep", "spherex_dr1" -> "DR1". */
+export function releaseName(collection) {
+  if (!collection) return null;
+  const [rel, ...rest] = String(collection).replace(/^spherex_/, "").split("_");
+  return [rel.toUpperCase(), ...rest].join(" ");
+}
+
+/** Release of a frame: its collection, or (fields built before T64) the release folder in its source_url. */
+export function frameRelease(f) {
+  if (f?.collection) return releaseName(f.collection);
+  const m = /\/(dr\d+|qr\d*)\/level2\//.exec(f?.source_url ?? "");
+  return m ? m[1].toUpperCase() : null;
+}
+
+/** "DR1 + QR3" for a list of frames (deep or not merged), "" if no frame tells. */
+export const releasesOf = (frames) => [...new Set(frames.map((f) => frameRelease(f)?.split(" ")[0]).filter(Boolean))].sort().join(" + ");
+
 export const safeUrl = (u) => (typeof u === "string" && /^https?:\/\//i.test(u) ? u : null);
 
 /** True when keyboard focus is somewhere the user types text. */

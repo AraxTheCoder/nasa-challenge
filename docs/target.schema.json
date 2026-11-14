@@ -144,6 +144,10 @@
               "null"
             ]
           },
+          "collection": {
+            "type": "string",
+            "description": "v0.18 (T64): IRSA collection = SPHEREx release, e.g. spherex_dr1, spherex_qr3_deep"
+          },
           "bandwidth_um": {
             "type": "number",
             "exclusiveMinimum": 0
@@ -282,6 +286,18 @@
             "minimum": 0
           }
         }
+      }
+    },
+    "source_exposures": {
+      "type": "object",
+      "description": "v0.18 (T64): the SPHEREx exposures covering the centre when the field was built (the frames are a selection)",
+      "required": ["count"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 0 },
+        "latest_mjd": { "type": ["number", "null"] },
+        "latest_utc": { "type": ["string", "null"] },
+        "collections": { "type": "array", "items": { "type": "string" } },
+        "checked_utc": { "type": ["string", "null"] }
       }
     },
     "labels_requested": {

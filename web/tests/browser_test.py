@@ -36,6 +36,7 @@ for i, (fid, ep, mjd, det, lam) in enumerate(_spec):
 for f in _frames:  # real-looking times from MJD
     from datetime import datetime, timedelta, timezone
     f["time_utc"] = (datetime(1858, 11, 17, tzinfo=timezone.utc) + timedelta(days=f["mjd"])).strftime("%Y-%m-%dT%H:%M:%SZ")
+    f["collection"] = "spherex_qr3" if f["epoch"] == 3 else "spherex_dr1"   # T64: release per frame (made up here)
 _t = dict(_fixture, id="multi-epoch", name="Synthetic multi-epoch test field (NOT SPHEREx data)", schema_version="0.2",
           frames=_frames, labels=[],
           detections=[
@@ -347,6 +348,8 @@ try:
         check(z.locator(".tl-frame.is-a").get_attribute("data-frame") == "f001"
               and z.locator(".tl-frame.is-b").get_attribute("data-frame") == "f007", "timeline marks A and B")
         check("wavelength-matched" in z.text_content("#frame-info"), "frame info says A/B are wavelength-matched")
+        check("SPHEREx DR1 + QR3" in z.text_content("#target-meta") and "DR1 (spherex_dr1)" in z.text_content("#frame-info")
+              and z.is_hidden("#target-updates"), f"T64: releases in the field line and the frame info ({z.text_content('#target-meta')})")
         check(z.is_visible("#pair-select") and "f001 ↔ f007" in z.eval_on_selector("#pair-select", "s => s.options[s.selectedIndex].text"),
               "pair picker shows the current pair")
         z.fill("#lam-max", "1.5"); z.press("#lam-max", "Enter"); z.locator("#lam-max").blur()

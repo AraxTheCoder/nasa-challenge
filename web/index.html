@@ -134,6 +134,9 @@
           <div>
             <h2 id="target-name"></h2>
             <p id="target-meta" class="muted"></p>
+            <!-- T64: newer SPHEREx data since this field was built (GET /api/targets/<id>/updates) -->
+            <p id="target-updates" class="target-updates small" hidden><span id="target-updates-text"></span>
+              <button id="target-updates-rebuild" type="button" class="link" hidden>Rebuild now</button></p>
             <p id="objects-summary" class="objects-summary"></p>
           </div>
           <div class="target-actions">

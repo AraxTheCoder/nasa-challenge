@@ -415,3 +415,7 @@ body.map-only #ph-measure { display: none !important; }
 .ol-sw-env { width: 16px; height: 10px; border-radius: 2px; background: #8b93a7; opacity: 0.35; }
 .ol-item { cursor: pointer; border-radius: 4px; }
 .ol-item.is-selected { background: var(--panel-2); box-shadow: inset 3px 0 0 #3987e5; }
+
+/* ---------- T64: newer SPHEREx data for the shown field ---------- */
+.target-updates { margin: 4px 0 0; padding: 4px 8px; border-left: 3px solid var(--warn); color: var(--text); }
+.target-updates button { margin-left: 6px; }
