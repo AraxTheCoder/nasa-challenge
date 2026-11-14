@@ -53,12 +53,18 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T14 | C: Deploy: static viewer (e.g. GitHub Pages) + Live API on a host that runs Python, viewer pointed at it (contracts v0.3) | | open | | Needs T11, T18, T20. Reworded 2026-11-14 for live data (was: pre-baked targets, no live API calls) |
 | T15 | C: Submission text, data credits and AI-use disclosure | | open | | Needs official text in `docs/CHALLENGE.md` |
 | T16 | C: Demo video and slides | | open | | After feature freeze |
-| T17 | A: Compute wavelength-matched `pairs` across epochs (+ `bandwidth_um`) in `target.json` (contracts v0.2) | Joerg | open | | Part of T03/T04 output. Rule in CONTRACTS "Pair" |
+| T17 | A: Compute wavelength-matched `pairs` across epochs (+ `bandwidth_um`) in `target.json` (contracts v0.2) | | open | | Handed over by Joerg: best done inside T03/T04 (Jonathan). Working code: `pipeline/reference/align_render.py` |
 | T18 | C: Live API service: `GET /api/target?ra=&dec=&size=` builds (pipeline + detect) or serves from cache, progress while building, CORS (contracts v0.3) | Jonathan | done | `jonathan/T18-live-api` | `python -m server [--fixture]`, see `server/README.md`. Live mode works once `pipeline.build` (T02–T04) exists; until then `--fixture` |
 | T19 | A: Labels on the images: catalogue names/positions (SIMBAD, Gaia DR3 with proper motion) into `target.json` | Joerg | done | `joerg/T19-labels` | [task file](tasks/T19-labels.md). `pipeline/labels.py`; viewer side is T13 |
 | T20 | C: Viewer ↔ Live API: RA/Dec/size input, `?ra=&dec=&size=` in the page URL, request + poll with progress, load from `target_url`, quick picks for the official test fields (contracts v0.3) | Mati | done | `mati/T20-live-api-client` | [tasks/T20](tasks/T20-live-api-client.md). Run: `web/README.md` (API :8000, viewer :8080). Test fields in `web/presets.json` |
 | T21 | C: Everyone can run the viewer locally: one-command launcher (API + viewer), README run steps for Linux/macOS/Windows | Mati | done | `mati/T21-run-kit` | [tasks/T21](tasks/T21-run-kit.md). `python web/dev.py`, setup in README "How to run" |
 | T22 | C: Movement paths in the viewer: line + tick per frame, early→late colour, current position + name, labelled exaggerated arrow for slow movers | Joerg | doing | `joerg/T22-movement-paths` | [task file](tasks/T22-movement-paths.md). From the "Draw paths" idea |
+| T23 | A: Labelling over time: labels that follow moving objects, motion summary + motion class per object, trail image, shift-and-stack | Joerg | doing | `joerg/T23-labels-over-time` | [task file](tasks/T23-labels-over-time.md). Umbrella for T19 (done) + T22; from 4 Ideas |
+| T24 | All: Pin exact dependency versions so everyone runs the same | Joerg | done | `joerg/T24-pin-deps` | Lock files at root; README "Dependencies". Python 3.12+ |
+| T25 | C: Default field in the form (Barnard's Star) + hint that RA/Dec/field of view can be changed | Mati | doing | `mati/T25-form-defaults` | [tasks/T25](tasks/T25-form-defaults.md) |
+| T26 | A: Builds survive IRSA throttling: retry 503/timeouts with backoff, one shared download limit across concurrent builds (no frames dropped) | Jonathan | doing | `jonathan/T26-T28-speed` | Measured: IRSA answers `503 Server busy`, frames were silently dropped |
+| T27 | A: Cache the IRSA exposure list per position (disk, TTL) and drop the server's duplicate query, so FOV changes skip TAP | Jonathan | doing | `jonathan/T26-T28-speed` | TAP took 19 s for a trivial query today |
+| T28 | A: Reuse cached cutouts across FOV changes (a larger cached cutout serves a smaller FOV; minimum size bucket) | Jonathan | doing | `jonathan/T26-T28-speed` | 82% of each 4.6 MB cutout is the EPSF table, independent of FOV |
 
 ## Decisions
 
@@ -103,6 +109,12 @@ Dated, one line each, with why.
   stars, position per frame with proper motion), written by `pipeline.labels`. `schema_version`
   stays "0.2" so existing readers keep working. Why: official targets are fast-moving stars;
   labels that follow them make motion visible. Details: tasks/T19-labels.md.
+- 2026-11-14 [Joerg] All Python dependencies pinned exactly (`==`); install from `requirements.lock`
+  (app) or `requirements-dev.lock` (tests). Minimum Python is now **3.12** (was 3.11). Why: same
+  versions for everyone; numpy 2.5 needs 3.12. Checked: fresh 3.14 venv installs from the lock with
+  plain pip, `pytest server` 11 passed, `web/dev.py` serves API + viewer. Updating: README "Dependencies".
+- 2026-11-14 [Joerg] Ideas "Draw paths", "Motion classification", "Trail image" and
+  "Shift-and-stack" are on the Board now: T22 (paths) and T23 (the rest).
 
 ## Ideas
 
@@ -147,6 +159,14 @@ Things waiting on a human.
   overlay, spectra, flag display. Resources tab and judging criteria still missing.
 - 2026-11-14 [Joerg → Mati] `labels` is in CONTRACTS v0.4 for T13 (overlay). Drawing suggestion
   and a working reference are in tasks/T19-labels.md, "Questions / needs from others".
+- 2026-11-14 [Joerg → Jonathan] Since you build T02-T04: (1) T17 (matched pairs + `bandwidth_um`)
+  is yours if you want it, it falls out of T03/T04; I released it. (2) Working exploration code for
+  cutouts, alignment, flags, wavelength/bandwidth, alpha PNGs and pairs is in `pipeline/reference/`
+  (README there). (3) After `target.json` is written, call `pipeline.labels.add_labels(target)`
+  (T19). (4) CLAUDE.md asks for a task file per task: T02-T04, T06, T10 don't have one yet.
+- 2026-11-14 [Joerg → Mati] `web/dev.py` line 145 still says `pip install -r server/requirements.txt`.
+  That still works (direct deps are pinned), but `requirements.lock` is now the documented install.
+  Your file, so I left it.
 
 ## Log
 
@@ -208,3 +228,6 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   room. The viewer now looks for the API on port 8000 of the page's host. Gotchas: plain
   `python -m http.server` shares the whole repo with your network, use `--bind 127.0.0.1`; `pytest`/
   `httpx` (server tests) are not in any requirements file (question for Jonathan in tasks/T21).
+- 2026-11-14 [Mati + Claude] Fix merged: blinking no longer scrolls the page down to the frame table
+  on narrow screens (Mati's report); arrow keys step after clicking A/B/Blink. Branch
+  `mati/T11-fix-blink-scroll`, details in tasks/T11. Merges cleanly with T22.
