@@ -7,7 +7,7 @@
 // is served (python3 -m http.server, then open /web/).
 
 const DATA_ROOTS = ["targets/", "../fixtures/targets/"];
-const SCHEMA_VERSION = "0.1";
+const SCHEMA_VERSIONS = ["0.1", "0.2"]; // target.json versions this viewer understands
 
 const state = {
   root: null,
@@ -78,8 +78,8 @@ function checkTarget(t, id) {
     throw new Error(`target "${id}" has no frames`);
   }
   const warnings = [];
-  if (t.schema_version !== SCHEMA_VERSION) {
-    warnings.push(`schema_version is ${JSON.stringify(t.schema_version)}, this viewer expects "${SCHEMA_VERSION}".`);
+  if (!SCHEMA_VERSIONS.includes(t.schema_version)) {
+    warnings.push(`schema_version is ${JSON.stringify(t.schema_version)}, this viewer knows ${SCHEMA_VERSIONS.join(", ")}.`);
   }
   if (t.id !== id) warnings.push(`target.json id "${t.id}" differs from its folder "${id}".`);
   if (typeof t.synthetic !== "boolean") warnings.push("target.json has no synthetic flag; treating it as synthetic.");
