@@ -1,4 +1,7 @@
-"""T42: live deep-zoom SPHEREx tiles (HiPS orders 6-7) computed on demand from level-2 images.
+"""tilegen (T42/T47): live deep-zoom SPHEREx tiles (HiPS orders 6-7) from level-2 images.
+
+Subcomponent: runs inside the Live API (local mode) or as its own service next to the AWS bucket
+(`python -m tilegen`, remote mode), see tilegen/README.md. Depends on pipeline.s3 + pipeline.mirror.
 
 The all-sky maps stop at order 5 (IRSA cube, 12.9"/px). Zooming further anywhere on the sky, the
 map asks for order 6 (6.4"/px, SPHEREx's native 6.15") and 7 (3.2"/px) tiles of the layer
@@ -11,19 +14,22 @@ map asks for order 6 (6.4"/px, SPHEREx's native 6.15") and 7 (3.2"/px) tiles of 
      centres, background-subtracted and divided by the noise of their chunk (so tiles and images
      match in brightness), averaged and asinh-stretched to 8 bit; alpha 0 where no image has data.
 
-Tile pixel (row, col) <-> HEALPix NESTED sub-index: row -> even bits, col -> odd bits (server/hips.py).
+Tile pixel (row, col) <-> HEALPix NESTED sub-index: row -> even bits, col -> odd bits (same as server/hips.py).
 """
 from __future__ import annotations
 
 import io
 import math
+import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
 LIVE_ORDERS = (6, 7)
-IMAGES_PER_TILE = 1           # S3 was down to ~0.1 MB/s per connection on 2026-11-14 afternoon
+# 1 image per tile when S3 is slow (from Europe: ~0.1 MB/s per connection on 2026-11-14), more
+# next to the bucket (the Google Cloud VM sets TILEGEN_IMAGES=3).
+IMAGES_PER_TILE = int(os.environ.get("TILEGEN_IMAGES", "1"))
 SHARE_ORDER = 5               # tiles inside one order-5 cell use the same images (shared row chunks)
 MAX_FILL = 3                  # more images, only while the tile still has holes (image edge, bad pixels)
 FILL_UNTIL = 0.995            # stop once this fraction of the tile has data
@@ -46,8 +52,19 @@ def _mirror():
         return _index
 
 
+_XY = None
+
+
 def _xy_table():
-    from .hips import _XY
+    """Tile pixel -> NESTED sub-index offset: row -> even bits, col -> odd bits."""
+    global _XY
+    if _XY is None:
+        rows, cols = np.mgrid[0:TILE, 0:TILE].astype(np.int64)
+        z = np.zeros_like(rows)
+        for b in range(9):
+            z |= ((rows >> b) & 1) << (2 * b)
+            z |= ((cols >> b) & 1) << (2 * b + 1)
+        _XY = z
     return _XY
 
 

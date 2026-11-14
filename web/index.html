@@ -69,6 +69,9 @@
       <label title="Names of catalogued stars and objects in the field (SIMBAD, Gaia DR3). Asked only when switched on.">
         <input id="labels-toggle" type="checkbox"> Labels <span id="labels-note" class="muted small"></span></label>
       <span class="spacer"></span>
+      <label id="tiles-box" class="muted small" hidden
+             title="Where the live deep-zoom tiles are computed: here, or on the Google Cloud VM next to the AWS SPHEREx bucket (much faster downloads)">Tiles
+        <select id="tiles-mode"><option value="local">local</option><option value="remote">US VM</option></select></label>
       <label class="muted small" title="Debug: tile outlines (green sharp, yellow still blurry, red no tile), zoom level and loading state">
         <input id="sky-debug" type="checkbox"> Debug</label>
       <span id="explore-pos" class="muted small"></span>

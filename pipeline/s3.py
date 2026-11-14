@@ -174,6 +174,8 @@ def fetch_cutout(fits_url: str, ra: float, dec: float, size_deg: float, dest: Pa
 
 # -- T42: whole-image access with cached headers and row chunks (for live map tiles) -------------
 
+import threading
+
 CHUNK_ROWS = 128
 CHUNK_ROOT = Path("data/raw/s3chunks")
 
@@ -219,7 +221,7 @@ class S3Image:
             meta = {"himg": himg.tostring(), "data0": data0, "off_flags": off_flags,
                     "hflags": hflags.tostring(), "sflags": sflags}
             self.dir.mkdir(parents=True, exist_ok=True)
-            tmp = meta_f.with_suffix(".part")
+            tmp = meta_f.with_name(f"meta.{threading.get_ident()}.part")
             tmp.write_text(json.dumps(meta), encoding="utf-8")
             tmp.replace(meta_f)
         self.himg = fits.Header.fromstring(meta["himg"])
@@ -235,8 +237,20 @@ class S3Image:
             im = cls._mem[fits_url] = cls(fits_url)
         return im
 
+    _locks: dict = {}
+    _locks_guard = threading.Lock()
+
     def chunk(self, i: int):
-        """(image rows, bad-pixel mask, median, robust sigma) of chunk i (rows i*CHUNK_ROWS...)."""
+        """(image rows, bad-pixel mask, median, robust sigma) of chunk i (rows i*CHUNK_ROWS...).
+
+        Single-flight: tiles asking for the same chunk at once wait for one download."""
+        key = f"{self.dir}/{i}"
+        with S3Image._locks_guard:
+            lk = S3Image._locks.setdefault(key, threading.Lock())
+        with lk:
+            return self._chunk(i)
+
+    def _chunk(self, i: int):
         f = self.dir / f"c{i:02d}.npz"
         if f.exists():
             z = np.load(f)
@@ -251,7 +265,7 @@ class S3Image:
         good = img[~bad]
         med = float(np.median(good)) if good.size else 0.0
         sig = float(1.4826 * np.median(np.abs(good - med))) if good.size else 1.0
-        tmp = f.with_suffix(".part.npz")
+        tmp = f.with_name(f"{f.stem}.{threading.get_ident()}.part.npz")
         np.savez(tmp, img=img, bad=bad, med=med, sig=max(sig, 1e-6))
         tmp.replace(f)
         return img, bad, med, max(sig, 1e-6)
