@@ -163,3 +163,20 @@ def test_epoch_tiles_prerendered(client):
     n = hips.tiles_touching(t, 7)[0]
     client.get(f"/api/hips/{body['id']}/e1/Norder7/Dir{(n // 10000) * 10000}/Npix{n}.png")
     assert hips._tile_cached.cache_info().hits > before
+
+
+def test_live_layer_routes_low_orders_to_cube(tmp_path, monkeypatch):
+    from server.skycache import SkyCache
+    from server import livetiles
+
+    c = SkyCache(tmp_path)
+    seen = []
+    real_fetch = c._fetch
+    monkeypatch.setattr(c, "_fetch", lambda s, p: real_fetch(s, p) if s == "spherex-live" else (
+        seen.append((s, p)) or (b"hips_order = 5\nhips_cube_depth = 102\n" if p == "properties" else b"\x89PNG")))
+    monkeypatch.setattr(livetiles, "render", lambda sl, o, n: seen.append(("live", sl, o, n)) or b"\x89PNGlive")
+    assert b"hips_order           = 7" in c.get("spherex-live", "properties")
+    assert c.get("spherex-live", "Norder5/Dir0/Npix12_20.png") == b"\x89PNG"
+    assert c.get("spherex-live", "Norder3/Allsky_20.png") == b"\x89PNG"
+    assert c.get("spherex-live", "Norder7/Dir0/Npix123_20.png") == b"\x89PNGlive"
+    assert ("live", 20, 7, 123) in seen and ("spherex-cube", "Norder5/Dir0/Npix12_20.png") in seen
