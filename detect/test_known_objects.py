@@ -92,7 +92,7 @@ def test_find_known_objects_end_to_end():
     assert o["source"] == "jpl-sbident" and o["synthetic"] is False
     assert [p["frame_id"] for p in o["positions"]] == ["f0", "f1"]
     grid = Grid(TARGET)
-    x, y = grid.to_xy(323.80, -13.90)
+    x, y = (float(v) for v in grid.to_xy(323.80, -13.90))
     assert o["positions"][0]["x"] == pytest.approx(x, abs=0.01) and o["positions"][0]["y"] == pytest.approx(y, abs=0.01)
     assert o["positions"][1]["x"] > o["positions"][0]["x"]  # moving west = to the right (east left)
     # one state-vector call for both visits, one candidate search per visit, the vmag limit passed on

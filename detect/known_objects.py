@@ -223,7 +223,7 @@ def find_known_objects(target: dict, jpl: Jpl | None = None, vmag_lim: float = D
             return None
         pos = []
         for f, (ra, dec) in zip(fs, radec):
-            x, y = grid.to_xy(ra, dec)
+            x, y = (float(v) for v in grid.to_xy(ra, dec))  # Grid works on arrays too (T38): plain floats here
             if grid.contains(x, y):
                 pos.append({"frame_id": f["id"], "ra_deg": round(ra, 6), "dec_deg": round(dec, 6),
                             "x": round(x, 2), "y": round(y, 2)})
