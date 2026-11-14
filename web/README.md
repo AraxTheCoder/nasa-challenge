@@ -11,6 +11,7 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `util.js` | DOM and formatting helpers |
 | `presets.json` | the five official test fields (SIMBAD positions moved to epoch 2026.0, with query + timestamp) |
 | `dev.py` | one-command launcher: Live API + viewer, opens the browser (`python web/dev.py --help`) |
+| `warm.py` | pre-builds the five test fields in a Live API cache before a demo (`python web/warm.py --help`) |
 | `tests/browser_test.py` | end-to-end browser test against `python -m server --fixture` |
 
 ## Run locally
