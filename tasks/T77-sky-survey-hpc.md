@@ -1,6 +1,6 @@
 # T77: Sky survey on the HPC (later)
 
-- **Owner:** (open)  ·  **Status:** open
+- **Owner:** Joerg  ·  **Status:** done (merged into T74/T75)
 - **Branch:** -
 - **Depends on / feeds:** T06 (mover detection, Jonathan), T09 (are known asteroids visible?), T31 (image index), T51 (known objects), T36 (map)
 

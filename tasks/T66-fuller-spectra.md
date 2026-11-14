@@ -1,7 +1,7 @@
 # T66: A: Fuller spectra from all exposures: photometry on every exposure covering a position (not only the 36 frames kept for blinking), cached per position
 
-- **Owner:** –  ·  **Status:** open
-- **Branch:** –
+- **Owner:** Joerg  ·  **Status:** doing
+- **Branch:** `joerg/T66-fuller-spectra`
 - **Depends on / feeds:** T31, T33, T49
 
 ## Goal
