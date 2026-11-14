@@ -319,6 +319,8 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
     except Exception as ex:  # noqa: BLE001 - labels are nice to have, frames are the product
         target["labels"] = []
         print(f"labels skipped: {ex}")
+    from .pairs import add_pairs  # T17: wavelength-matched pairs for the viewer's pairs blink
+    add_pairs(target)
     (out / "target.json").write_text(json.dumps(target, indent=1), encoding="utf-8")
     return out
 
