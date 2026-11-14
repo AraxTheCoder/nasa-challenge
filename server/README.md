@@ -4,7 +4,7 @@ Builds a target folder on request for any RA/Dec, caches it under `data/targets/
 it to the frontend. API spec: `docs/CONTRACTS.md` → "Live API".
 
 ```
-pip install -r server/requirements.txt
+pip install -r requirements.lock   # from the repo root; exact pinned versions
 python -m server --fixture          # until pipeline.build (T02-T04) exists: synthetic fixture only
 python -m server                    # live: pipeline.query + pipeline.build (+ detect.run if present)
 python -m pytest server -q

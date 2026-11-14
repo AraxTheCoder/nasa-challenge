@@ -50,6 +50,6 @@ header and a watermark on the image.
 ## Test
 
 ```
-pip install playwright fastapi uvicorn && playwright install chromium   # once
+python -m pip install -r requirements-dev.lock && playwright install chromium   # once, from the repo root
 python web/tests/browser_test.py            # starts the API (:8001) + static server (:8081) itself
 ```

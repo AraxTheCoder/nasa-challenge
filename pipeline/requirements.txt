@@ -1,4 +1,9 @@
-astropy>=7
-pyvo>=1.6
-numpy>=2
-requests>=2.31
+# Exact pins so every teammate runs the same versions. Python 3.12+ (numpy 2.5 needs it).
+# After changing a pin, regenerate the root lock file, see README "Updating dependencies".
+astropy==8.0.2
+pyvo==1.10.0
+numpy==2.5.4
+requests==2.34.2
+reproject==0.21.0
+scipy==1.18.1
+pillow==13.0.0
