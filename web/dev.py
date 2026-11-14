@@ -10,7 +10,7 @@ Starts `python -m server` (the Live API) and a small static server for the viewe
 opens it, and stops both on Ctrl+C. Works on Linux, macOS, Windows and WSL.
 
 Default mode: live if `pipeline.build` exists (track A, T02-T04), otherwise fixture.
-The static server only serves `web/` and `fixtures/`, never the rest of the repo.
+The static server only serves `web/`, `app/` (UI redesign, T55) and `fixtures/`, never the rest of the repo.
 """
 from __future__ import annotations
 
@@ -34,7 +34,8 @@ from pathlib import Path
 from urllib.parse import unquote
 
 REPO = Path(__file__).resolve().parent.parent
-SERVED = ("/web/", "/fixtures/")  # only these folders are reachable over HTTP
+SERVED = ("/web/", "/app/", "/fixtures/")  # only these folders are reachable over HTTP
+# /app/ = UI redesign copy of web/ (T55), UI work only; everything else stays in /web/.
 
 
 def allowed(raw_path: str) -> bool:
@@ -198,6 +199,7 @@ def main() -> int:
             url += f"?api=http://{shown_host}:{args.api_port}"
         print()
         print(f"  Viewer:   {url}")
+        print(f"  New UI:   {url.replace('/web/', '/app/', 1)}  (UI redesign in progress, T55)")
         print(f"  Live API: http://{shown_host}:{args.api_port}  "
               f"({'fixture mode: every field is the synthetic demo' if fixture else 'live SPHEREx data'})")
         if host != "127.0.0.1":

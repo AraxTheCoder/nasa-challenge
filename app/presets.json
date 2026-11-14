@@ -1,0 +1,60 @@
+{
+  "description": "Quick-pick fields for the viewer: the five official test targets from docs/CHALLENGE.md. Positions are propagated to epoch 2026.0 so fast movers sit near the field centre in SPHEREx data. Use this list to warm the Live API cache (T05) so the cache ids match what the viewer requests.",
+  "provenance": [
+    {
+      "service": "SIMBAD TAP, mirror https://simbad.harvard.edu/simbad/sim-tap/sync (simbad.cds.unistra.fr answered 'page unavailable' at the time)",
+      "query": "SELECT i.id AS query_id, b.main_id, b.ra, b.dec, b.pmra, b.pmdec, b.coo_bibcode, b.otype FROM basic AS b JOIN ident AS i ON b.oid = i.oidref WHERE i.id IN ('NAME Barnard''s Star', '* eps Ind B', 'WISE J085510.83-071442.5', 'V* RW Aur', 'V* R Dra')",
+      "retrieved_utc": "2026-11-14T10:05:00Z"
+    }
+  ],
+  "method": "ICRS J2000 position plus SIMBAD proper motion (pmra includes cos dec), propagated linearly to epoch 2026.0 and rounded to 1e-4 deg (the Live API cache grid). Parallax and radial velocity ignored (below 1 arcsec for these objects).",
+  "fields": [
+    {
+      "name": "Barnard's Star",
+      "default": true,
+      "simbad_id": "NAME Barnard's star",
+      "kind": "Red dwarf with the largest proper motion of any star",
+      "pm_arcsec_per_yr": 10.39,
+      "ra_deg": 269.4463,
+      "dec_deg": 4.7682,
+      "size_arcmin": 15
+    },
+    {
+      "name": "Epsilon Indi B",
+      "simbad_id": "* eps Ind B",
+      "kind": "Pair of brown dwarfs orbiting the star Epsilon Indi",
+      "pm_arcsec_per_yr": 4.68,
+      "ra_deg": 331.0966,
+      "dec_deg": -56.8007,
+      "size_arcmin": 15
+    },
+    {
+      "name": "WISE 0855-0714",
+      "simbad_id": "WISEA J085510.74-071442.5",
+      "kind": "Coldest known brown dwarf, fast-moving",
+      "pm_arcsec_per_yr": 8.15,
+      "ra_deg": 133.7598,
+      "dec_deg": -7.2422,
+      "size_arcmin": 15,
+      "note": "The challenge text gives RA 08h55m10.831s, Dec -7d14m42.53s, which is the position around 2010 (WISE epoch), about 2 arcmin from the 2026 position used here."
+    },
+    {
+      "name": "RW Aurigae",
+      "simbad_id": "V* RW Aur",
+      "kind": "Young variable star (T Tauri type)",
+      "pm_arcsec_per_yr": 0.02,
+      "ra_deg": 76.9566,
+      "dec_deg": 30.4013,
+      "size_arcmin": 15
+    },
+    {
+      "name": "R Draconis",
+      "simbad_id": "V* R Dra",
+      "kind": "Mira-type variable star",
+      "pm_arcsec_per_yr": 0.02,
+      "ra_deg": 248.1672,
+      "dec_deg": 66.755,
+      "size_arcmin": 15
+    }
+  ]
+}

@@ -92,6 +92,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T53 | B: Comets in the local orbit catalogue (MPC CometEls.txt), like the asteroids in T51 | Joerg | doing | `joerg/T52-more-labels` | [tasks/T53](tasks/T53-local-comets.md). SkyBoT fallback had comets, the local path not yet |
 | T54 | A/C: Known objects + labels start while the images download (they need only frame times + field geometry), so a new field is complete when its frames are | Joerg | doing | `joerg/T52-more-labels` | [tasks/T54](tasks/T54-early-objects-labels.md). New field: frames 11 s, objects +2.5 s, labels +2-3 s today |
 | T52 | All: Docs match the code (idea I2): README status/run/how-it-works, CONTRACTS without pre-baked `web/targets/` + `pipeline.publish`, undocumented API routes, a schema-0.2 fixture with pairs/labels/varied detections | Mati | doing | `mati/T52-docs-current` | [tasks/T52](tasks/T52-docs-current.md) |
+| T55 | C: UI redesign under `/app/` (copy of `web/`); `web/` and `/web/` stay as they are for all other work | Jonathan | doing | `jonathan/T55-app-ui` | [tasks/T55](tasks/T55-app-ui.md). UI work only; everyone else keeps working in `web/` |
 
 ## Decisions
 
@@ -182,6 +183,10 @@ Dated, one line each, with why.
   every frame (flux in µJy, wavelength/bandwidth at the star, masked flag). Why: the official test targets include
   two variable stars and "spectra on the fly" is the extra-kudos item; both need calibrated fluxes, not PNGs.
   New endpoint only; target.json unchanged; synthetic targets answer 200 `no_data`.
+- 2026-11-14 Jonathan: The UI redesign happens in a new folder `app/` (URL `/app/`, served by
+  `web/dev.py`), a copy of the viewer in `web/`. **This is only for UI work (T55).** All other work
+  (features, fixes, API wiring, tests) stays in `web/` and `/web/` exactly as before; `/web/` stays
+  the default URL and the working demo. Why: the UI can be reworked without blocking the others.
 
 ## Ideas
 
@@ -370,6 +375,8 @@ Things waiting on a human.
   ("Four task proposals from a cross-check …") and answer here: include yes/no, and owner. Suggested:
   (a) Mati, (b) Joerg (labels), (c) Jonathan (index + S3), (d) with T06. Once a human says yes, they go
   onto the Board with task files.
+- 2026-11-14 Jonathan (Claude): two Board rows use the ID T52 (Joerg: more labels; Mati: docs match
+  the code). One of them should take a new ID (next free: T56).
 
 ## Log
 
@@ -592,3 +599,8 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   entries moved only, text unchanged; the separate ranked overview removed. If you append an idea, put it where it
   ranks, or at the end and say so.
 - 2026-11-14 Mati (Claude): Ideas numbered I1–I20 (sub-items I6a–d) so humans can refer to them; numbers are fixed, new ideas take the next free number. The proposals under Questions map as (a) = I8, (b) = I4, (c) = I11, (d) = I12. Only prefixes added, no content changed.
+- 2026-11-14 Jonathan (Claude): T55 started. `app/` = copy of the viewer files in `web/` for the UI
+  redesign, open at `http://localhost:8080/app/` via `python web/dev.py` (which now also serves
+  `/app/`). **Other agents: `app/` is UI work only; keep your work in `web/` as before**, don't
+  edit `app/`. Changes in `web/` are ported to `app/` by T55. Gotcha: Board has two rows named T52
+  (Joerg more labels, Mati docs), see Questions.
