@@ -11,6 +11,7 @@ import inspect
 import json
 import shutil
 import threading
+import time
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -252,6 +253,9 @@ class Builder:
         if "progress" in inspect.signature(build_target).parameters:
             kwargs["progress"] = lambda step, done=None, total=None, message="": \
                 self._set(job, step, message or step, done, total)
+        early: dict = {}
+        if "early" in inspect.signature(build_target).parameters:
+            kwargs["early"] = lambda stub: self._start_early(stub, early)
         # Build into a temp root so a half-finished build is never served from the cache.
         tmp_root = self.cache_root / ".building"
         tmp_root.mkdir(exist_ok=True)
@@ -261,8 +265,59 @@ class Builder:
         except LookupError as e:  # pipeline.build: no usable SPHEREx images here
             raise NoData(str(e)) from None
 
-        # T51: detect (JPL, rate-limited: minutes per field) runs after this, see objects().
-
         out = self.target_dir(job.id)
         shutil.rmtree(out, ignore_errors=True)
         built.rename(out)
+        self._finish_early(job.id, early)   # T54: labels + known objects computed during the download
+
+    # -- T54: labels + known objects while the images download -------------------------------
+
+    EARLY_WAIT_S = 20   # after the frames are ready; otherwise the on-request jobs take over
+
+    def _start_early(self, stub: dict, early: dict) -> None:
+        """Labels and known objects need only frame times + the grid: start both on the stub now."""
+        import copy
+
+        def labels():
+            from pipeline.labels import add_labels
+            early["labels"] = add_labels(copy.deepcopy(stub))
+
+        def objects():
+            from detect.run import detect_target
+            early["objects"] = detect_target(copy.deepcopy(stub))
+
+        early["stub"] = stub
+        early["threads"] = [threading.Thread(target=fn, daemon=True, name=f"early-{fn.__name__}-{stub['id']}")
+                            for fn in (labels, objects)]
+        for th in early["threads"]:
+            th.start()
+
+    def _finish_early(self, tid: str, early: dict) -> None:
+        """Map the early results onto the built frames and merge them (labels_requested /
+        objects_requested set, so the viewer and objects() find them ready)."""
+        if not early.get("threads"):
+            return
+        from pipeline.build import remap_to_frames
+        from pipeline.motion import summarize
+
+        end = time.monotonic() + self.EARLY_WAIT_S
+        for th in early["threads"]:
+            th.join(max(0.0, end - time.monotonic()))
+        tj = self.target_dir(tid) / "target.json"
+        frames = json.loads(tj.read_text(encoding="utf-8"))["frames"]
+        stub_frames = early["stub"]["frames"]
+        try:
+            if "labels" in early:
+                t = early["labels"]
+                t["labels"] = remap_to_frames(t.get("labels", []), stub_frames, frames)
+                scale = t["image"]["pixel_scale_arcsec"]
+                for l in t["labels"]:
+                    l["motion"] = summarize(l["positions"], frames, scale)
+                self._merge(tid, t, ("labels",), "labels_requested")
+            if "objects" in early:
+                t = early["objects"]
+                t["known_objects"] = remap_to_frames(t.get("known_objects", []), stub_frames, frames)
+                t["detections"] = []
+                self._merge(tid, t, ("known_objects", "detections"), "objects_requested")
+        except Exception:  # noqa: BLE001 - the on-request jobs (labels(), objects()) still work
+            traceback.print_exc()

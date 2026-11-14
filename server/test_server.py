@@ -239,3 +239,63 @@ def test_objects_and_labels_jobs_do_not_overwrite_each_other(tmp_path, monkeypat
     assert t["labels"] == [{"name": "HD 1"}] and t["labels_requested"] is True
     assert t["known_objects"][0]["name"] == "433 Eros" and t["objects_requested"] is True
     assert [p["service"] for p in t["provenance"]] == ["build", "SIMBAD", "JPL SB Identification (sb_ident, first pass)"]
+
+
+def test_early_labels_and_objects_land_with_the_build(tmp_path, monkeypatch):
+    """T54: labels + known objects run on the stub during the 'download' and are merged onto the
+    built frames (a dropped frame loses its positions); /labels and /objects are ready at once."""
+    import json
+    import threading
+
+    import detect.run
+    import pipeline.build
+    import pipeline.labels
+
+    stub_done = threading.Event()
+
+    def fake_build(target_id, ra, dec, size, out_root, early=None, **kw):
+        stub = {"id": target_id, "synthetic": False, "center": {"ra_deg": ra, "dec_deg": dec},
+                "image": {"width": 10, "height": 10, "pixel_scale_arcsec": 6.15},
+                "frames": [{"id": f"c00{i}", "mjd": 60000.0 + i, "obs_id": f"o{i}", "detector": 1} for i in range(3)],
+                "labels": [], "known_objects": [], "detections": [], "provenance": []}
+        early(stub)
+        stub_done.wait(5)            # the "download" outlasts the early work
+        d = Path(out_root) / target_id
+        d.mkdir(parents=True)
+        frames = [{"id": "f000", "mjd": 60000.0, "obs_id": "o0", "detector": 1},      # o1 dropped
+                  {"id": "f001", "mjd": 60002.0, "obs_id": "o2", "detector": 1}]
+        (d / "target.json").write_text(json.dumps({"id": target_id, "synthetic": False, "center": stub["center"],
+            "image": stub["image"], "frames": frames, "labels": [], "known_objects": [], "detections": [],
+            "provenance": [{"service": "build"}]}))
+        return d
+
+    def pos(fid):
+        return {"frame_id": fid, "ra_deg": 1.0, "dec_deg": 2.0, "x": 1.0, "y": 2.0}
+
+    def fake_labels(t):
+        t["labels"] = [{"id": "l000", "name": "Star", "kind": "star", "otype": "*", "source": "simbad", "named": True,
+                        "positions": [pos(f["id"]) for f in t["frames"]]}]
+        t["provenance"].append({"service": "SIMBAD"})
+        return t
+
+    def fake_detect(t):
+        t["known_objects"] = [{"name": "433 Eros", "source": "mpcorb", "synthetic": False, "positions": [pos("c001")]},
+                              {"name": "1 Ceres", "source": "mpcorb", "synthetic": False, "positions": [pos("c002")]}]
+        t["provenance"].append({"service": "MPC orbit catalogue"})
+        stub_done.set()
+        return t
+
+    from pathlib import Path
+    monkeypatch.setattr(pipeline.build, "build_target", fake_build)
+    monkeypatch.setattr(pipeline.labels, "add_labels", fake_labels)
+    monkeypatch.setattr(detect.run, "detect_target", fake_detect)
+    client = TestClient(create_app(tmp_path))
+    body = _wait_ready(client, client.get("/api/target", params={"ra": "180", "dec": "0", "size": "5"}).json())
+    t = client.get(body["target_url"]).json()
+    assert t["labels_requested"] is True and t["objects_requested"] is True
+    assert [p["frame_id"] for p in t["labels"][0]["positions"]] == ["f000", "f001"]
+    assert [o["name"] for o in t["known_objects"]] == ["1 Ceres"]          # Eros was only on the dropped frame
+    assert t["known_objects"][0]["positions"][0]["frame_id"] == "f001"
+    assert [p["service"] for p in t["provenance"]] == ["build", "SIMBAD", "MPC orbit catalogue"]
+    assert client.get(f"/api/targets/{body['id']}/objects").json() == {"status": "ready", "n": 1}
+    assert client.get(f"/api/targets/{body['id']}/labels").json() == {"status": "ready", "n": 1}
