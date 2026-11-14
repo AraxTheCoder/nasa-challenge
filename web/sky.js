@@ -105,7 +105,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   const { gl } = G;
 
   const st = { ra, dec, fov, w: 1, h: 1, dpr: 1, base: null, overlays: [], shown: -1,
-    dirty: true, loads: 0, queue: [], hooks: [], frame: 0, listeners: { change: [], tiles: [] } };
+    dirty: true, loads: 0, queue: [], hooks: [], frame: 0, errors: 0, debug: false, stats: null, listeners: { change: [], tiles: [] } };
 
   // ----- projection (stereographic, north up, east left) -----
   // Screen px per unit of the projection plane: the view's half width covers fov/2.
@@ -246,26 +246,44 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       if (job.t.state !== "queued") continue;
       job.t.state = "loading";
       st.loads++;
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        st.loads--;
-        const tex = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, tex);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        job.t.tex = tex;
-        job.t.state = "ok";
-        evict();
-        markDirty();
-        pump();
-      };
-      img.onerror = () => { st.loads--; job.t.state = "missing"; pump(); };
-      img.src = job.url ?? job.layer.tileUrl(job.order, job.pix);
+      load(job);
+    }
+  }
+
+  // Tiles come via fetch() so we see the HTTP status: 404 = no tile there (final), anything else
+  // (timeout, 502/503 from a busy upstream) is retried with back-off instead of being given up.
+  async function load(job) {
+    const t = job.t;
+    try {
+      const res = await fetch(job.url ?? job.layer.tileUrl(job.order, job.pix));
+      if (res.status === 404) { t.state = "missing"; return; }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const bmp = await createImageBitmap(await res.blob());
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bmp);
+      bmp.close?.();
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      t.tex = tex;
+      t.state = "ok";
+      evict();
+      markDirty();
+    } catch (e) {
+      t.tries = (t.tries ?? 0) + 1;
+      st.errors++;
+      if (t.tries >= 5) { t.state = "failed"; t.error = String(e.message ?? e); }
+      else {
+        t.state = "retry";
+        setTimeout(() => { if (t.state === "retry") { t.state = "queued"; st.queue.push(job); pump(); markDirty(); } },
+          500 * 2 ** t.tries);
+      }
+    } finally {
+      st.loads--;
+      pump();
     }
   }
 
@@ -308,12 +326,29 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       if (all.state === "ok") drawAllsky(layer, all);
     }
     const n = order <= 4 ? 8 : 4;
+    const isBase = layer === st.base;
+    const stats = isBase ? { order, wanted: wantedOrder(), maxOrder: layer.maxOrder, visible: 0, sharp: 0,
+      blurry: 0, empty: 0, outlines: [] } : null;
     for (const pix of visibleTiles(order)) {
       const g = tileGrid(order, pix, n);
       const sp = [];
       for (let i = 0; i < g.length; i += 2) sp.push(toScreen(g[i], g[i + 1]));
       const mid = sp[Math.floor(sp.length / 2)];
       const tx = textureFor(layer, order, pix, Math.hypot(mid.x - st.w / 2, mid.y - st.h / 2));
+      if (stats) {
+        stats.visible++;
+        const own = layer.tiles.get(layer.key(order, pix));
+        const kind = tx && tx.d === 0 ? "sharp" : own?.state === "missing" ? "empty" : tx ? "blurry" : "empty";
+        stats[kind]++;
+        if (st.debug) {
+          const edge = [];
+          for (let b = 0; b <= n; b++) edge.push(sp[b]);
+          for (let a = 1; a <= n; a++) edge.push(sp[a * (n + 1) + n]);
+          for (let b = n - 1; b >= 0; b--) edge.push(sp[n * (n + 1) + b]);
+          for (let a = n - 1; a >= 1; a--) edge.push(sp[a * (n + 1)]);
+          stats.outlines.push({ kind, state: own?.state, tries: own?.tries ?? 0, edge, mid, pix });
+        }
+      }
       if (!tx) continue;
       const pos = [], uv = [];
       const m = 2 ** tx.d;
@@ -332,6 +367,53 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       }
       drawTriangles(tx.tex, pos, uv);
     }
+    if (stats) st.stats = stats;
+  }
+
+  /** Order the screen would need for 1 texel per device pixel (may exceed what the map has). */
+  function wantedOrder() {
+    const arcsecPerPx = (st.fov * 3600) / (st.w * st.dpr);
+    return Math.ceil(Math.log2(TEXEL_ARCSEC_ORDER0 / arcsecPerPx));
+  }
+
+  // ----- debug overlay (toggle): tile outlines + zoom/loading state -----
+  const KIND_COLOUR = { sharp: "rgba(80,220,120,0.9)", blurry: "rgba(255,200,60,0.9)", empty: "rgba(255,90,90,0.9)" };
+  function drawDebug(ctx) {
+    const s = st.stats;
+    if (!s) return;
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.font = "11px monospace";
+    for (const o of s.outlines) {
+      ctx.strokeStyle = KIND_COLOUR[o.kind];
+      ctx.beginPath();
+      o.edge.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+      ctx.stroke();
+      if (o.mid.front) {
+        ctx.fillStyle = KIND_COLOUR[o.kind];
+        ctx.fillText(`${s.order}/${o.pix} ${o.state ?? "-"}${o.tries ? ` x${o.tries}` : ""}`, o.mid.x - 40, o.mid.y);
+      }
+    }
+    const texel = TEXEL_ARCSEC_ORDER0 / 2 ** s.order;
+    const screen = (st.fov * 3600) / (st.w * st.dpr);
+    const atMax = s.wanted > s.maxOrder;
+    const allSharp = s.visible > 0 && s.sharp + s.empty === s.visible;
+    const lines = [
+      `map order ${s.order} of max ${s.maxOrder}  (screen wants ${s.wanted})`,
+      `texel ${texel.toFixed(1)}"  screen px ${screen.toFixed(2)}"`,
+      atMax ? "MAX ZOOM: the map has no finer tiles here" : "more detail available when zooming in",
+      allSharp ? "SHARP: all visible tiles at this order loaded" : `loading: ${s.sharp}/${s.visible} sharp, ${s.blurry} blurry, ${s.empty} empty`,
+      `in flight ${st.loads}, queued ${st.queue.length}, errors ${st.errors}`,
+    ];
+    const w = 330, h = 14 * lines.length + 10;
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(8, 8, w, h);
+    lines.forEach((l, i) => {
+      ctx.fillStyle = i === 2 && atMax ? "#ff9a6c" : i === 3 && allSharp ? "#7fe38a" : "#e8eef7";
+      ctx.fillText(l, 14, 22 + 14 * i);
+    });
+    ctx.restore();
   }
 
   function render() {
@@ -350,6 +432,8 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     for (const hook of st.hooks) {
       try { hook(ctx2d, proj); } catch (e) { console.error(e); }
     }
+    if (st.debug) drawDebug(ctx2d);
+    st.listeners.tiles.forEach((fn) => fn(api.stats()));
   }
 
   function prefetch(layer) {
@@ -477,6 +561,15 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       return st.overlays.map((l) => l.meta);
     },
     showOverlay(i) { st.shown = i; markDirty(); },
+    setDebug(on) { st.debug = !!on; markDirty(); },
+    /** {order, wanted, maxOrder, visible, sharp, blurry, empty, atMax, allSharp, loads, queued, errors} */
+    stats() {
+      const s = st.stats;
+      if (!s) return null;
+      return { order: s.order, wanted: s.wanted, maxOrder: s.maxOrder, visible: s.visible, sharp: s.sharp,
+        blurry: s.blurry, empty: s.empty, atMax: s.wanted > s.maxOrder,
+        allSharp: s.visible > 0 && s.sharp + s.empty === s.visible, loads: st.loads, queued: st.queue.length, errors: st.errors };
+    },
     goTo(ra, dec, fov) {
       st.ra = ((Number(ra) % 360) + 360) % 360;
       st.dec = Math.max(-90, Math.min(90, Number(dec)));

@@ -515,6 +515,11 @@ async function startExplore() {
       api: app.dataRoot ? null : app.api,
     });
     sky.on("change", updateExplorePos);
+    // Debug overlay (tile outlines, max-zoom / sharp indicator); ?debug=1 switches it on at load
+    const dbg = $("#sky-debug");
+    dbg.checked = params().get("debug") === "1";
+    explore.setDebug(dbg.checked);
+    dbg.addEventListener("change", () => explore.setDebug(dbg.checked));
     setupBand(sky.base);
     if (app.shownTarget) syncExplore(app.shownTarget);   // a field loaded before the map was ready
     updateExplorePos();
