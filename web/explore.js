@@ -6,6 +6,9 @@
 import { createSky } from "./sky.js";
 
 export const SURVEYS = [
+  // T42: IRSA cube up to order 5, deeper zoom = live tiles from the AWS level-2 images (our server)
+  { id: "spherex-live", label: "SPHEREx · 102 bands · live deep zoom",
+    urls: [], fallback: ["https://irsa.ipac.caltech.edu/data/hips/SPHEREx/spherex_allsky_cube"] },
   { id: "spherex-cube", label: "SPHEREx all-sky · 102 bands (IRSA DR1)",
     urls: ["https://irsa.ipac.caltech.edu/data/hips/SPHEREx/spherex_allsky_cube"] },
   ...[1, 2, 3, 4, 5, 6].map((d) => ({
@@ -16,7 +19,7 @@ export const SURVEYS = [
   { id: "2mass", label: "Compare: 2MASS colour (IRSA)", urls: ["https://irsa.ipac.caltech.edu/data/hips/CDS/2MASS/Color"] },
   { id: "allwise", label: "Compare: AllWISE colour (IRSA)", urls: ["https://irsa.ipac.caltech.edu/data/hips/CDS/AllWISE/RGB-W4-W2-W1"] },
 ];
-export const DEFAULT_SURVEY = "spherex-cube";
+export const DEFAULT_SURVEY = "spherex-live";
 
 let sky = null;
 let apiBase = null;        // T41: our server caches + prefetches the map tiles (/api/sky/<id>)
@@ -39,7 +42,7 @@ export async function setSurvey(id) {
   const s = SURVEYS.find((x) => x.id === id);
   if (!s || !sky) return null;
   let last;
-  const urls = apiBase ? [`${apiBase.replace(/\/$/, "")}/api/sky/${s.id}`, ...s.urls] : s.urls;
+  const urls = [...(apiBase ? [`${apiBase.replace(/\/$/, "")}/api/sky/${s.id}`] : []), ...s.urls, ...(s.fallback ?? [])];
   for (const url of urls) {
     try {
       const layer = await sky.setBase(url, { label: s.label });

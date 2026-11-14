@@ -22,6 +22,8 @@ SURVEYS = {
     "spherex-cube": ["https://irsa.ipac.caltech.edu/data/hips/SPHEREx/spherex_allsky_cube"],
     **{f"spherex-d{d}": [f"https://alasky.cds.unistra.fr/SPHEREx/D{d}", f"https://alaskybis.cds.unistra.fr/SPHEREx/D{d}"]
        for d in range(1, 7)},
+    # T42: IRSA's cube up to order 5, our own live tiles from the AWS level-2 images at 6-7
+    "spherex-live": [],
     "2mass": ["https://irsa.ipac.caltech.edu/data/hips/CDS/2MASS/Color"],
     "allwise": ["https://irsa.ipac.caltech.edu/data/hips/CDS/AllWISE/RGB-W4-W2-W1"],
 }
@@ -39,6 +41,7 @@ class SkyCache:
         self._lock = threading.Lock()
         self._prefetch = ThreadPoolExecutor(16, thread_name_prefix="sky-prefetch")
         self._props: dict[str, dict] = {}
+        self._live_slots = threading.BoundedSemaphore(6)     # live tiles rendered at once
 
     def _http(self):
         if self._session is None:
@@ -57,6 +60,10 @@ class SkyCache:
 
     def get(self, survey: str, path: str) -> bytes | None:
         """Bytes of the file (from disk or upstream), or None if upstream doesn't have it."""
+        if survey == "spherex-live":
+            live = self._live_route(path)
+            if live is not None:
+                return live()
         f = self.root / survey / path
         if f.exists():
             data = f.read_bytes()
@@ -82,7 +89,34 @@ class SkyCache:
                 self._inflight.pop(key, None)
             ev.set()
 
+    def _live_route(self, path: str):
+        """spherex-live: properties and orders <= 5 come from the cube, 6-7 are rendered by us."""
+        from . import livetiles
+
+        if path == "properties":
+            def props():
+                cube = (self.get("spherex-cube", "properties") or b"").decode("utf-8", "replace")
+                lines = [l for l in cube.splitlines() if not l.startswith(("hips_order ", "obs_title", "creator_did"))]
+                lines += [f"hips_order           = {max(livetiles.LIVE_ORDERS)}",
+                          "obs_title            = SPHEREx DR1: IRSA cube to order 5, live tiles from AWS level-2 images above",
+                          "creator_did          = ivo://spherex-blink/live"]
+                return ("\n".join(lines) + "\n").encode()
+            return props
+        if ALLSKY_RE.match(path):
+            return lambda: self.get("spherex-cube", path)
+        m = TILE_RE.match(path)
+        if m and int(m.group(1)) not in livetiles.LIVE_ORDERS:
+            return lambda: self.get("spherex-cube", path)
+        return None                                   # live order: cached on disk like any tile
+
     def _fetch(self, survey: str, path: str) -> bytes | None:
+        if survey == "spherex-live":
+            from . import livetiles
+
+            m = TILE_RE.match(path)
+            slice_ = int(m.group(4)[1:]) if m.group(4) else 0
+            with self._live_slots:
+                return livetiles.render(slice_, int(m.group(1)), int(m.group(3)))
         last = None
         for base in SURVEYS[survey]:
             try:

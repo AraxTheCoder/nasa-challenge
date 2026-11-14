@@ -170,3 +170,91 @@ def fetch_cutout(fits_url: str, ra: float, dec: float, size_deg: float, dest: Pa
     out.writeto(tmp, overwrite=True)
     tmp.replace(dest)
     return dest
+
+
+# -- T42: whole-image access with cached headers and row chunks (for live map tiles) -------------
+
+CHUNK_ROWS = 128
+CHUNK_ROOT = Path("data/raw/s3chunks")
+
+
+class NotInBucket(FileNotFoundError):
+    """The path is not in the bucket (e.g. a reprocessed l2b_retry file): resolve the real path."""
+
+
+class S3Image:
+    """One level-2 image in the bucket: WCS from its header, IMAGE/FLAGS rows in cached chunks.
+
+    Headers (~26 kB) are cached as JSON, rows in chunks of CHUNK_ROWS full-width rows (~1 MB of
+    IMAGE + its FLAGS tiles) under data/raw/s3chunks/<hash>/, so map tiles next to each other reuse
+    what their neighbours already read."""
+
+    _mem: dict[str, "S3Image"] = {}
+
+    def __init__(self, fits_url: str, root: Path = CHUNK_ROOT):
+        import hashlib
+        import json
+
+        from astropy.io import fits
+        from astropy.wcs import WCS
+
+        self.url = s3_url(fits_url)
+        if self.url is None:
+            raise ValueError(f"not an IRSA SPHEREx path: {fits_url}")
+        self.dir = root / hashlib.sha1(self.url.encode()).hexdigest()[:20]
+        meta_f = self.dir / "meta.json"
+        if meta_f.exists():
+            meta = json.loads(meta_f.read_text(encoding="utf-8"))
+        else:
+            try:
+                _, s0 = _header_at(self.url, 0, 2)
+            except Exception as e:
+                if "404" in str(e):
+                    raise NotInBucket(self.url) from e
+                raise
+            himg, simg = _header_at(self.url, s0, 12)
+            data0 = s0 + simg
+            off_flags = data0 + _data_size(himg)
+            hflags, sflags = _header_at(self.url, off_flags, 8)
+            meta = {"himg": himg.tostring(), "data0": data0, "off_flags": off_flags,
+                    "hflags": hflags.tostring(), "sflags": sflags}
+            self.dir.mkdir(parents=True, exist_ok=True)
+            tmp = meta_f.with_suffix(".part")
+            tmp.write_text(json.dumps(meta), encoding="utf-8")
+            tmp.replace(meta_f)
+        self.himg = fits.Header.fromstring(meta["himg"])
+        self.hflags = fits.Header.fromstring(meta["hflags"])
+        self.data0, self.off_flags, self.sflags = meta["data0"], meta["off_flags"], meta["sflags"]
+        self.nx, self.ny = self.himg["NAXIS1"], self.himg["NAXIS2"]
+        self.wcs = WCS(self.himg)
+
+    @classmethod
+    def get(cls, fits_url: str) -> "S3Image":
+        im = cls._mem.get(fits_url)
+        if im is None:
+            im = cls._mem[fits_url] = cls(fits_url)
+        return im
+
+    def chunk(self, i: int):
+        """(image rows, bad-pixel mask, median, robust sigma) of chunk i (rows i*CHUNK_ROWS...)."""
+        f = self.dir / f"c{i:02d}.npz"
+        if f.exists():
+            z = np.load(f)
+            return z["img"], z["bad"], float(z["med"]), float(z["sig"])
+        y0, y1 = i * CHUNK_ROWS, min(self.ny, (i + 1) * CHUNK_ROWS)
+        bpp = abs(self.himg["BITPIX"]) // 8
+        dtype = {-32: ">f4", -64: ">f8", 32: ">i4", 16: ">i2"}[self.himg["BITPIX"]]
+        raw = _get(self.url, self.data0 + y0 * self.nx * bpp, self.data0 + y1 * self.nx * bpp)
+        img = np.frombuffer(raw, dtype).reshape(y1 - y0, self.nx).astype(np.float32)
+        flags = _flags_rows(self.url, self.off_flags, self.hflags, self.sflags, y0, y1, 0, self.nx)
+        bad = ((flags & HW_MASK) != 0) | ~np.isfinite(img)
+        good = img[~bad]
+        med = float(np.median(good)) if good.size else 0.0
+        sig = float(1.4826 * np.median(np.abs(good - med))) if good.size else 1.0
+        tmp = f.with_suffix(".part.npz")
+        np.savez(tmp, img=img, bad=bad, med=med, sig=max(sig, 1e-6))
+        tmp.replace(f)
+        return img, bad, med, max(sig, 1e-6)
+
+
+HW_MASK = sum(1 << b for b in (0, 1, 2, 6, 9, 10, 11, 14, 17, 25, 26, 27, 28))   # as pipeline.build
