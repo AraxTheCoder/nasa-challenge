@@ -595,7 +595,7 @@ def rank_importance(labels: list[dict], target: dict) -> None:
             l["importance"] = 4
 
 
-def add_labels(target: dict) -> dict:
+def add_labels(target: dict, sources=None) -> dict:
     """Fill target["labels"] (replacing any old ones) and append provenance. Returns the target.
 
     Synthetic targets get no labels: real catalogue names on simulated frames would mislead."""
@@ -605,7 +605,7 @@ def add_labels(target: dict) -> dict:
     grid = Grid(target)
     labels = []
     from concurrent.futures import ThreadPoolExecutor
-    sources = (simbad_labels, gaia_labels, vsx_labels, catwise_labels, planet_labels)   # T52: + VSX, CatWISE, planets
+    sources = sources or (simbad_labels, gaia_labels, vsx_labels, catwise_labels, planet_labels)   # T52: + VSX, CatWISE, planets
     with ThreadPoolExecutor(len(sources)) as pool:  # all at the same time: total = the slowest one (T38)
         results = list(pool.map(lambda fn: fn(target, grid), sources))
     for found, prov in results:
@@ -624,6 +624,51 @@ def add_labels(target: dict) -> dict:
         l["id"] = f"l{i:03d}"
     target["labels"] = labels
     return target
+
+
+# ---------- T72: labels for any patch of the sky map (no field built) ----------
+
+SKY_CELL_DEG = 0.25           # requests snap to this grid, so nearby views share one cache entry
+SKY_RADII = (0.25, 0.5, 1.0)  # degrees
+SKY_MJD = 61041.0             # 2026-01-01, the middle of the SPHEREx survey so far; the map combines epochs
+
+
+def sky_region(ra: float, dec: float, radius: float) -> tuple[float, float, float]:
+    """Snap a request to the cache grid: (ra, dec, radius)."""
+    r = next((x for x in SKY_RADII if x >= radius), SKY_RADII[-1])
+    dec_s = max(-90.0, min(90.0, round(dec / SKY_CELL_DEG) * SKY_CELL_DEG))
+    step = SKY_CELL_DEG / max(math.cos(math.radians(dec_s)), 0.05)
+    return round((round(ra / step) * step) % 360, 4), round(dec_s, 4), r
+
+
+def sky_labels(ra: float, dec: float, radius: float) -> dict:
+    """Labels around (ra, dec) for the map: SIMBAD, Gaia (only to merge and filter, not returned),
+    VSX and CatWISE, at SKY_MJD. Compact rows instead of per-frame positions."""
+    scale = 6.15
+    npix = int(radius * 2 ** 0.5 * 3600 / scale)          # Grid radius = half the diagonal = radius
+    t = {"id": "sky", "synthetic": False, "center": {"ra_deg": ra, "dec_deg": dec},
+         "image": {"width": npix, "height": npix, "pixel_scale_arcsec": scale},
+         "frames": [{"id": "s0", "mjd": SKY_MJD, "epoch": 1}], "labels": [], "provenance": []}
+    add_labels(t, sources=(simbad_labels, gaia_labels, vsx_labels, catwise_labels))
+    rows = []
+    for l in t["labels"]:
+        if l["source"] == "gaia_dr3":
+            continue
+        p = l["positions"][0]
+        # Drawing order on the map (the client names the first ones that fit): famous objects and fast
+        # movers, then other real names, then catalogue numbers; brighter first within each.
+        name = " ".join(l["name"].split())              # SIMBAD pads: "M  31"
+        notable = (l["otype"] in NOTABLE_OTYPES or (l.get("pm_mas_yr") or 0) >= 100
+                   or name.startswith("* ") or l["source"] == "catwise2020")
+        tier = 0 if name.startswith(("M ", "NGC ", "IC ")) else 1 if notable else 2 if l["named"] else 3
+        rows.append({k: v for k, v in {
+            "name": name, "kind": l["kind"], "otype": l["otype"], "source": l["source"],
+            "importance": tier, "named": l["named"], "_mag": l.get("mag") if l.get("mag") is not None else 99, "ra_deg": p["ra_deg"], "dec_deg": p["dec_deg"],
+            "mag": l.get("mag"), "mag_band": l.get("mag_band"), "pm_mas_yr": l.get("pm_mas_yr"),
+            "note": l.get("note"), "aliases": l.get("aliases") or None}.items() if v is not None})
+    rows.sort(key=lambda r: (r["importance"], r.pop("_mag")))
+    return {"center": {"ra_deg": ra, "dec_deg": dec}, "radius_deg": radius, "mjd": SKY_MJD,
+            "labels": rows, "provenance": t["provenance"]}
 
 
 def main(argv=None):
