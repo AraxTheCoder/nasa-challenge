@@ -72,6 +72,8 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T33 | A: Read SPHEREx images from the AWS Open Data bucket (`nasa-irsa-spherex`, same paths as IRSA) with HTTP Range: only headers + the rows around the field of IMAGE/FLAGS + WCS-WAVE, no EPSF; IRSA cutouts as fallback | Jonathan | done | `jonathan/T33-s3-range` | Measured S3 5-7 MB/s, 0 errors vs IRSA 0.31 MB/s, >50% 503 |
 | T34 | C: Label priority: always show only the most important names (field's object, movers, known asteroids, notable motion), the rest on hover; cap + "show all" toggle | Joerg | done | `joerg/T34-label-priority` | [tasks/T34](tasks/T34-label-priority.md). Mati: labels too crowded on real fields. Builds on T23 `paths.js` |
 | T35 | C: Tracing over the stitched sky: paths, per-epoch markers and names of moving / important objects drawn on the explore map (T30/T32), following the epoch blink | Joerg | review | `joerg/T35-sky-traces` | [task file](tasks/T35-sky-traces.md). From Joerg's idea |
+| T36 | C: Own sky map as the main view (no Aladin, no dependency): WebGL HiPS renderer (HEALPix tiles, SIN projection), drag/zoom/pinch like Google Earth, SPHEREx epochs as layers, blink in the map; frame viewer stays below as detail | Jonathan | doing | `jonathan/T36-sky-map` | Replaces the T30 Aladin panel |
+| T37 | A/C: Catalogue labels only on request: builds skip labels; `GET /api/targets/<id>/labels` computes them in the background; viewer has a Labels switch | Jonathan | doing | `jonathan/T36-sky-map` | SIMBAD labels cost 30 s in deep fields (labels.py untouched) |
 
 ## Decisions
 
