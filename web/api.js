@@ -3,7 +3,12 @@
 // requestField() asks for a field, polls while the server builds it, and resolves with the URL of
 // the finished target.json. Frame image paths in target.json are relative to that URL.
 
-export const DEFAULT_API = "http://localhost:8000";
+// Default: port 8000 on the machine that served this page. That is localhost when you run it
+// yourself, and the host's machine when a teammate opens it over the LAN (python web/dev.py --lan).
+// Override with ?api=<url>; a hosted deployment (T14) sets its own value here.
+export const DEFAULT_API = /^https?:$/.test(location.protocol) && location.hostname
+  ? `${location.protocol}//${location.hostname}:8000` // hostname keeps IPv6 brackets per the URL spec
+  : "http://localhost:8000";
 export const POLL_MS = 2000;
 
 /** kind: "bad_request" (400), "no_data" (404), "error" (500 / unexpected), "unreachable" (network). */
