@@ -94,7 +94,7 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
         return {"ok": True, "orders": list(render.LIVE_ORDERS), "images_per_tile": render.IMAGES_PER_TILE,
                 "rendered": n, "served_from_cache": stats["cached"], "prefetched": stats["prefetched"],
                 "prefetch_pending": len(pending),
-                "mean_render_s": round(stats["seconds"] / n, 2) if n else None}
+                "mean_render_s": round(stats["seconds"] / (n + stats["prefetched"]), 2) if n + stats["prefetched"] else None}
 
     @app.get("/tiles/live/{path:path}")
     def tile(path: str):
