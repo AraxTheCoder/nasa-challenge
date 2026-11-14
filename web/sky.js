@@ -27,6 +27,10 @@ const MAX_PRELOADS = 3;                   // preloads in flight at once, and onl
 // Preload tiers, in this order after every visible tile: parent (zoom out), ring around the view
 // (pan), children of the centre (zoom in), other epochs (blink).
 const PRE_PARENT = PRELOAD, PRE_RING = PRELOAD + 1e4, PRE_CHILD = PRELOAD + 2e4, PRE_EPOCH = PRELOAD + 3e4;
+// T55: overlays with meta.eager (survey passes) are what the user waits for: right after the visible
+// base tiles, before any preload, only at the order the view needs (within the layer's orders), and from
+// one order before the layer starts (the tiles a zoom in at the centre would show).
+const EAGER = PRELOAD / 2;
 
 // ---------- HiPS layer ------------------------------------------------------------------------
 
@@ -62,11 +66,17 @@ class Layer {
     // Orders a server renders on demand (our live deep zoom): slow, so only a few at a time.
     this.slowOrders = new Set((props.x_live_orders ?? "").split(/\s+/).filter(Boolean).map(Number));
   }
+  /** T89: at the live orders a tile only depends on the detector (17 channels each), so all channels of a
+   *  detector use its first slice: one download and one texture instead of 17. */
+  sliceAt(order) {
+    return this.slowOrders.has(order) ? Math.floor(Math.min(this.slice, 101) / 17) * 17 : this.slice;
+  }
   tileUrl(order, pix) {
-    const s = this.depth > 1 && this.slice > 0 ? `_${this.slice}` : "";
+    const sl = this.sliceAt(order);
+    const s = this.depth > 1 && sl > 0 ? `_${sl}` : "";
     return `${this.url}/Norder${order}/Dir${Math.floor(pix / 10000) * 10000}/Npix${pix}${s}.${this.ext}`;
   }
-  key(order, pix) { return `${this.slice}/${order}/${pix}`; }
+  key(order, pix) { return `${this.sliceAt(order)}/${order}/${pix}`; }
   allskyUrl() {
     const s = this.depth > 1 && this.slice > 0 ? `_${this.slice}` : "";
     return `${this.url}/Norder3/Allsky${s}.${this.ext}`;
@@ -168,7 +178,10 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   function pickOrder(layer) {
     const arcsecPerPx = (st.fov * 3600) / (st.w * st.dpr);
     const k = Math.ceil(Math.log2(TEXEL_ARCSEC_ORDER0 / arcsecPerPx));
-    return Math.max(layer.minOrder, Math.min(layer.maxOrder, k));
+    // T55: while survey passes blink on top, the base map stops one order short (no slow live renders
+    // competing with the passes'; it only shows where a pass has no data)
+    const max = layer === st.base && st.baseCap != null ? Math.min(layer.maxOrder, st.baseCap) : layer.maxOrder;
+    return Math.max(layer.minOrder, Math.min(max, k));
   }
 
   function visibleTiles(order) {
@@ -404,8 +417,12 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     const all = layer === st.base || order <= 3 ? requestAllsky(layer) : null;
     if (order <= 3 && all?.state === "ok") drawAllsky(layer, all);
     const n = order <= 4 ? 8 : 4;
-    const isBase = layer === st.base;
-    const stats = isBase ? { order, wanted: wantedOrder(), maxOrder: layer.maxOrder, visible: 0, sharp: 0,
+    // Debug stats describe the layer on top: the shown overlay (a survey pass, a field epoch) is drawn after
+    // the base and overwrites the base's; the base is named as capped when it stops short for the passes.
+    const isTop = layer === st.base || layer === st.overlays[st.shown];
+    const name = layer !== st.base ? layer.label
+      : st.baseCap != null && layer.maxOrder > st.baseCap ? `base map (capped at ${st.baseCap}: overlays load first)` : "base map";
+    const stats = isTop ? { name, order, wanted: wantedOrder(), maxOrder: layer.maxOrder, visible: 0, sharp: 0,
       blurry: 0, empty: 0, outlines: [] } : null;
     const shownTiles = [];
     for (const pix of tilesFor(layer, order)) {
@@ -543,20 +560,22 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     const texel = TEXEL_ARCSEC_ORDER0 / 2 ** s.order;
     const screen = (st.fov * 3600) / (st.w * st.dpr);
     const atMax = s.wanted > s.maxOrder;
-    const allSharp = s.visible > 0 && s.sharp + s.empty === s.visible;
+    const allSharp = s.visible > 0 && s.sharp > 0 && s.sharp + s.empty === s.visible;
+    const noData = s.visible > 0 && s.empty === s.visible;
     const lines = [
-      `map order ${s.order} of max ${s.maxOrder}  (screen wants ${s.wanted})`,
+      `${s.name}: order ${s.order} of max ${s.maxOrder}  (screen wants ${s.wanted})`,
       `texel ${texel.toFixed(1)}"  screen px ${screen.toFixed(2)}"`,
       atMax ? "MAX ZOOM: the map has no finer tiles here" : "more detail available when zooming in",
-      allSharp ? "SHARP: all visible tiles at this order loaded" : `loading: ${s.sharp}/${s.visible} sharp, ${s.blurry} blurry, ${s.empty} empty`,
+      noData ? "NO DATA: no visible tile has data here (blank band or not loaded yet)"
+        : allSharp ? "SHARP: all visible tiles at this order loaded" : `loading: ${s.sharp}/${s.visible} sharp, ${s.blurry} blurry, ${s.empty} empty`,
       `in flight ${st.loads} (${[...st.inflight].filter((j) => j.slow).length} live, ${[...st.inflight].filter((j) => j.t.prio >= PRELOAD).length} preload), `
         + `queued ${st.queue.filter((j) => j.t.prio < PRELOAD).length} visible + ${st.queue.filter((j) => j.t.prio >= PRELOAD).length} preload, errors ${st.errors}`,
     ];
-    const w = 330, h = 14 * lines.length + 10;
+    const w = Math.max(330, ...lines.map((l) => ctx.measureText(l).width + 14)), h = 14 * lines.length + 10;
     ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(8, 8, w, h);
     lines.forEach((l, i) => {
-      ctx.fillStyle = i === 2 && atMax ? "#ff9a6c" : i === 3 && allSharp ? "#7fe38a" : "#e8eef7";
+      ctx.fillStyle = i === 2 && atMax ? "#ff9a6c" : i === 3 && noData ? "#ff6b6b" : i === 3 && allSharp ? "#7fe38a" : "#e8eef7";
       ctx.fillText(l, 14, 22 + 14 * i);
     });
     ctx.restore();
@@ -588,6 +607,11 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
 
   /** Other epochs (blink): their tiles on screen inside their field, after the shown ones. */
   function prefetch(layer) {
+    if (layer.meta?.eager) {
+      const k = eagerOrder(layer);
+      for (const [pix, d] of sharpTiles(k)) request(layer, k, pix, EAGER + d);
+      return;
+    }
     const order = pickOrder(layer);
     for (const pix of tilesFor(layer, order)) request(layer, order, pix, PRE_EPOCH);
   }
@@ -606,6 +630,32 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
         + Math.cos(c[1] * DEG) * Math.cos(dec * DEG) * Math.cos((c[0] - ra) * DEG))) / DEG;
       return d < reach;
     });
+  }
+
+  /** T55: the order an eager overlay is loaded at: the one the view wants, within the layer's orders. */
+  function eagerOrder(layer) {
+    return Math.max(layer.minOrder, Math.min(layer.maxOrder, wantedOrder()));
+  }
+
+  /** T55: tiles of order k an eager overlay needs, with their distance (px) from the centre: the
+   *  visible ones once the view shows order k; one order short of it, those a zoom in to order k
+   *  at the centre would show (loaded ahead); further out, none. */
+  function sharpTiles(k) {
+    const want = wantedOrder();
+    if (want < k - 1) return [];
+    const f = want >= k ? 1 : Math.min(1, api.fovForOrder(k) / st.fov);
+    const w = st.w * f, h = st.h * f, x0 = (st.w - w) / 2, y0 = (st.h - h) / 2;
+    const out = new Map(), step = Math.max(8, 40 * f);
+    for (let y = 0; y <= h + 0.5; y += step) {
+      for (let x = 0; x <= w + 0.5; x += step) {
+        const px = x0 + Math.min(x, w), py = y0 + Math.min(y, h);
+        const sp = fromScreen(px, py);
+        if (!sp) continue;
+        const pix = ang2pix(k, sp[0], sp[1]), d = Math.hypot(px - st.w / 2, py - st.h / 2);
+        if (!out.has(pix) || out.get(pix) > d) out.set(pix, d);
+      }
+    }
+    return [...out];
   }
 
   function markDirty() {
@@ -723,6 +773,14 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     if (keys[e.key]) { e.preventDefault(); e.stopPropagation(); keys[e.key](); }
   });
 
+  /** An overlay layer from {url, label, epoch, eager?}; cubes start on the base's band. */
+  async function makeOverlay(l) {
+    try {
+      const layer = Object.assign(new Layer(l.url, await readProperties(l.url), { slice: st.base?.slice, ...l }), { meta: l });
+      return layer;
+    } catch (e) { console.warn(e); return null; }
+  }
+
   // ----- public API -----
   const api = {
     async setBase(url, opts) {
@@ -733,7 +791,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       return layer;
     },
     setSlice(i) {
-      if (!st.base || st.base.depth <= 1) return;
+      if (!st.base || st.base.depth <= 1) return;   // (false-colour map: no bands)
       st.base.slice = Math.max(0, Math.min(st.base.depth - 1, i));
       for (const l of st.overlays) if (l.depth > 1) l.slice = Math.min(l.depth - 1, st.base.slice);   // T82: pass layers
       markDirty();
@@ -743,13 +801,23 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       for (const l of st.overlays) for (const t of l.tiles.values()) if (t.tex) gl.deleteTexture(t.tex);
       st.overlays = [];
       st.shown = -1;
-      const made = await Promise.all(layers.map(async (l) => {
-        try { return Object.assign(new Layer(l.url, await readProperties(l.url), l), { meta: l }); }
-        catch (e) { console.warn(e); return null; }
-      }));
+      const made = await Promise.all(layers.map(makeOverlay));
       st.overlays = made.filter(Boolean);
       markDirty();
       return st.overlays.map((l) => l.meta);
+    },
+    /** T55: how far overlay i is loaded for this view: {total, done, ok} tiles (done = loaded or none there). */
+    overlayProgress(i) {
+      const l = st.overlays[i];
+      if (!l) return null;
+      const k = l.meta?.eager ? eagerOrder(l) : pickOrder(l);
+      const pixs = l.meta?.eager ? sharpTiles(k).map(([p]) => p) : tilesFor(l, k);
+      let done = 0, ok = 0;
+      for (const pix of pixs) {
+        const t = l.tiles.get(l.key(k, pix));
+        if (t?.state === "ok") { ok++; done++; } else if (t?.state === "missing" || t?.state === "failed") done++;
+      }
+      return { total: pixs.length, done, ok };
     },
     /** T81: append overlays (e.g. an A − B layer) without reloading the others; returns their indexes. */
     async addOverlays(layers) {
@@ -764,6 +832,8 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       return made.map((_, k) => first + k);
     },
     showOverlay(i) { st.shown = i; markDirty(); },
+    /** T55: highest order the base map draws (null = its own maximum). */
+    setBaseCap(k) { if (st.baseCap !== k) { st.baseCap = k; markDirty(); } },
     setDebug(on) { st.debug = !!on; markDirty(); },
     /** {order, wanted, maxOrder, visible, sharp, blurry, empty, atMax, allSharp, loads, queued, errors} */
     stats() {
@@ -777,6 +847,15 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       setFrame(((Number(ra) % 360) + 360) % 360, Math.max(-90, Math.min(90, Number(dec))));
       if (fov) st.fov = Math.max(MIN_FOV, Math.min(MAX_FOV, fov));
       changed();
+    },
+    /** T55: like goTo, but the sky point (ra, dec) ends up under screen point (x, y) instead of the centre. */
+    placeAt(ra, dec, x, y, fov) {
+      api.goTo(ra, dec, fov);
+      dragTo([st.w / 2, st.h / 2], [x, y]);
+    },
+    /** T55: the field of view (deg) at which the map shows HiPS order k at one texel per screen pixel. */
+    fovForOrder(k) {
+      return ((TEXEL_ARCSEC_ORDER0 / 2 ** k) * st.w * st.dpr) / 3600;
     },
     /** Level the picture again: north up, east left, same centre and zoom. */
     northUp() { setFrame(st.ra, st.dec); changed(); },

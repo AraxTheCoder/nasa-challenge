@@ -69,6 +69,8 @@ export async function initChemistry(api) {
   $("#chem-feature").addEventListener("change", (e) => pick(e.target.value));
   // Another view took over the map (A/B, blink, A − B, an epoch button): the chemistry map is gone.
   for (const ev of ["viewer:frame", "viewer:diff", "explore:epoch-picked"]) document.addEventListener(ev, () => { if (st.shown) off(); });
+  // T90: the automatic blink took the map back (the view moved to another tile)
+  document.addEventListener("map:manual", (e) => { if (!e.detail?.on && st.shown) off(); });
   document.addEventListener("viewer:target", (e) => {
     off();
     st.target = e.detail?.target ?? null;

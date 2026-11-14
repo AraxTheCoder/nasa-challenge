@@ -42,6 +42,7 @@ Mati). When you finish a task, move its row to Done in the same commit.
 
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
+| T89 | C/A: Band switching that works on the map (passes per detector, instant within a detector; field epochs per band, builds only the shown detector) + a false-colour layer of all bands (passes and field epochs) | Jonathan | doing | `main` | [tasks/T89](tasks/T89-bands-false-colour.md). Reopened: faster false colour (LRGB). `app/` + tilegen/server; per-detector builds touch the build filter |
 | T06 | B: Mover detection v0 on the fixture: source extraction per frame, match across frames, keep what moves | Jonathan | doing | `jonathan/T06-mover-detection` | Start on `fixtures/`, switch to real data after T04 |
 | T10 | B: "Planet X mode": pick a slow distant body (dwarf planet), check it's detectable across epochs, propose the demo target list | Jonathan | doing | `jonathan/T10-test-targets` | Reworded 2026-11-14 for the official text: check SPHEREx multi-epoch coverage of the five official test fields (Barnard, Eps Indi B, WISE 0855, RW Aur, R Dra) + maybe one dwarf planet; feeds T05 warm-up |
 | T14 | C: Deploy: static viewer (e.g. GitHub Pages) + Live API on a host that runs Python, viewer pointed at it (contracts v0.3) | | open | | Needs T11, T18, T20. Reworded 2026-11-14 for live data (was: pre-baked targets, no live API calls) |
@@ -57,7 +58,6 @@ Mati). When you finish a task, move its row to Done in the same commit.
 | T68 | C: Split the big web files: filter / pairs / playback out of `viewer.js`, sky-map wiring out of `app.js` (pure refactor, browser test guards it) (idea I13) | | blocked | | [tasks/T68](tasks/T68-split-web-files.md). Blocked by T55: refactoring `web/` now would make porting to `app/` harder. |
 | T70 | B/C: Motion classes for real detections: asteroid-like / nearby star / distant body from rate, direction and shape, checked on T06 output (idea I15) | | open | | [tasks/T70](tasks/T70-detection-motion-classes.md). Partly done: classes for labels (T23), status + reason incl. class for detections (T08). |
 | T87 | B: What it is, from the bands: temperature, IR excess, ices (3.0 / 4.27 / 4.67 µm), CH4 3.3 and H2O 1.4 / 1.9 µm (brown dwarfs), CO 2.3 µm, PAH 3.3, Pa-α / Br-α, galaxy 1.6 µm bump; per source a class or hint | Joerg | open | | [tasks/T87](tasks/T87-band-features.md). Needs T85; after T86 |
-| T90 | C: Merge `/app/` (T55 redesign) back into `/web/`: first screen = the app/ map (automatic blink, floating panels), scroll down for every web/ widget (frame viewer, analysis, spectra, candidates, outliers…); nothing dropped from either | Jonathan | doing | `jonathan/T90-merge-app-web` | [tasks/T90](tasks/T90-merge-app-into-web.md). Touches all of web/ |
 | T91 | A: Measured motion of the official targets: each star's position fitted in every epoch (deep per-epoch stacks of its own exposures), proper motion with error from SPHEREx alone, compared with Gaia / the catalogue ("SPHEREx says 10.3″/yr, Gaia 10.4") | Joerg | doing | `joerg/T91-measured-motion` | [tasks/T91](tasks/T91-measured-motion.md). Barnard, Eps Indi B, WISE 0855 |
 | T92 | C: Guided tour of the five official targets: one click per stop opens the field, sets the layer, starts the blink and shows one sentence of what to watch | Joerg | open | | [tasks/T92](tasks/T92-guided-tour.md). After T90 (web/ layout) lands |
 | T93 | C/A: Chemistry maps: continuum-subtracted feature images for the shown field (water / CO₂ / CO ice, PAH, hydrogen lines): the image at the feature minus the continuum from neighbouring wavelengths, as a map layer + in the frame viewer | Mati | doing | `mati/T93-chemistry-maps` | [tasks/T93](tasks/T93-chemistry-maps.md). From the cached FITS cutouts (real fluxes, per-pixel wavelength); visualization only |
@@ -143,7 +143,7 @@ Mati). When you finish a task, move its row to Done in the same commit.
 | T85 | A: Spectra for a whole field: one pass over every exposure covering a field, photometry at every catalogue source at once (cost = reading the exposures, not the number of stars), cached per field | Joerg | done | `joerg/T85-field-spectra` | [tasks/T85](tasks/T85-field-spectra.md). Feeds T86, T87, T75 |
 | T86 | B: Spectral outliers: sources whose spectral shape is out of distribution for their field (field's own model of an ordinary star, calibrated scatter, only consistent deviations), ranked with a plain-words reason; second opinion from the catalogue prediction (idea I23) | Joerg | done | `joerg/T85-field-spectra` | [tasks/T86](tasks/T86-spectral-outliers.md). Needs T85 |
 | T88 | C: Unusual spectra on the map: "Unusual spectra" toggle in the map bar (measures the field if needed), rings + rank on the outliers, click → card with the reason, spectrum and charts; linked to the T86 panel | Joerg | done | `joerg/T88-outliers-map` | [tasks/T88](tasks/T88-outliers-map.md). Uses explore.js's public draw hook only, no change to the map code |
-| T89 | C/A: Band switching that works on the map (passes per detector, instant within a detector; field epochs per band, builds only the shown detector) + a false-colour layer of all bands (passes and field epochs) | Jonathan | done | `main` | [tasks/T89](tasks/T89-bands-false-colour.md). `app/` + tilegen/server; per-detector builds touch the build filter |
+| T90 | C: Merge `/app/` (T55 redesign) back into `/web/`: first screen = the app/ map (automatic blink, floating panels), scroll down for every web/ widget (frame viewer, analysis, spectra, outliers…); nothing dropped from either | Jonathan | done | `jonathan/T90-merge-app-web` | [tasks/T90](tasks/T90-merge-app-into-web.md). Touches all of web/ |
 
 ## Decisions
 
@@ -268,6 +268,7 @@ Dated, one line each, with why.
 - 2026-11-14 [Jonathan] CONTRACTS v0.19: `visits` per pass in `/api/pass-dates`. Why: near a pass boundary a pass holds two visits half a year apart (Epsilon Indi B: Apr & Oct 2025); the map labels them separately.
 - 2026-11-14 [Jonathan] CONTRACTS v0.20 (T89): `&detector=` on `/api/target`, epoch layers `e<n>d<det>` / `e<n>c`, sky layers `spherex-live-p<n>-rgb`, live-order slices rounded to the detector. Why: the band slider did nothing for field epochs (mean of all detectors) and re-rendered identical pass tiles for each of a detector's 17 channels; a one-detector field builds in 31 s instead of ~100 s.
 - 2026-11-14 [Jonathan] CONTRACTS v0.21 (T89): `spherex-live-rgb` (false-colour map at every zoom) and IRSA's blank cube slices 50/51 served from 49/52. Why: false colour did nothing zoomed out, and the band 2.399 µm (slice 50) left the zoomed-out map black.
+- 2026-11-14 [Jonathan] T90: `/web/` is now one page: first screen = the T55 map (automatic blink, floating panels), scroll down for every web/ feature (map tools, field form, frame viewer, analysis, spectra, objects, frames, provenance). Nothing of web/ or app/ dropped. `/app/` stays as it is until we decide to remove it. Why: one viewer for the demo, and the others keep all their widgets.
 - 2026-11-14 [Joerg] CONTRACTS v0.22 (T58): limits for a public Live API behind `--public`: 429 / 503 busy with Retry-After, admin token for refresh and settings, cache cap. Why: a public server must not download unlimited data or fill its disk; off by default, so nothing changes for the team.
 - 2026-11-14 [Mati] **Scope: the tool shows the data beautifully, citizen scientists do the finding.** We build
   visualization (blink, bands, stacks, differences, spectra, overlays, map) and no automatic discovery: no
@@ -428,6 +429,7 @@ Things waiting on a human.
   Still useful later for slow distant bodies (T10 Planet X mode) with shift-and-stack (T69), and for the
   "follows the detector" artifact rule (T67).
 - 2026-11-14 [Joerg → Jonathan] T89: proposal to feed your false colour / band layers with deep per-detector (and per-epoch) stacks from the T85 cutouts (~40 exposures per detector instead of 2); details in tasks/T89 "Notes from others". Your call; I won't touch it unless you say so.
+- 2026-11-14 [Jonathan → all] After T90, CLAUDE.md's rule "`app/` is Jonathan's UI redesign, everyone else works in `web/`" is out of date: the redesign lives in `web/` now. Proposal: everyone works in `web/` again, `app/` gets deleted once you've looked at `/web/`. Say so here (or just delete it).
 - 2026-11-14 [Joerg → all] T14 public deploy: which host? Options: the us-east4 VM (already serves tiles, next to the data), a new small VM, or this host behind a tunnel. Needs a decision before Sunday noon; T58 limits are being added now.
 - 2026-11-14 Mati (Claude) [→ Joerg, Jonathan]: see the new Decision "the tool shows the data, citizen scientists
   do the finding". [→ Joerg] T84/T86 panels stay (on demand, the user judges); T87 (classes from the bands) is
@@ -783,6 +785,12 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Jonathan (Claude): T89 follow-up: false colour now at every zoom (base map `spherex-live-rgb`: IRSA cube
   one channel per detector to order 5, live tiles above); cube slices 50/51 (blank at IRSA) from 49/52; Debug says
   "NO DATA" instead of "SHARP" when no visible tile has data.
+- 2026-11-14 Jonathan (Claude): T90 done: `/app/` merged into `/web/`. First screen = the T55 map (Go, 📍, panels,
+  automatic blink of survey passes / tile field epochs, band per detector, false colour, balanced tiles); scroll
+  down for everything web/ had: map tools (base map, N↑, T82 pass buttons, Blink this spot), the field
+  form (Show), frame viewer, analysis, spectra, objects, frames, provenance. The frame viewer / pass buttons take the
+  map over until the view moves to another tile. [to everyone] pull and look at `/web/` before building on it;
+  `web/tests/browser_test.py` not run by me (please run it). `overview_check.mjs` adapted to T89 (Joerg's T48 test).
 - 2026-11-14 [Joerg] Claimed T58 (limits before a public deploy) and T91 (measured motion of the official targets); added T92 (guided tour), starts after T90 lands. T14 (deploy) needs a host decision from the humans: under Questions.
 - 2026-11-14 [Joerg] T58 done: `python -m server --public` adds per-IP rate limits, a per-IP and server-wide cap on new expensive jobs (429 / 503 busy), admin token for refresh and settings, and an LRU cache cap. Off by default. Next for T14: a host (question under Questions / Blockers).
 - 2026-11-14 Mati (Claude): Mati's Decision: visualization only, citizen scientists find things. T73–T75 parked (branch `mati/T73-survey-pilot` pushed, not merged: survey runner, `pipeline/variability.py`, pilot on 7 of 25 fields). Next: deploy (T14) and submission (T15/T16), timing with the team.
