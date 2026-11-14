@@ -10,46 +10,85 @@
 <body>
   <header class="topbar">
     <h1>SPHEREx Blink</h1>
-    <label class="picker">Target
-      <select id="target-select" disabled></select>
+
+    <!-- Live mode (default): ask the Live API for any RA/Dec. -->
+    <form id="field-form" class="field-form" autocomplete="off">
+      <label>RA <input name="ra" type="text" required placeholder="08h55m10.8s or 133.795" spellcheck="false"></label>
+      <label>Dec <input name="dec" type="text" required placeholder="-7d14m42.5s or -7.245" spellcheck="false"></label>
+      <label>Field <input name="size" type="number" min="5" max="60" step="1" value="15" required> ′</label>
+      <button type="submit" class="primary">Show</button>
+      <select id="preset" aria-label="Test fields" hidden>
+        <option value="">Test fields…</option>
+      </select>
+    </form>
+
+    <!-- Offline mode (?data=<folder>): pick from a static index.json. -->
+    <label id="picker" class="picker" hidden>Target
+      <select id="target-select"></select>
     </label>
+
     <span id="synthetic-badge" class="badge badge-synthetic" hidden>Synthetic data · not SPHEREx</span>
   </header>
 
   <div id="messages" class="messages" role="status" aria-live="polite"></div>
 
+  <section id="job" class="job" hidden aria-live="polite">
+    <div class="job-head">
+      <strong id="job-title">Building field…</strong>
+      <span id="job-elapsed" class="muted"></span>
+      <button id="job-cancel" type="button" class="link">Stop waiting</button>
+    </div>
+    <progress id="job-progress"></progress>
+    <p id="job-message" class="muted small"></p>
+  </section>
+
   <main class="layout">
     <section class="viewer" aria-label="Frame viewer">
-      <div class="target-head">
-        <h2 id="target-name">Loading…</h2>
-        <p id="target-meta" class="muted"></p>
+      <div id="empty" class="empty">
+        <h2>Pick a patch of sky</h2>
+        <p class="muted">Enter RA and Dec above (decimal degrees or sexagesimal) or choose one of the
+          test fields. The first request for a field builds it from SPHEREx data and can take a minute
+          or two; later requests come from the cache.</p>
       </div>
 
-      <div id="stage" class="stage">
-        <div id="frame-stack" class="frame-stack"></div>
-        <!-- Overlay layer for detections / known objects (T13). Pixel coords per CONTRACTS. -->
-        <svg id="overlay" class="overlay" aria-hidden="true"></svg>
-        <div id="stage-label" class="stage-label"></div>
-        <div id="stage-error" class="stage-error" hidden></div>
-        <div id="stage-watermark" class="stage-watermark" hidden>SYNTHETIC · NOT SPHEREx DATA</div>
-      </div>
+      <div id="viewer-body" hidden>
+        <div class="target-head">
+          <div>
+            <h2 id="target-name"></h2>
+            <p id="target-meta" class="muted"></p>
+          </div>
+          <div class="target-actions">
+            <button id="btn-copy" type="button" class="link" title="Copy a link to this field">Copy link</button>
+            <button id="btn-rebuild" type="button" class="link" title="Rebuild from IRSA to pick up new data">Rebuild</button>
+          </div>
+        </div>
 
-      <div class="controls">
-        <button id="btn-a" type="button" class="slot slot-a" title="Show frame A">A</button>
-        <button id="btn-play" type="button" class="play" aria-pressed="false" title="Blink A/B (Space)">▶ Blink</button>
-        <button id="btn-b" type="button" class="slot slot-b" title="Show frame B">B</button>
-        <label class="speed">Interval
-          <input id="speed" type="range" min="100" max="2000" step="50" value="500">
-          <output id="speed-out" for="speed">500 ms</output>
-        </label>
+        <div id="stage" class="stage">
+          <div id="frame-stack" class="frame-stack"></div>
+          <!-- Overlay layer for detections / known objects (T13). Pixel coords per CONTRACTS. -->
+          <svg id="overlay" class="overlay" aria-hidden="true"></svg>
+          <div id="stage-label" class="stage-label"></div>
+          <div id="stage-error" class="stage-error" hidden></div>
+          <div id="stage-watermark" class="stage-watermark" hidden>SYNTHETIC · NOT SPHEREx DATA</div>
+        </div>
+
+        <div class="controls">
+          <button id="btn-a" type="button" class="slot slot-a" title="Show frame A">A</button>
+          <button id="btn-play" type="button" class="play" aria-pressed="false" title="Blink A/B (Space)">▶ Blink</button>
+          <button id="btn-b" type="button" class="slot slot-b" title="Show frame B">B</button>
+          <label class="speed">Interval
+            <input id="speed" type="range" min="100" max="2000" step="50" value="500">
+            <output id="speed-out" for="speed">500 ms</output>
+          </label>
+        </div>
+        <p class="hint muted">
+          <kbd>Space</kbd> blink on/off · <kbd>X</kbd> flip A/B · <kbd>←</kbd>/<kbd>→</kbd> step through frames ·
+          <span class="nodata-swatch" aria-hidden="true"></span> hatched = no data
+        </p>
       </div>
-      <p class="hint muted">
-        <kbd>Space</kbd> blink on/off · <kbd>X</kbd> flip A/B · <kbd>←</kbd>/<kbd>→</kbd> step through frames ·
-        <span class="nodata-swatch" aria-hidden="true"></span> hatched = no data
-      </p>
     </section>
 
-    <aside class="side">
+    <aside id="side" class="side" hidden>
       <section class="panel">
         <h3>Shown frame</h3>
         <dl id="frame-info" class="info"></dl>
@@ -84,7 +123,7 @@
   </main>
 
   <footer class="footer muted small">
-    Data root: <code id="data-root">–</code>
+    <span id="source-info">–</span>
   </footer>
 </body>
 </html>
