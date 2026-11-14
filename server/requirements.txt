@@ -2,3 +2,4 @@
 fastapi==0.162.7
 uvicorn==0.54.0
 -r ../pipeline/requirements.txt
+astropy-healpix==2.0.1
