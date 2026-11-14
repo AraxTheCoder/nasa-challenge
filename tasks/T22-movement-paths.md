@@ -1,6 +1,6 @@
 # T22: Movement paths in the viewer
 
-- **Owner:** Joerg  ·  **Status:** review (waiting for a visual check in a browser)
+- **Owner:** Joerg  ·  **Status:** done (merged; visual check by eye still welcome)
 - **Branch:** `joerg/T22-movement-paths`
 - **Depends on / feeds:** T19 (`labels`), T07 (`known_objects`), T06/T08 (`detections`); part of
   what T13 (overlay) wants. From the idea "Draw paths, not just positions" in TEAM.md.
