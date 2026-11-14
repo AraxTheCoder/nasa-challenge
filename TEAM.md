@@ -123,6 +123,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T85 | A: Spectra for a whole field: one pass over every exposure covering a field, photometry at every catalogue source at once (cost = reading the exposures, not the number of stars), cached per field | Joerg | done | `joerg/T85-field-spectra` | [tasks/T85](tasks/T85-field-spectra.md). Feeds T86, T87, T75 |
 | T86 | B: Spectral outliers: sources whose spectral shape is out of distribution for their field (field's own model of an ordinary star, calibrated scatter, only consistent deviations), ranked with a plain-words reason; second opinion from the catalogue prediction (idea I23) | Joerg | done | `joerg/T85-field-spectra` | [tasks/T86](tasks/T86-spectral-outliers.md). Needs T85 |
 | T87 | B: What it is, from the bands: temperature, IR excess, ices (3.0 / 4.27 / 4.67 µm), CH4 3.3 and H2O 1.4 / 1.9 µm (brown dwarfs), CO 2.3 µm, PAH 3.3, Pa-α / Br-α, galaxy 1.6 µm bump; per source a class or hint | Joerg | open | | [tasks/T87](tasks/T87-band-features.md). Needs T85; after T86 |
+| T88 | C: Unusual spectra on the map: "Unusual spectra" toggle in the map bar (measures the field if needed), rings + rank on the outliers, click → card with the reason, spectrum and charts; linked to the T86 panel | Joerg | doing | `joerg/T88-outliers-map` | [tasks/T88](tasks/T88-outliers-map.md). Uses explore.js's public draw hook only, no change to the map code |
 
 ## Decisions
 
@@ -731,3 +732,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   pass labels list each visit ("Apr & Oct 2025": near a pass boundary one pass holds two visits;
   `/api/pass-dates` gains `visits`, CONTRACTS v0.19); stale highlight on the pass labels fixed.
 - 2026-11-14 [Joerg] Board: removed a blank line between T47 and T48 that split the table (GitHub showed every row after T47 as plain text).
+- 2026-11-14 [Joerg] Claimed T88: T86 results on the map (toggle in the map bar, rings, click card). [to Jonathan] done from `web/outliers.js` through `explore.addDrawHook` / pointer events on `#sky`; no edit to explore.js. `/app/` would need its own version if you want it there.
