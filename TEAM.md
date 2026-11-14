@@ -93,6 +93,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T54 | A/C: Known objects + labels start while the images download (they need only frame times + field geometry), so a new field is complete when its frames are | Joerg | doing | `joerg/T52-more-labels` | [tasks/T54](tasks/T54-early-objects-labels.md). New field: frames 11 s, objects +2.5 s, labels +2-3 s today |
 | T56 | All: Docs match the code (idea I2): README status/run/how-it-works, CONTRACTS without pre-baked `web/targets/` + `pipeline.publish`, undocumented API routes, a schema-0.2 fixture with pairs/labels/varied detections | Mati | done | `mati/T52-docs-current` | [tasks/T56](tasks/T56-docs-current.md). Was claimed as T52, then T55 (ID clashes with Joerg's T52, Jonathan's T55). Also: classify fix for SkyBoT/MPC, tilegen tests in CI |
 | T55 | C: UI redesign under `/app/` (copy of `web/`); `web/` and `/web/` stay as they are for all other work | Jonathan | doing | `jonathan/T55-app-ui` | [tasks/T55](tasks/T55-app-ui.md). UI work only; everyone else keeps working in `web/` |
+| T57 | A: Faster "Show": the US VM (tilegen, `us-east4`) reads + cuts the SPHEREx images next to the bucket and sends only the small cutout FITS (gzip); build/photometry/caches stay local; fallback S3, then IRSA | Jonathan | doing | `jonathan/T57-vm-cutouts` | [tasks/T57](tasks/T57-vm-cutouts.md). Download was ~36 s of ~45 s for a new field |
 
 ## Decisions
 
