@@ -390,3 +390,28 @@ body.map-only #ph-measure { display: none !important; }
 .ol-tick { fill: var(--muted); font-size: 8px; }
 .ol-caveat { margin: 4px 0 0; }
 @media (max-width: 600px) { .ol-detail { flex-wrap: wrap; } .ol-chart { width: 100%; } }
+/* T86 view: colour–colour diagram + selected source's bands */
+.ol-viz { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0 4px; }
+.ol-fig { margin: 0; min-width: 0; }
+.ol-fig figcaption { margin-bottom: 4px; }
+.ol-cc, .ol-shape { display: block; background: var(--panel-2); border-radius: 6px; max-width: 100%; }
+.ol-grid { stroke: var(--border); stroke-width: 1; opacity: 0.6; }
+.ol-axis { fill: var(--muted); font-size: 10px; }
+.ol-dot { fill: #8b93a7; opacity: 0.75; stroke: var(--panel-2); stroke-width: 1; }
+.ol-dot-other { fill: none; stroke: #8b93a7; stroke-width: 1.2; }
+.ol-dot-odd { opacity: 1; stroke: var(--panel-2); stroke-width: 2; }
+.ol-ring { fill: none; stroke-width: 2; }
+.ol-hit { fill: transparent; cursor: pointer; }
+.ol-env { fill: #8b93a7; opacity: 0.22; }
+.ol-model { fill: none; stroke-width: 2; stroke-dasharray: 5 4; }
+.ol-src { fill: none; stroke-width: 1.5; opacity: 0.6; }
+.ol-pt { stroke: var(--panel-2); stroke-width: 1.5; }
+.ol-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 0; }
+.ol-key { display: inline-flex; align-items: center; gap: 5px; }
+.ol-sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c, #8b93a7); }
+.ol-sw-ord { background: #8b93a7; opacity: 0.75; }
+.ol-sw-sel { background: none; border: 2px solid var(--c); }
+.ol-sw-line { width: 16px; height: 0; border-radius: 0; background: none; border-top: 2px dashed var(--c); }
+.ol-sw-env { width: 16px; height: 10px; border-radius: 2px; background: #8b93a7; opacity: 0.35; }
+.ol-item { cursor: pointer; border-radius: 4px; }
+.ol-item.is-selected { background: var(--panel-2); box-shadow: inset 3px 0 0 #3987e5; }

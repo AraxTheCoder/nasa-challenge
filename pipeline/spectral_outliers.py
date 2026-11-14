@@ -36,7 +36,7 @@ import numpy as np
 
 from .anomaly import BINS, CLEAN_MASKED
 
-VERSION = 1
+VERSION = 2                  # 2: chart data (points, envelope)
 MIN_CELL_SNR = 5.0           # a band's median flux must be this far above its error to count
 MIN_BANDS = 8                # bands (over all epochs) a source needs to be judged
 N_COMPONENTS = 2             # principal shapes on top of the mean shape
@@ -54,6 +54,9 @@ BLEND_DMAG = 1.5             # ... and at most this much fainter adds >= 25 % of
 VARIABLE_HINTS = ("V*", "Mi*", "RR*", "Ce*", "Or*", "TT*", "Ae*", "Y*O", "pr*", "EB*", "Ro*", "LP*", "s*r", "C*")
 GALAXY_HINTS = ("G", "GiG", "GiC", "AGN", "QSO", "Sy1", "Sy2", "BLL", "LIN", "SBG", "EmG", "rG", "H2G", "bCG")
 CENTRES = np.sqrt(BINS[:-1] * BINS[1:])
+# Colour–colour diagram (T86 view): mean band shape over these ranges, µm. x = short − mid, y = mid − long, in
+# magnitudes (positive = redder). Ordinary stars sit on one sequence; dust, cool dwarfs and galaxies leave it.
+COLOUR_BANDS = {"short": (1.0, 1.35), "mid": (1.9, 2.5), "long": (3.4, 4.8)}
 
 # What a deviation over a wavelength range may mean (standard values; the same list as web/spectrum.js T63).
 # (lo, hi) µm, sign (+1 brighter, -1 fainter, 0 either), words.
@@ -379,11 +382,46 @@ def find_outliers(fs: dict) -> dict:
     else:
         summary = (f"{len(items)} of {n_j} sources stand out ({len(clean)} without caveats), "
                    f"judged against {int(ref.sum())} ordinary ones.")
+    views = _views(Y, S, C, M, A, V, scatter, sources, judged, ref, {it["id"] for it in items}, scores)
     return {"version": VERSION, "items": items, "scores": scores, "n_sources": ns, "n_judged": n_j,
-            "n_reference": int(ref.sum()), "components": K, "epochs": epochs, "summary": summary,
+            "n_reference": int(ref.sum()), "components": K, "epochs": epochs, "summary": summary, **views,
             "scatter_pct": [round(float(10 ** s - 1) * 100, 1) for s in scatter],
             "not_judged": _not_judged(fs, sources, judged, n_bands),
             "method": _method(int(ref.sum()), K)}
+
+
+def _band_mean(row, lo, hi):
+    sel = (CENTRES >= lo) & (CENTRES <= hi) & np.isfinite(row)
+    return float(row[sel].mean()) if sel.any() else math.nan
+
+
+def _r(v, nd=3):
+    return None if v is None or not np.isfinite(v) else round(float(v), nd)
+
+
+def _views(Y, S, C, M, A, V, scatter, sources, judged, ref, outlier_ids, scores) -> dict:
+    """For the charts: each judged source's band shape (level taken out, epochs combined, dex), the shape an
+    ordinary source of its kind would have (the model), the field's spread, and two colours per source."""
+    w = np.where(np.isfinite(Y), 1.0 / (S ** 2 + scatter[None, None, :] ** 2), 0.0)
+    wsum = w.sum(1)
+    shape = np.where(wsum > 0, (w * np.nan_to_num(Y - C[:, :, None])).sum(1) / np.where(wsum > 0, wsum, 1), np.nan)
+    model = M[None, :] + A @ V if A.size else np.repeat(M[None, :], len(sources), 0)
+    with np.errstate(all="ignore"), __import__("warnings").catch_warnings():
+        __import__("warnings").simplefilter("ignore", RuntimeWarning)
+        env = np.nanpercentile(shape[ref], [16, 50, 84], axis=0) if ref.any() else np.full((3, len(CENTRES)), np.nan)
+    points = []
+    for i in np.flatnonzero(judged):
+        s = shape[i]
+        a, b, c = (_band_mean(s, *COLOUR_BANDS[k]) for k in ("short", "mid", "long"))
+        points.append({"id": sources[i]["id"], "name": sources[i]["name"], "otype": sources[i].get("otype"),
+                       "ra_deg": sources[i]["ra_deg"], "dec_deg": sources[i]["dec_deg"],
+                       "x": _r(-2.5 * (a - b), 2), "y": _r(-2.5 * (b - c), 2),   # magnitudes: + = redder
+                       "outlier": sources[i]["id"] in outlier_ids, "reference": bool(ref[i]),
+                       "score": scores.get(sources[i]["id"], 0.0),
+                       "shape": [_r(v) for v in s], "model": [_r(v) for v in model[i]]})
+    return {"bands_um": [round(float(c), 3) for c in CENTRES], "points": points,
+            "envelope": {k: [_r(v) for v in env[j]] for j, k in enumerate(("p16", "p50", "p84"))},
+            "colours": {k: [lo, hi] for k, (lo, hi) in COLOUR_BANDS.items()}}
 
 
 def _not_judged(fs, sources, judged, n_bands):
