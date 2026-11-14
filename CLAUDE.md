@@ -88,3 +88,15 @@ Source of truth, in order: `docs/CHALLENGE.md` (official text) > `docs/CONTRACTS
 - Update your task status on the Board.
 - Append a handoff note to the TEAM.md Log: who, what's done, what's next, gotchas.
 - Commit `board: …` and push.
+
+## Personal rules: Jonathan only
+
+These apply only to sessions with Jonathan (git user `Jonathan`). Other humans' agents ignore this
+section.
+
+- **Nothing gets pushed before Jonathan has tested and verified it.** Commit locally on the task
+  branch; merge to main and push only after his explicit OK. The only exception is Board
+  bookkeeping that the team process requires immediately (`board: claim T<id>`).
+- **After every task, start everything needed to test it** (servers, viewer, in the background)
+  and tell him exactly what to test: URLs to open, commands to run, steps to click, and the
+  expected result for each. Then wait for his verdict.
