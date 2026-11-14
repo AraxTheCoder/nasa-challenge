@@ -1,6 +1,6 @@
 # T23: Labelling over time: moving objects and image series
 
-- **Owner:** Joerg  ·  **Status:** doing
+- **Owner:** Joerg  ·  **Status:** done
 - **Branch:** `joerg/T23-labels-over-time`
 - **From Joerg's feature list (2026-11-14):** object inspector, cleaner labels, motion vectors.
 - **Depends on / feeds:** builds on T19 (catalogue labels, done) and T22 (paths in the viewer,
@@ -38,7 +38,7 @@ visible without blinking: a trail image and, later, shift-and-stack along a moti
       shifted median stacks side by side (synthetic input stamped SYNTHETIC). On the fixture the fake
       asteroid vanishes from the plain stack and is a sharp dot in the shifted one. Next: guessed
       motions as a search tool for T10 (Jonathan)
-- [ ] Try it on the official test targets once `build_target` produces real frames (T02–T04)
+- [-] Try it on the official test targets: dropped 2026-11-14. `build_target` makes real fields now and every label has a position in every frame of every epoch (134/134 on c0767409-p243202-s15, 36 frames, epochs 1–3)
 
 ## Findings
 - Motion classes on the real Barnard's Star field: Barnard's Star (SIMBAD and its Gaia twin) =
