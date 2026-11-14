@@ -2,6 +2,7 @@
 
 - **Owner:** Joerg  ·  **Status:** doing
 - **Branch:** `joerg/T23-labels-over-time`
+- **From Joerg's feature list (2026-11-14):** object inspector, cleaner labels, motion vectors.
 - **Depends on / feeds:** builds on T19 (catalogue labels, done) and T22 (paths in the viewer,
   review); uses T07 (`known_objects`) and T06/T08 (`detections`, Jonathan) once they exist; feeds
   T10 ("Planet X mode") and the demo. Moved onto the Board from the Ideas "Draw paths", "Motion
@@ -25,6 +26,12 @@ visible without blinking: a trail image and, later, shift-and-stack along a moti
       seen in one burst only, ~150 px/day for the main belt), distant solar-system body (big jump
       between epochs, slow drift within one). For detections: agree the rule with Jonathan (T06/T08)
 - [ ] Show the class next to the name in the viewer (with T22's layer)
+- [ ] Object inspector: click an object → side panel with coordinates, catalogue matches (SIMBAD,
+      Gaia), observation history per frame (time, epoch, wavelength, position, and brightness at
+      that spot), motion data; Barnard's Star as the demo object. Grows out of T22's pinned tooltip;
+      coordinate with Mati's objects list (T13)
+- [ ] Cleaner labels: avoid overlapping names (shift or hide lower-priority ones), show catalogue
+      numbers only on hover, fewer rings at wide fields
 - [ ] Trail image: one burst or one epoch summed into one picture, movers as dot rows or streaks
 - [ ] Shift-and-stack prototype along a known motion (Barnard's Star first), then along guessed
       motions as a search tool for T10

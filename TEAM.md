@@ -146,6 +146,16 @@ Format: `[name] idea — status: new`. Agents don't act on an idea until a human
   or subtract images". — status: new
 - [Joerg] Trail image: sum one burst (or one epoch) into a single picture so movers show as dot rows
   or streaks without playing the blink. — status: new
+- [Joerg] Feature list from Joerg (2026-11-14), what's not covered yet. Already covered: timeline
+  (T12), blink (T11), matched pairs (T12/T17), layer toggles + motion paths + hover info (T22),
+  objects list + status markers (T13), mover detection (T06), all-sky pan/zoom with epochs
+  (T30/T32), Barnard's Star as validation (T19/T23). New: — status: new
+  - Appear / disappear / brightness change between epochs, not only motion (detect side, B).
+  - "Uncatalogued?" check: a detection with no SIMBAD/Gaia label within ~1 px gets flagged
+    (labels are already in target.json, so this is a cheap cross-match).
+  - Candidate ranking (motion significance, consistency across frames, catalogue match, artifact
+    probability from the FLAGS bits) and a dedicated candidate list in the viewer.
+  - Photutils for source extraction (not in requirements.lock yet: add with a pin + lock update).
 
 ## Questions / Blockers
 
