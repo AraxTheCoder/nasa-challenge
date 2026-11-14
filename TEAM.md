@@ -115,7 +115,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T76 | C: Discovery index in the viewer: candidates per tile from the survey served by the Live API; "Show me something interesting" + candidate list, each opening its field with blink, spectrum and reason | | open | | [tasks/T76](tasks/T76-discovery-index.md). Suggested owner: Mati. Can start on a synthetic sample index. |
 | T77 | B: (merged into T74/T75, the same survey; measured scope + per-band plan moved to tasks/T74 Notes) | Joerg | done | | [tasks/T77](tasks/T77-sky-survey-hpc.md) |
 | T78 | C: Type an exact wavelength: a µm input next to the sky map's band slider (snaps to the nearest of the 102 channels, shows its exact centre) and "frames at λ" in the blink viewer (A/B = the frames nearest that wavelength in two epochs) | Mati | done | `mati/T78-wavelength-input` | [tasks/T78](tasks/T78-wavelength-input.md). Mati's request; needs porting to `app/` (T55) |
-| T79 | C: Click to measure: a plain click on the frame image measures that star (no "Measure a star" mode needed); a click anywhere on the explore map gives the spectrum + light curve of that sky point from all exposures, field or not (`GET /api/photometry?ra=&dec=`) | Joerg | doing | `joerg/T79-click-spectrum` | [tasks/T79](tasks/T79-click-spectrum.md). Joerg: "nothing happens if I click on a pixel". `/app/` (T55): note for Jonathan |
+| T79 | C: Click to measure: a plain click on the frame image measures that star (no "Measure a star" mode needed); a click anywhere on the explore map gives the spectrum + light curve of that sky point from all exposures, field or not (`GET /api/photometry?ra=&dec=`) | Joerg | done | `joerg/T79-click-spectrum` | [tasks/T79](tasks/T79-click-spectrum.md). Joerg: "nothing happens if I click on a pixel". `/app/` (T55): note for Jonathan |
 
 ## Decisions
 
@@ -610,3 +610,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   position under the mouse; Field input removed (Blink builds 1/3 of the view). `web/` unchanged.
 - 2026-11-14 Jonathan (Claude): T55 step 8 (`app/` only): pin held at its head, RA/Dec in two lines beside it;
   Go centres + zooms to order 7; epochs merged into the band panel. `web/` unchanged.
+- 2026-11-14 Mati (Claude): Mati's outlier method (expected spectral profile per source → measured vs expected → heatmap of outliers) written into T75 (Notes from others) with two rules: boundaries calibrated per tile from the data, and only consistent outliers count. Pointer in T76. Joerg: please read before the scoring step.

@@ -13,6 +13,16 @@ const COLOURS = { simbad: "#9cc3ff", vsx: "#ffb36b", catwise2020: "#e88bff" };
 const st = { on: true, region: null, labels: [], pending: null, timer: null, hooked: false, placed: [],
   traced: new Set(), tip: null };
 
+/** T79: the labelled dot drawn nearest to canvas px (x, y), within 8 px; null if none. */
+export function nearestLabel(x, y) {
+  let best = null, bd = 64;
+  for (const p of st.placed) {
+    const d = (p.x - x) ** 2 + (p.y - y) ** 2;
+    if (d < bd) { bd = d; best = p.l; }
+  }
+  return best;
+}
+
 function namesBudget(fov) { return fov > 1 ? 20 : fov > 0.4 ? 40 : 120; }
 const NUMBERS_FOV_DEG = 0.25;   // catalogue numbers (2dFGRS, LEDA, Gaia DR3 ...) get a name only closer than this
 
@@ -129,6 +139,7 @@ function hook() {
 }
 
 document.addEventListener("explore:ready", hook);
+// T79: photometry.js snaps a map click to a labelled dot within 8 px
 document.addEventListener("labels:changed", (e) => {
   st.on = Boolean(e.detail?.on);
   hook();

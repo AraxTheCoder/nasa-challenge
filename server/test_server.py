@@ -355,3 +355,19 @@ def test_photometry_all_exposures_job(tmp_path, monkeypatch):
             break
         time.sleep(0.02)
     assert r.status_code == 200 and r.json()["all_exposures"] is True and r.json()["frames"] == [{"frame_id": "o1-D1"}]
+
+
+def test_photometry_anywhere_no_field_needed(tmp_path, monkeypatch):
+    """T79: GET /api/photometry?ra=&dec= measures all exposures at any sky point."""
+    import pipeline.photometry as ph
+    monkeypatch.setattr(ph, "SPECTRA_ROOT", tmp_path / "spectra")
+    monkeypatch.setattr(ph, "measure_all", lambda ra, dec, progress=None: {
+        "ra_deg": ra, "dec_deg": dec, "frames": [], "all_exposures": True, "n_exposures": 0})
+    client = TestClient(create_app(tmp_path))
+    for _ in range(100):
+        r = client.get("/api/photometry", params={"ra": 10.5, "dec": -3.25})
+        if r.status_code == 200:
+            break
+        time.sleep(0.02)
+    assert r.status_code == 200 and r.json()["ra_deg"] == 10.5 and r.json()["all_exposures"] is True
+    assert client.get("/api/photometry", params={"ra": 400, "dec": 0}).status_code == 400
