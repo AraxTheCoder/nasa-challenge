@@ -20,7 +20,8 @@ const MAX_FOV = 240;                      // stereographic shows more than a hem
 const BACK_COSC = -0.6;                   // don't draw beyond ~127 deg from the centre
 const MIN_FOV = 1 / 60;                   // 1 arcmin
 const MAX_TEXTURES = 200;           // 1 MB of GPU memory each
-const MAX_PARALLEL_LOADS = 12;            // our tile cache is local; browsers cap per host anyway
+const MAX_PARALLEL_LOADS = 6;             // = what a browser opens per host over HTTP/1.1
+const MAX_SLOW_LOADS = 2;                 // live-rendered tiles: leave connections for the rest
 
 // ---------- HiPS layer ------------------------------------------------------------------------
 
@@ -48,6 +49,8 @@ class Layer {
     this.label = opts.label ?? props.obs_title ?? url;
     this.props = props;
     this.tiles = new Map();     // key -> {state: "loading"|"ok"|"missing", tex, used}
+    // Orders a server renders on demand (our live deep zoom): slow, so only a few at a time.
+    this.slowOrders = new Set((props.x_live_orders ?? "").split(/\s+/).filter(Boolean).map(Number));
   }
   tileUrl(order, pix) {
     const s = this.depth > 1 && this.slice > 0 ? `_${this.slice}` : "";
@@ -105,7 +108,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   const { gl } = G;
 
   const st = { ra, dec, fov, w: 1, h: 1, dpr: 1, base: null, overlays: [], shown: -1,
-    dirty: true, loads: 0, queue: [], hooks: [], frame: 0, errors: 0, debug: false, stats: null, listeners: { change: [], tiles: [] } };
+    dirty: true, loads: 0, queue: [], inflight: new Set(), hooks: [], frame: 0, errors: 0, debug: false, stats: null, listeners: { change: [], tiles: [] } };
 
   // ----- projection (stereographic, north up, east left) -----
   // Screen px per unit of the projection plane: the view's half width covers fov/2.
@@ -241,21 +244,34 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       });
       st.queue.sort((a, b) => b.t.prio - a.t.prio);         // pop() takes the smallest prio
     }
+    // Abort downloads of tiles that left the screen (zoomed past them): frees the connection now.
+    for (const job of st.inflight) {
+      if (job.t.want < st.frame - 1 && job.t.prio >= 0) {
+        job.ctrl.abort();
+      }
+    }
+    const slowBusy = () => [...st.inflight].filter((j) => j.slow).length;
+    let skipped = [];
     while (st.loads < MAX_PARALLEL_LOADS && st.queue.length) {
       const job = st.queue.pop();
       if (job.t.state !== "queued") continue;
+      job.slow = job.order != null && job.layer.slowOrders.has(job.order);
+      if (job.slow && slowBusy() >= MAX_SLOW_LOADS) { skipped.push(job); continue; }
       job.t.state = "loading";
       st.loads++;
       load(job);
     }
+    if (skipped.length) st.queue.push(...skipped.reverse());
   }
 
   // Tiles come via fetch() so we see the HTTP status: 404 = no tile there (final), anything else
   // (timeout, 502/503 from a busy upstream) is retried with back-off instead of being given up.
   async function load(job) {
     const t = job.t;
+    job.ctrl = new AbortController();
+    st.inflight.add(job);
     try {
-      const res = await fetch(job.url ?? job.layer.tileUrl(job.order, job.pix));
+      const res = await fetch(job.url ?? job.layer.tileUrl(job.order, job.pix), { signal: job.ctrl.signal });
       if (res.status === 404) { t.state = "missing"; return; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const bmp = await createImageBitmap(await res.blob());
@@ -273,6 +289,11 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       evict();
       markDirty();
     } catch (e) {
+      if (e.name === "AbortError") {             // left the screen: forget it, asked again if it comes back
+        t.state = "aborted";
+        job.layer.tiles.delete(t.key);
+        return;
+      }
       t.tries = (t.tries ?? 0) + 1;
       st.errors++;
       if (t.tries >= 5) { t.state = "failed"; t.error = String(e.message ?? e); }
@@ -282,6 +303,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
           500 * 2 ** t.tries);
       }
     } finally {
+      st.inflight.delete(job);
       st.loads--;
       pump();
     }
@@ -425,7 +447,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       `texel ${texel.toFixed(1)}"  screen px ${screen.toFixed(2)}"`,
       atMax ? "MAX ZOOM: the map has no finer tiles here" : "more detail available when zooming in",
       allSharp ? "SHARP: all visible tiles at this order loaded" : `loading: ${s.sharp}/${s.visible} sharp, ${s.blurry} blurry, ${s.empty} empty`,
-      `in flight ${st.loads}, queued ${st.queue.length}, errors ${st.errors}`,
+      `in flight ${st.loads} (${[...st.inflight].filter((j) => j.slow).length} live), queued ${st.queue.length}, errors ${st.errors}`,
     ];
     const w = 330, h = 14 * lines.length + 10;
     ctx.fillStyle = "rgba(0,0,0,0.7)";
@@ -560,12 +582,14 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       const layer = new Layer(url, await readProperties(url), opts);
       if (st.base) for (const t of st.base.tiles.values()) if (t.tex) gl.deleteTexture(t.tex);
       st.base = layer;
+      requestAllsky(layer);            // the zoomed-out view is ready before anyone zooms out
       markDirty();
       return layer;
     },
     setSlice(i) {
       if (!st.base || st.base.depth <= 1) return;
       st.base.slice = Math.max(0, Math.min(st.base.depth - 1, i));
+      requestAllsky(st.base);
       markDirty();
     },
     /** layers: [{url, label, epoch}] — all are prefetched, one is drawn (showOverlay). */

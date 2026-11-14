@@ -99,7 +99,8 @@ class SkyCache:
                 lines = [l for l in cube.splitlines() if not l.startswith(("hips_order ", "obs_title", "creator_did"))]
                 lines += [f"hips_order           = {max(livetiles.LIVE_ORDERS)}",
                           "obs_title            = SPHEREx DR1: IRSA cube to order 5, live tiles from AWS level-2 images above",
-                          "creator_did          = ivo://spherex-blink/live"]
+                          "creator_did          = ivo://spherex-blink/live",
+                          "x_live_orders        = " + " ".join(map(str, livetiles.LIVE_ORDERS))]
                 return ("\n".join(lines) + "\n").encode()
             return props
         if ALLSKY_RE.match(path):
