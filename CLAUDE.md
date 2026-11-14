@@ -20,9 +20,37 @@ Source of truth, in order: `docs/CHALLENGE.md` (official text) > `docs/CONTRACTS
 4. Wait for their OK before doing anything else.
    Don't write code until I've OK'd the task and you've claimed it on the Board.
 
+## Decisions and consistency (the agents' main job)
+
+- Humans don't ack each other's decisions. Whoever decides writes a dated line under TEAM.md
+  "Decisions" and it is in effect. No "PROPOSED, please ack" waiting.
+- Keeping the repo consistent is every agent's job, all the time. When you pull and see a change
+  (a decision, contract, schema, task or code) that affects your area or contradicts something
+  else in the repo, bring your side in line: docs, CONTRACTS, schema, fixtures, Board, your code.
+  Say what you changed in the TEAM.md Log.
+- If making it consistent needs a change in someone else's code, put it in their task file or under
+  "Questions / Blockers" instead of editing their code.
+- If two decisions contradict each other, the later one holds. Flag the conflict under
+  "Questions / Blockers" so the humans see it.
+- Stay synced: pull before every piece of work, merge main into your branch often, and keep a
+  background `git fetch` running so new commits on main are noticed within a minute.
+
+## Tasks (how we distribute and communicate work)
+
+- Every task has a file `tasks/T<id>-<slug>.md` (template: `tasks/README.md`): goal, owner,
+  status, plan, findings, questions, handoff. The Board row in TEAM.md is the one-line index and
+  links the file.
+- New task: add a Board row and its task file in the same commit. Existing rows without a file get
+  one when someone picks the task up.
+- The task file is where details go: what you found, what you need from whom, how to use the
+  result. Keep it current while you work; it is what the next person reads.
+- Only the owner edits a task file, except the "Notes from others" section, which anyone may
+  append to.
+
 ## Claiming work (prevents two agents doing the same thing)
 
 - Only work on a Board task that is `open` or already assigned to your human.
+- Claiming = Board row (Owner, Status `doing`, Branch) + task file, in one commit.
 - Claim it before writing code: set Owner and Status=`doing` in your Board row, commit
   `board: claim T<id>`, and push straight to main.
 - If the push is rejected: pull, check nobody else claimed the task, then retry. If someone did,

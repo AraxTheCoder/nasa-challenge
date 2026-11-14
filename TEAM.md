@@ -55,6 +55,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T16 | C: Demo video and slides | | open | | After feature freeze |
 | T17 | A: Compute wavelength-matched `pairs` across epochs (+ `bandwidth_um`) in `target.json` (contracts v0.2) | Joerg | open | | Part of T03/T04 output. Rule in CONTRACTS "Pair" |
 | T18 | C: Live API service: `GET /api/target?ra=&dec=&size=` builds (pipeline + detect) or serves from cache, progress while building, CORS (contracts v0.3) | Jonathan | doing | `jonathan/T18-live-api` | New folder `server/`. Uses `build_target` once T02–T04 exist; until then serves the fixture labelled synthetic |
+| T19 | A: Labels on the images: catalogue names/positions (SIMBAD, Gaia DR3 with proper motion, CatWISE) into `target.json` | Joerg | doing | `joerg/T19-labels` | [task file](tasks/T19-labels.md) |
 
 ## Decisions
 
@@ -88,6 +89,11 @@ Dated, one line each, with why.
   progress, `/api/targets/<id>/...` serves the unchanged target folder. Why: official Objectives
   require user-entered coordinates; target folder format stays as-is so A/B code is unaffected.
   Impact: T05 becomes cache warm-up of the five named test fields, T14 needs a host that runs Python.
+- 2026-11-14 [Joerg] Decisions no longer need acks: whoever decides writes a dated line here and
+  it holds. Agents keep the repo consistent with every decision (rules in CLAUDE.md). So CONTRACTS
+  v0.2 (pairs, bandwidth, alpha no-data) and v0.3 (live API) are both in effect.
+- 2026-11-14 [Joerg] Every task gets a file `tasks/T<id>-<slug>.md` for details and communication;
+  the Board stays the one-line index. Why: Board rows are too short for findings and requests.
 
 ## Ideas
 
