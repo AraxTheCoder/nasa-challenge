@@ -202,6 +202,45 @@ Format: `[name] idea — status: new`. Agents don't act on an idea until a human
   automatically, e.g. high-proper-motion stars and brown dwarfs (Gaia/SIMBAD/CatWISE), known asteroids
   passing through SPHEREx frames (JPL, T07), fields where our detection (T06) finds unknown movers,
   or a "surprise me" pick ranked by how much moves there. Shown as a list / quick picks. — status: new
+- [Mati] Gap scan vs. the official text (2026-11-14, Claude), highest value first. Each is a proposal; a
+  human moves it to the Board. — status: new
+  1. **Play the series like a video** (core Objective: "a series of images of that patch like a little
+     video"): today only A/B blink + arrow keys. Autoplay all frames inside the wavelength filter (or one
+     per epoch at matched wavelength), speed + loop, timeline cursor follows. C, `viewer.js`, ~1-2 h.
+  2. **Light curves for the variable test stars** (RW Aur, R Dra are official test targets): brightness
+     over time at (nearly) the same wavelength, since SPHEREx steps in wavelength and blinking mixes
+     colour with variability. Needs calibrated photometry per frame at a position (FITS, not the PNGs):
+     A/B: `pipeline.photometry` + `GET /api/targets/<id>/photometry?x=&y=`; C: chart on click. ~3 h.
+  3. **Spectra on the fly** ("extra kudos"): same photometry, plotted against wavelength (each epoch
+     sweeps 0.75-5 µm), one colour per epoch. Shares the endpoint with 2, so do both together. C ~1 h extra.
+  4. **Per-detector co-adds per epoch** (consideration: "add together all the data taken by each of the
+     six detector arrays to improve the signal-to-noise"): mean/median of the aligned frames per detector
+     and epoch as extra frames (`kind: "coadd"`, `n_exposures`; contract change). Helps faint red brown
+     dwarfs (WISE 0855, Eps Ind B) that single 0.75-3 µm exposures barely show. A ~2 h + C ~0.5 h.
+  5. **Contamination flags** (consideration: "display metadata, like contamination flags"): only the
+     hardware mask reaches the viewer (as no-data). Export a small per-frame flags image (or bit counts)
+     with the frame; viewer: flags overlay toggle + flag names at the inspected pixel (OUTLIER may be a
+     mover, SOURCE is a catalogued star, PERSIST is a ghost). A ~1.5 h + C ~1 h.
+  6. **Data release in the UI** ("easy to update with the latest data releases"): carry the release
+     (DR1 / QR3, from obs_collection) per frame into target.json, show it in frame info + footer, and let
+     the API say when a cached field predates the newest release ("newer data available: Rebuild").
+  7. **CatWISE2020 labels on the frames** (consideration: "overlay ... the WISE mission"): positions + proper
+     motions of WISE sources, the natural catalogue for brown dwarfs (WISE 0855 was found by WISE). WISE is
+     only a sky-map layer today; frame labels come from SIMBAD + Gaia. A (`pipeline.labels`) ~1 h.
+  8. **Embed + share** (consideration: "easily embed it in other websites"): `?embed=1` compact layout
+     (stage + blink only, for iframes), and export the current frame / difference / series as PNG or GIF.
+     C ~1.5 h.
+  9. **CI on every push** (GitHub Actions): pytest + `web/tests/browser_test.py` (fixture mode, `?explore=0`,
+     ~20 s) + schema validation of fixtures. Three agents push straight to main and one can't run a
+     browser; the T30 module bug broke the page for everyone unnoticed. ~1 h, any track.
+  10. **Docs out of date** (consistency, CLAUDE.md): README "Status" still says every field is synthetic;
+     CONTRACTS still describes pre-baked `web/targets/`, its size budget and `pipeline.publish`, which the
+     live-data decision made obsolete (needs a Decisions line); the committed fixture is schema 0.1 without
+     pairs / labels / varied detections (the browser test generates a richer one; commit it as a second
+     fixture). ~1 h.
+  11. **Limits before a public deploy** (T14): anyone can request any field and `refresh=1`, i.e. trigger
+     unlimited IRSA/AWS downloads and JPL queries. Rate limit per IP, cap concurrent builds, disable
+     `refresh` publicly (token), cache size cap with eviction. Server ~1 h.
 
 ## Questions / Blockers
 
