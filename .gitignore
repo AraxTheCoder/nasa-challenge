@@ -30,3 +30,6 @@ dist/
 
 # local credentials (deploy key), never commit
 .secret/
+
+# browser test screenshots (python web/tests/browser_test.py browser-test-out)
+browser-test-out/

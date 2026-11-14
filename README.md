@@ -1,5 +1,7 @@
 # Planet X and SPHEREx (working title)
 
+[![tests](https://github.com/jabra11/nasa-challenge/actions/workflows/tests.yml/badge.svg)](https://github.com/jabra11/nasa-challenge/actions/workflows/tests.yml)
+
 NASA Space Apps Challenge 2026 entry for the challenge "Planet X and SPHEREx".
 
 A public, browser-based blink comparator for SPHEREx data: pick a patch of sky, flip between
@@ -89,6 +91,11 @@ All versions are pinned exactly so everyone runs the same thing.
 
 Tests: `python -m pip install -r requirements-dev.lock` (and `playwright install chromium` for the
 browser test).
+
+CI (`.github/workflows/tests.yml`, T46) runs on every push to main and every pull request: the Python
+tests, the contract checks in `tests/` (fixtures validate against the schema, presets are sane) and the
+browser test in fixture mode (no external servers). Run the same locally before pushing:
+`python -m pytest detect server pipeline tests -q && python web/tests/browser_test.py`.
 
 Updating dependencies (whoever adds or bumps a package): change the pin in the `requirements*.txt`
 file, regenerate both locks, commit all of it together, and add a line under TEAM.md "Decisions":
