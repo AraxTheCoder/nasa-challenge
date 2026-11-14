@@ -20,10 +20,13 @@ from fastapi import APIRouter, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
+from . import limits
+
 router = APIRouter()
 _ID = re.compile(r"^[a-z0-9-]+$")
 _jobs: dict[str, dict] = {}
 _lock = threading.Lock()
+limits.register_active(lambda: len(_jobs))    # T58: field-spectra runs count against the server-wide cap
 
 
 @lru_cache(maxsize=64)
@@ -90,6 +93,10 @@ async def spectral_outliers(tid: str, request: Request, start: int = 0):
     target = json.loads(path.read_text(encoding="utf-8"))
     if target.get("synthetic"):
         return {"status": "no_data", "id": tid, "message": "synthetic target: there are no SPHEREx images to measure"}
+    if start and tid not in _jobs and await run_in_threadpool(_cached, target) is None:
+        deny = limits.new_job(request)               # T58: a new run costs a job (per IP + server-wide cap)
+        if deny is not None:
+            return deny
     body = await run_in_threadpool(_state, target, bool(start))
     code = {"ready": 200, "not_started": 200, "building": 202}.get(body["status"], 500)
     return JSONResponse({"id": tid, **body}, status_code=code)
