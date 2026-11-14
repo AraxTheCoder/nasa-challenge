@@ -1,6 +1,6 @@
 # T86: Spectral outliers
 
-- **Owner:** Joerg  ·  **Status:** done
+- **Owner:** Joerg  ·  **Status:** doing
 - **Branch:** `joerg/T85-field-spectra` (together with T85)
 - **Depends on / feeds:** T85 (field spectra), T84 (masking rules), T63 (feature list); feeds T76 (discovery
   index), T75 (HPC survey). Includes idea I23 (Mati) as a second opinion.
@@ -32,6 +32,8 @@ where and how in plain words ("too bright at 3–5 µm: warm dust?", "dip at 3.0
 - [x] Live API + `web/outliers.js` panel "Unusual spectra in this field" (button to start, progress, list
       with a residual chart per source, click opens the spectrum, `outliers:list` event for the map)
 - [ ] I23 catalogue prediction as second opinion: not done, moved to T87
+- [ ] Visualisation: colour–colour diagram of the field (outliers highlighted, click selects) + selected source's
+      band shape vs. its expected ordinary shape and the field's spread
 
 ## Findings
 - **RW Aur itself can't be judged**: saturated core in 229 of 237 exposures (same as T84). Listed under
