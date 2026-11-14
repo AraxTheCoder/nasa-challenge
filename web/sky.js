@@ -350,6 +350,28 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
         }
       }
       if (!tx) continue;
+      // A loaded tile may have holes (alpha 0: edge of the source image, masked pixels). Draw the
+      // nearest loaded coarser tile underneath, so holes show lower-resolution sky, not black.
+      if (tx.d === 0 && order > layer.minOrder) {
+        const under = ancestorFor(layer, order, pix);
+        if (under) drawTile(under, sp, n);
+      }
+      drawTile(tx, sp, n);
+    }
+    if (stats) st.stats = stats;
+  }
+
+  function ancestorFor(layer, order, pix) {
+    const { ix, iy } = nest2xyf(order, pix);
+    for (let d = 1; order - d >= layer.minOrder; d++) {
+      const anc = layer.tiles.get(layer.key(order - d, Math.floor(pix / 4 ** d)));
+      if (anc?.state === "ok") { const m = 2 ** d; return { tex: anc.tex, d, aOff: ix % m, bOff: iy % m }; }
+    }
+    return null;
+  }
+
+  function drawTile(tx, sp, n) {
+    {
       const pos = [], uv = [];
       const m = 2 ** tx.d;
       const vtx = (a, b) => {
@@ -367,7 +389,6 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       }
       drawTriangles(tx.tex, pos, uv);
     }
-    if (stats) st.stats = stats;
   }
 
   /** Order the screen would need for 1 texel per device pixel (may exceed what the map has). */
