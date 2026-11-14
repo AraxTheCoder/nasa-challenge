@@ -94,8 +94,8 @@ Tests: `python -m pip install -r requirements-dev.lock` (and `playwright install
 browser test).
 
 CI (`.github/workflows/tests.yml`, T46) runs on every push to main and every pull request: the Python
-tests, the contract checks in `tests/` (fixtures validate against the schema, presets are sane) and the
-browser test in fixture mode (no external servers). Run the same locally before pushing:
+tests, the contract checks in `tests/` (fixtures validate against the schema, presets are sane), the Node
+tests `web/tests/*.mjs` (e.g. the sky-map projection) and the browser test in fixture mode (no external servers). Run the same locally before pushing:
 `python -m pytest detect server pipeline tests -q && python web/tests/browser_test.py`.
 
 Updating dependencies (whoever adds or bumps a package): change the pin in the `requirements*.txt`
