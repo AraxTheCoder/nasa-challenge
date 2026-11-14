@@ -65,6 +65,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T26 | A: Builds survive IRSA throttling: retry 503/timeouts with backoff, one shared download limit across concurrent builds (no frames dropped) | Jonathan | doing | `jonathan/T26-T28-speed` | Measured: IRSA answers `503 Server busy`, frames were silently dropped |
 | T27 | A: Cache the IRSA exposure list per position (disk, TTL) and drop the server's duplicate query, so FOV changes skip TAP | Jonathan | doing | `jonathan/T26-T28-speed` | TAP took 19 s for a trivial query today |
 | T28 | A: Reuse cached cutouts across FOV changes (a larger cached cutout serves a smaller FOV; minimum size bucket) | Jonathan | doing | `jonathan/T26-T28-speed` | 82% of each 4.6 MB cutout is the EPSF table, independent of FOV |
+| T29 | C: RA/Dec help as a popup bubble under the form (built, switched off for now; on for the demo) | Mati | doing | `mati/T29-form-tip` | [tasks/T29](tasks/T29-form-tip.md) |
 
 ## Decisions
 
