@@ -1,7 +1,7 @@
 # T69: C: Shift-and-stack in the viewer: stack the frames along an object's motion (or a guessed one), faint movers sharpen, stars smear
 
-- **Owner:** –  ·  **Status:** open
-- **Branch:** –
+- **Owner:** Mati  ·  **Status:** doing
+- **Branch:** `mati/T69-shift-stack`
 - **Depends on / feeds:** T23, T10
 
 ## Goal
