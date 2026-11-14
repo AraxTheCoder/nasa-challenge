@@ -13,6 +13,7 @@ import { initObjects } from "./objects.js";
 import { initDiff } from "./diff.js";
 import { initPhotometry } from "./photometry.js";
 import "./mapframes.js"; // T81: the frame viewer's A/B, blink, play and A − B drive the map
+import "./passes.js";    // T82: blink SPHEREx's six-month survey passes anywhere on the map
 import { initLamPick, lamFromUrl, setLamUrl } from "./lampick.js";
 import { initStack } from "./stackview.js";
 import { nearestBand, parseLam } from "./lambda.js";

@@ -128,14 +128,16 @@ export async function setFieldLayers(epochs, frames, base) {
 
 /** Draw the layer with this key; A − B layers are added the first time they are asked for. */
 export async function showLayer(key) {
-  if (!sky || !fieldBase) return false;
+  if (!sky || (!fieldBase && !key.startsWith("p")) || (key.startsWith("p") && !apiBase)) return false;
   let i = layerIndex.get(key);
-  if (i === undefined && key.startsWith("d-")) {
+  if (i === undefined && (key.startsWith("d-") || /^p\d$/.test(key))) {
     layerIndex.set(key, -1);                       // being added
-    const [j] = await sky.addOverlays([{ url: `${fieldBase}/${key}`, epoch: null, id: key, label: key }]);
+    // T82: p<n> = survey pass n of the live map, anywhere on the sky (not tied to the field)
+    const url = key.startsWith("p") ? `${apiBase.replace(/\/$/, "")}/api/sky/spherex-live-${key}` : `${fieldBase}/${key}`;
+    const [j] = await sky.addOverlays([{ url, epoch: null, id: key, label: key }]);
     if (j === undefined) { layerIndex.delete(key); return false; }
     layerIndex.set(key, j);
-    epochLayers[j] = { url: `${fieldBase}/${key}`, epoch: null, id: key };
+    epochLayers[j] = { url, epoch: null, id: key };
     i = j;
   }
   if (i === undefined || i < 0) return false;
@@ -148,6 +150,9 @@ export function showEpoch(i) {
   // T35: traces.js highlights each object's position in the shown epoch
   document.dispatchEvent(new CustomEvent("explore:epoch", { detail: { epoch: epochLayers[i]?.epoch ?? null } }));
 }
+
+/** T82: draw no overlay (back to the plain map). */
+export function hideOverlay() { sky?.showOverlay(-1); }
 
 export function hideEpochs() {
   epochLayers = [];

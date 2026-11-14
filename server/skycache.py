@@ -24,6 +24,8 @@ SURVEYS = {
        for d in range(1, 7)},
     # T42: IRSA's cube up to order 5, our own live tiles from the AWS level-2 images at 6-7
     "spherex-live": [],
+    # T82: one layer per survey pass, live orders only (the IRSA cube below them combines passes)
+    **{f"spherex-live-p{n}": [] for n in range(1, 7)},
     "2mass": ["https://irsa.ipac.caltech.edu/data/hips/CDS/2MASS/Color"],
     "allwise": ["https://irsa.ipac.caltech.edu/data/hips/CDS/AllWISE/RGB-W4-W2-W1"],
 }
@@ -65,8 +67,8 @@ class SkyCache:
 
     def get(self, survey: str, path: str) -> bytes | None:
         """Bytes of the file (from disk or upstream), or None if upstream doesn't have it."""
-        if survey == "spherex-live":
-            live = self._live_route(path)
+        if survey.startswith("spherex-live"):
+            live = self._live_route(path, survey)
             if live is not None:
                 return live()
         f = self.root / survey / path
@@ -94,10 +96,26 @@ class SkyCache:
                 self._inflight.pop(key, None)
             ev.set()
 
-    def _live_route(self, path: str):
-        """spherex-live: properties and orders <= 5 come from the cube, 6-7 are rendered by us."""
+    def _live_route(self, path: str, survey: str = "spherex-live"):
+        """spherex-live: properties and orders <= 5 come from the cube, 6-7 are rendered by us.
+        spherex-live-p<n> (T82): the same, but orders <= 5 are empty (no per-pass cube)."""
         from tilegen.render import LIVE_ORDERS
 
+        if survey != "spherex-live":
+            n = survey.rsplit("-p", 1)[1]
+            if path == "properties":            # the live map's (102-band cube depth etc.), relabelled
+                def props():
+                    live = (self._live_route("properties")() or b"").decode("utf-8", "replace").splitlines()
+                    keep = [l for l in live if not l.startswith(("obs_title", "creator_did", "hips_order_min"))]
+                    keep += [f"obs_title            = SPHEREx survey pass {n}: live tiles from that pass's level-2 images",
+                             f"creator_did          = ivo://spherex-blink/live-p{n}",
+                             f"hips_order_min       = {min(LIVE_ORDERS)}"]
+                    return ("\n".join(keep) + "\n").encode()
+                return props
+            m = TILE_RE.match(path)
+            if ALLSKY_RE.match(path) or (m and int(m.group(1)) not in LIVE_ORDERS):
+                return lambda: None
+            return None
         if path == "properties":
             def props():
                 cube = (self.get("spherex-cube", "properties") or b"").decode("utf-8", "replace")
@@ -116,9 +134,12 @@ class SkyCache:
         return None                                   # live order: cached on disk like any tile
 
     def _fetch(self, survey: str, path: str) -> bytes | None:
-        if survey == "spherex-live":                  # live order: tile generator (local or remote)
+        if survey.startswith("spherex-live"):         # live order: tile generator (local or remote)
             m = TILE_RE.match(path)
             slice_ = int(m.group(4)[1:]) if m.group(4) else 0
+            pass_ = int(survey.rsplit("-p", 1)[1]) if survey != "spherex-live" else None
+            if pass_:
+                return self.tiles.get(slice_, int(m.group(1)), int(m.group(3)), pass_=pass_)
             return self.tiles.get(slice_, int(m.group(1)), int(m.group(3)))
         last = None
         for base in SURVEYS[survey]:
@@ -138,7 +159,7 @@ class SkyCache:
 
     def is_live_render(self, survey: str, path: str) -> bool:
         """True if this request would run the (slow) tile generator: live order, not cached yet."""
-        if survey != "spherex-live":
+        if not survey.startswith("spherex-live"):
             return False
         from tilegen.render import LIVE_ORDERS
 
@@ -148,6 +169,8 @@ class SkyCache:
     def prefetch_around(self, survey: str, path: str) -> None:
         m = TILE_RE.match(path)
         if not m:
+            return
+        if survey.startswith("spherex-live-p"):     # T82: pass layers: nothing below the live orders
             return
         if survey == "spherex-live":
             # Never prefetch into live orders: each is a slow render that would take a slot from a

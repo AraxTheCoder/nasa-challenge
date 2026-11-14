@@ -735,6 +735,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     setSlice(i) {
       if (!st.base || st.base.depth <= 1) return;
       st.base.slice = Math.max(0, Math.min(st.base.depth - 1, i));
+      for (const l of st.overlays) if (l.depth > 1) l.slice = Math.min(l.depth - 1, st.base.slice);   // T82: pass layers
       markDirty();
     },
     /** layers: [{url, label, epoch}] — all are prefetched, one is drawn (showOverlay). */
@@ -753,7 +754,8 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     /** T81: append overlays (e.g. an A − B layer) without reloading the others; returns their indexes. */
     async addOverlays(layers) {
       const made = (await Promise.all(layers.map(async (l) => {
-        try { return Object.assign(new Layer(l.url, await readProperties(l.url), l), { meta: l }); }
+        const opts = { slice: st.base?.slice, ...l };          // cube overlays (T82 passes) start on the base's band
+        try { return Object.assign(new Layer(l.url, await readProperties(l.url), opts), { meta: l }); }
         catch (e) { console.warn(e); return null; }
       }))).filter(Boolean);
       const first = st.overlays.length;
