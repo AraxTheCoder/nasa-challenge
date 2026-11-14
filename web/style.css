@@ -419,3 +419,13 @@ body.map-only #ph-measure { display: none !important; }
 /* ---------- T64: newer SPHEREx data for the shown field ---------- */
 .target-updates { margin: 4px 0 0; padding: 4px 8px; border-left: 3px solid var(--warn); color: var(--text); }
 .target-updates button { margin-left: 6px; }
+/* T88: unusual spectra on the map */
+.ol-card { position: absolute; z-index: 6; width: min(300px, calc(100% - 16px)); background: var(--panel);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; box-shadow: 0 6px 24px rgba(0,0,0,0.5); }
+.ol-card p { margin: 4px 0; }
+.ol-card .ol-chart { width: 100%; height: auto; }
+.ol-card-head { display: flex; align-items: baseline; gap: 8px; }
+.ol-card-head strong { overflow-wrap: anywhere; }
+.ol-card-x { margin-left: auto; font-size: 18px; line-height: 1; padding: 0 4px; }
+.ol-card-actions { display: flex; gap: 12px; align-items: center; margin-top: 6px; }
+.ol-maptoggle { margin-left: auto; color: var(--muted); }

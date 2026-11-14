@@ -6,17 +6,30 @@
 //
 // Events: listens to viewer:target {target}; fires outliers:list {targetId, items} when a list is shown,
 // for anyone who wants to mark the sources (e.g. the map).
+//
+// T88: the same on the map. "Unusual spectra" in the map bar (next to Labels; remembered per browser) rings
+// the field's outliers where they are (orange, rank number, the selected one blue), measuring the field first
+// if needed (progress in the bar). Clicking a ring opens a card on the map with the reason, the band chart and
+// buttons for the spectrum and the charts. Panel, colour diagram and map share one selection. Drawn through
+// explore.js's public draw hook and pointer events on #sky only: no change to the map's own code.
 
 import { $, el, fmtNum } from "./util.js";
 import { targetBase } from "./viewer.js";
 import { openSpectrum } from "./photometry.js";
+import { getSky } from "./explore.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const SHOW = 10;
 // Validated pair on the dark panel (same as the spectrum panel's first two slots; validate_palette.js, dark):
 // "stands out" and "selected / expected shape". Ordinary sources stay neutral grey: context, not a category.
 const C_ODD = "#d95926", C_SEL = "#3987e5";
-const st = { target: null, token: 0, data: null, all: false, sel: null, lastW: 0 };
+const st = { target: null, token: 0, data: null, all: false, sel: null, lastW: 0,
+  mapOn: readPref(), card: null, placed: [], hooked: false };
+const PREF = "spherex.outliers";
+
+function readPref() {
+  try { return localStorage.getItem("spherex.outliers") === "1"; } catch { return false; }
+}
 
 function svg(tag, attrs = {}, ...children) {
   const n = document.createElementNS(NS, tag);
@@ -34,6 +47,10 @@ function panel() {
       el("div", { id: "ol-body" }));
     box.hidden = true;
     ($("#discoveries") ?? $("#explore"))?.after(box);
+    const mirror = el("label", { class: "ol-maptoggle small", title: "Ring these sources on the map above" },
+      el("input", { type: "checkbox", id: "ol-map-mirror" }), " show on the map");
+    mirror.querySelector("input").addEventListener("change", (e) => setMap(e.target.checked));
+    box.querySelector(".ol-head").append(mirror);
   }
   return box;
 }
@@ -81,7 +98,12 @@ function extent(vals, pad) {
   return [lo - p, hi + p];
 }
 
-function selectSource(id) { st.sel = id; render(); }
+function selectSource(id, card = st.mapOn) {
+  st.sel = id;
+  if (card) st.card = id;
+  render();
+  getSky()?.redraw();
+}
 
 /** Every judged source by two SPHEREx colours: ordinary ones form a sequence, outliers are coloured. */
 function colourChart(d, W) {
@@ -250,6 +272,7 @@ function render() {
   }
   body.replaceChildren(...parts);
   $("#ol-status").textContent = d.status === "ready" && d.items?.length ? `${d.items.length} found` : "";
+  mapNote();
 }
 
 async function load(start = false) {
@@ -284,12 +307,163 @@ document.addEventListener("viewer:target", (e) => {
   st.data = null;
   st.all = false;
   st.sel = null;
+  st.card = null;
   st.token++;
   panel().hidden = true;
-  if (st.target && st.target.synthetic === false) load(false);
+  cardEl().hidden = true;
+  mapNote();
+  getSky()?.redraw();
+  if (st.target && st.target.synthetic === false) load(st.mapOn);   // map toggle on: measure if needed
+});
+
+// ---------- T88: on the map ----------
+
+function mapNote() {
+  const note = $("#outliers-note");
+  const mirror = $("#ol-map-mirror");
+  if (mirror) mirror.checked = st.mapOn;
+  if (!note) return;
+  const d = st.data;
+  note.textContent = !st.mapOn ? "" :
+    !st.target ? "open a field first" :
+    !d ? "" :
+    d.status === "building" ? (d.total ? `measuring ${d.done}/${d.total}…` : "measuring…") :
+    d.status === "ready" ? (d.items?.length ? `${d.items.length} ringed` : "none here") :
+    d.status === "not_started" ? "" : "failed";
+}
+
+function setMap(on) {
+  st.mapOn = on;
+  try { localStorage.setItem(PREF, on ? "1" : "0"); } catch { /* private mode: not remembered */ }
+  const t = $("#outliers-toggle");
+  if (t) t.checked = on;
+  if (!on) { st.card = null; cardEl().hidden = true; }
+  if (on && st.target?.synthetic === false && (!st.data || st.data.status === "not_started")) load(true);
+  mapNote();
+  hookMap();
+  getSky()?.redraw();
+}
+
+function paintMap(ctx, proj) {
+  st.placed = [];
+  const d = st.data;
+  if (!st.mapOn || d?.status !== "ready" || !d.items?.length) { placeCard(null); return; }
+  const v = proj.view();
+  ctx.save();
+  ctx.font = "bold 11px sans-serif";
+  d.items.forEach((it, k) => {
+    const s = proj.toScreen(it.ra_deg, it.dec_deg);
+    if (!s.front || s.x < -30 || s.y < -30 || s.x > v.width + 30 || s.y > v.height + 30) return;
+    const r = 7 + Math.min(5, Math.sqrt(it.score) / 2);
+    ctx.lineWidth = 4.5; ctx.strokeStyle = "rgba(0,0,0,0.7)";
+    ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, 2 * Math.PI); ctx.stroke();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = C_ODD;
+    ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, 2 * Math.PI); ctx.stroke();
+    if (it.id === st.sel) {
+      ctx.lineWidth = 2.5; ctx.strokeStyle = C_SEL;
+      ctx.beginPath(); ctx.arc(s.x, s.y, r + 5, 0, 2 * Math.PI); ctx.stroke();
+    }
+    const label = String(k + 1);
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.8)"; ctx.fillStyle = "#ffffff";
+    ctx.strokeText(label, s.x + r * 0.75 + 2, s.y - r * 0.75 - 1);
+    ctx.fillText(label, s.x + r * 0.75 + 2, s.y - r * 0.75 - 1);
+    st.placed.push({ x: s.x, y: s.y, r, it });
+  });
+  ctx.restore();
+  placeCard(st.placed.find((p) => p.it.id === st.card) ?? null);
+}
+
+function cardEl() {
+  let c = $("#ol-card");
+  if (!c) {
+    c = el("div", { id: "ol-card", class: "ol-card", role: "dialog", "aria-label": "Unusual spectrum" });
+    c.hidden = true;
+    // the map's own click (spectrum at the point) and drag must not see clicks on the card
+    for (const ev of ["pointerdown", "pointerup", "click", "dblclick", "wheel"]) c.addEventListener(ev, (e) => e.stopPropagation());
+    $("#sky")?.append(c);
+  }
+  return c;
+}
+
+function placeCard(p) {
+  const c = cardEl();
+  if (!p) { c.hidden = true; return; }
+  if (c.dataset.id !== p.it.id) fillCard(c, p.it);
+  const box = $("#sky");
+  const W = box?.clientWidth ?? 600, H = box?.clientHeight ?? 400;
+  c.hidden = false;
+  const w = c.offsetWidth || 300, h = c.offsetHeight || 160;
+  let x = p.x + p.r + 12, y = p.y - h / 2;
+  if (x + w > W - 8) x = p.x - p.r - 12 - w;
+  c.style.left = `${Math.max(8, Math.min(W - w - 8, x))}px`;
+  c.style.top = `${Math.max(8, Math.min(H - h - 8, y))}px`;
+}
+
+function fillCard(c, it) {
+  c.dataset.id = it.id;
+  const rank = (st.data?.items ?? []).findIndex((i) => i.id === it.id) + 1;
+  const close = el("button", { type: "button", class: "link ol-card-x", "aria-label": "Close" }, "×");
+  close.addEventListener("click", () => { st.card = null; c.hidden = true; getSky()?.redraw(); });
+  const spec = el("button", { type: "button" }, "Spectrum");
+  spec.addEventListener("click", () => openSpectrum(it.ra_deg, it.dec_deg, it.name));
+  const charts = el("button", { type: "button", class: "link" }, "Charts ↓");
+  charts.addEventListener("click", () => { st.sel = it.id; render(); panel().scrollIntoView({ behavior: "smooth", block: "start" }); });
+  c.replaceChildren(...[
+    el("div", { class: "ol-card-head" }, el("strong", {}, `${rank}. ${it.name}`), close),
+    el("p", { class: "small muted" }, [it.otype && it.otype !== "*" ? it.otype : "", it.mag != null ? `mag ${fmtNum(it.mag, 1)}` : "",
+      `score ${fmtNum(it.score, 0)}`].filter(Boolean).join(" · ")),
+    residualChart(it, 260, 44),
+    el("p", { class: "small" }, it.reason),
+    it.caveats?.length ? el("p", { class: "small muted" }, `Caveat: ${it.caveats.join("; ")}.`) : null,
+    el("div", { class: "ol-card-actions" }, spec, charts)].filter(Boolean));   // replaceChildren would print "null"
+}
+
+function hookMap() {
+  const sky = getSky();
+  const box = $("#sky");
+  if (!sky || !box || st.hooked) return;
+  st.hooked = true;
+  sky.addDrawHook(paintMap);
+  let down = null;
+  box.addEventListener("pointerdown", (e) => { down = e.isPrimary ? { x: e.clientX, y: e.clientY } : null; });
+  box.addEventListener("pointerup", (e) => {
+    const d0 = down;
+    down = null;
+    if (!st.mapOn || !d0 || Math.hypot(e.clientX - d0.x, e.clientY - d0.y) > 4 || !st.placed.length) return;
+    const r = box.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    let best = null, bd = Infinity;
+    for (const p of st.placed) {
+      const dd = Math.hypot(p.x - x, p.y - y);
+      if (dd <= p.r + 6 && dd < bd) { bd = dd; best = p; }
+    }
+    if (best) selectSource(best.it.id, true);     // the map's own click also opens its spectrum (T79)
+  });
+}
+
+function addToggle() {
+  if ($("#outliers-toggle")) return;
+  const labels = $("#labels-toggle")?.closest("label");
+  if (!labels) return;
+  const box = el("label", { title: "Ring the sources of the open field whose spectrum doesn't look like the field's ordinary " +
+    "sources (T86). Measures the field the first time (~20 s)." },
+  el("input", { id: "outliers-toggle", type: "checkbox" }), " Unusual spectra ", el("span", { id: "outliers-note", class: "muted small" }));
+  labels.after(box);
+  const input = box.querySelector("input");
+  input.checked = st.mapOn;
+  input.addEventListener("change", () => setMap(input.checked));
+}
+
+addToggle();
+document.addEventListener("explore:ready", hookMap);
+hookMap();
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && st.card) { st.card = null; cardEl().hidden = true; getSky()?.redraw(); }
 });
 
 new ResizeObserver(() => {
   const w = Math.round($("#ol-body")?.clientWidth || 0);
   if (w && Math.abs(w - st.lastW) > 8 && st.data?.status === "ready") { st.lastW = w; render(); }
 }).observe(panel());
+// for web/tests and the console: where the rings are drawn right now (screen px inside #sky)
+globalThis.spherexOutliers = { placed: () => st.placed.map((p) => ({ x: p.x, y: p.y, id: p.it.id, name: p.it.name })) };

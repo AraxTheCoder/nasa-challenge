@@ -123,7 +123,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T85 | A: Spectra for a whole field: one pass over every exposure covering a field, photometry at every catalogue source at once (cost = reading the exposures, not the number of stars), cached per field | Joerg | done | `joerg/T85-field-spectra` | [tasks/T85](tasks/T85-field-spectra.md). Feeds T86, T87, T75 |
 | T86 | B: Spectral outliers: sources whose spectral shape is out of distribution for their field (field's own model of an ordinary star, calibrated scatter, only consistent deviations), ranked with a plain-words reason; second opinion from the catalogue prediction (idea I23) | Joerg | done | `joerg/T85-field-spectra` | [tasks/T86](tasks/T86-spectral-outliers.md). Needs T85 |
 | T87 | B: What it is, from the bands: temperature, IR excess, ices (3.0 / 4.27 / 4.67 µm), CH4 3.3 and H2O 1.4 / 1.9 µm (brown dwarfs), CO 2.3 µm, PAH 3.3, Pa-α / Br-α, galaxy 1.6 µm bump; per source a class or hint | Joerg | open | | [tasks/T87](tasks/T87-band-features.md). Needs T85; after T86 |
-| T88 | C: Unusual spectra on the map: "Unusual spectra" toggle in the map bar (measures the field if needed), rings + rank on the outliers, click → card with the reason, spectrum and charts; linked to the T86 panel | Joerg | doing | `joerg/T88-outliers-map` | [tasks/T88](tasks/T88-outliers-map.md). Uses explore.js's public draw hook only, no change to the map code |
+| T88 | C: Unusual spectra on the map: "Unusual spectra" toggle in the map bar (measures the field if needed), rings + rank on the outliers, click → card with the reason, spectrum and charts; linked to the T86 panel | Joerg | done | `joerg/T88-outliers-map` | [tasks/T88](tasks/T88-outliers-map.md). Uses explore.js's public draw hook only, no change to the map code |
 
 ## Decisions
 
@@ -735,3 +735,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 [Joerg] Claimed T88: T86 results on the map (toggle in the map bar, rings, click card). [to Jonathan] done from `web/outliers.js` through `explore.addDrawHook` / pointer events on `#sky`; no edit to explore.js. `/app/` would need its own version if you want it there.
 - 2026-11-14 Jonathan (Claude): T55: the map's Debug overlay describes the layer on top (the blinking survey pass or
   field epoch), not the capped base map under it ("map order 6 · MAX ZOOM" while the passes drew order 7).
+- 2026-11-14 [Joerg] T88 done: "Unusual spectra" toggle in the map bar of `/web/`: rings the open field's spectral outliers on the map (measures the field first if needed), click a ring for a card with the reason and band chart; panel, colour diagram and map share one selection.
