@@ -34,8 +34,10 @@ visible without blinking: a trail image and, later, shift-and-stack along a moti
       numbers only on hover, fewer rings at wide fields
 - [x] Trail view in the viewer (`web/trail.js`): frames of this epoch or all epochs stacked with
       "brightest pixel wins"; steady stars stay dots, movers leave rows of dots. Browser-only, no pipeline change
-- [ ] Shift-and-stack prototype along a known motion (Barnard's Star first), then along guessed
-      motions as a search tool for T10
+- [x] Shift-and-stack: `python -m pipeline.stack <target_dir> [--object <id|name>]` writes plain vs
+      shifted median stacks side by side (synthetic input stamped SYNTHETIC). On the fixture the fake
+      asteroid vanishes from the plain stack and is a sharp dot in the shifted one. Next: guessed
+      motions as a search tool for T10 (Jonathan)
 - [ ] Try it on the official test targets once `build_target` produces real frames (T02–T04)
 
 ## Findings
