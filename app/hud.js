@@ -6,7 +6,7 @@
 
 import { el } from "./util.js";
 
-const KEY = "spherex.app.hud.v3";   // v3: groups field / view / epochs; positions saved before are dropped
+const KEY = "spherex.app.hud.v4";   // v4: groups field / view (epochs merged in); positions saved before are dropped
 const INTERACTIVE = "input, select, button:not(.hud-grip), textarea, a, label, output, summary, [contenteditable]";
 const KEEP = 48;          // px of a panel that always stay on screen
 const THRESHOLD = 3;      // px before a press becomes a drag (so a click stays a click)

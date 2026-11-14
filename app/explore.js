@@ -59,6 +59,9 @@ export function goTo(ra, dec, fovDeg) { sky?.goTo(ra, dec, fovDeg); }
 /** T55 "Go": put sky point (ra, dec) under screen point (x, y) of the map (px from its top left). */
 export function placeAt(ra, dec, x, y, fovDeg) { sky?.placeAt(ra, dec, x, y, fovDeg); }
 
+/** Field of view (deg) that shows HiPS order k sharp (one texel per screen pixel), or null before the map. */
+export function fovForOrder(k) { return sky ? sky.fovForOrder(k) : null; }
+
 /** [ra, dec] in degrees under screen point (x, y) of the map, or null (off the sky / no map yet). */
 export function skyAt(x, y) { return sky?.proj.fromScreen(x, y) ?? null; }
 

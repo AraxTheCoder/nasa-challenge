@@ -770,6 +770,10 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       api.goTo(ra, dec, fov);
       dragTo([st.w / 2, st.h / 2], [x, y]);
     },
+    /** T55: the field of view (deg) at which the map shows HiPS order k at one texel per screen pixel. */
+    fovForOrder(k) {
+      return ((TEXEL_ARCSEC_ORDER0 / 2 ** k) * st.w * st.dpr) / 3600;
+    },
     /** Level the picture again: north up, east left, same centre and zoom. */
     northUp() { setFrame(st.ra, st.dec); changed(); },
     view: () => {

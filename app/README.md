@@ -37,3 +37,6 @@ viewer and the default URL.
   No fixed marker. "Go" moves the map so the typed RA/Dec lies under the mouse (`sky.placeAt`), keeps the
   zoom (zooms to 45′ only from wider than 3°); the Field input is gone, Blink builds 1/3 of the view
   (shown next to the button). URL: Go = ?ra=&dec=, Blink adds &size=&blink=1.
+- Step 8: the mouse holds the 📍 by its head (needle below), RA and Dec in two lines to its right.
+  Go centres the position and zooms to HiPS order 7 (3.22″/px, `sky.fovForOrder(7)`); the 📍 stands on the
+  centre until the mouse moves (a page can't move the mouse). Epochs are line 3 of the band panel; one dock.

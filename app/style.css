@@ -303,13 +303,16 @@ body.fullmap { overflow: hidden; height: 100vh; }
 .hud-nowrap { flex-wrap: nowrap; white-space: nowrap; }                                 /* position + Blink stay side by side */
 .hud-nowrap #explore-pos { flex: 1 1 auto; }
 #explore-pos { font-variant-numeric: tabular-nums; }
-/* T55 cursor pin (cursorpin.js): 📍 with its tip on the mouse, the sky position in a pill below.
-   Above the panels (z 30) only right after Go; it hides over panels otherwise. */
-.cursor-pin { position: fixed; left: 0; top: 0; z-index: 30; pointer-events: none; will-change: transform; }
-.cursor-pin-icon { position: absolute; left: 0; top: 0; transform: translate(-50%, -92%);
+/* T55 cursor pin (cursorpin.js): the mouse holds the 📍 by its round head (needle below), the sky
+   position in two lines to its right. Above the panels (z 30) only after Go; it hides over panels otherwise.
+   --pin-head-y: where the head sits in the glyph (fraction of its height from the top); tune per emoji font. */
+.cursor-pin { position: fixed; left: 0; top: 0; z-index: 30; pointer-events: none; will-change: transform;
+  --pin-head-y: 28%; }
+.cursor-pin-icon { position: absolute; left: 0; top: 0; transform: translate(-50%, calc(-1 * var(--pin-head-y)));
   font-size: 28px; line-height: 1; filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.7)); }
-.cursor-pin-pill { position: absolute; left: 0; top: 8px; transform: translateX(-50%); white-space: nowrap;
-  padding: 2px 10px; border-radius: 999px; font-size: 12px; font-variant-numeric: tabular-nums;
+.cursor-pin-pill { position: absolute; left: 20px; top: 0; transform: translateY(-50%); white-space: nowrap;
+  display: flex; flex-direction: column; padding: 3px 9px; border-radius: 9px;
+  font-size: 12px; line-height: 1.35; font-variant-numeric: tabular-nums;
   background: rgb(20 24 33 / 0.88); border: 1px solid rgb(255 255 255 / 0.15); color: var(--text);
   box-shadow: 0 3px 10px rgb(0 0 0 / 0.5); }
 .hud .topbar { border-bottom: none; padding: 10px 12px; gap: 8px 14px; }

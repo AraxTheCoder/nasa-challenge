@@ -14,7 +14,7 @@ import "./traces.js";      // T35: paths + per-epoch positions of the field's ob
 import "./skylabels.js";   // T72: catalogue names anywhere on the map
 import { initHud } from "./hud.js";   // T55: drag the floating panels anywhere
 import { parseDec, parseRa } from "./coords.js";
-import { initCursorPin, pointer as cursorPointer, stickHere } from "./cursorpin.js";   // T55: 📍 + RA/Dec at the mouse
+import { initCursorPin, showPinAt } from "./cursorpin.js";   // T55: 📍 + RA/Dec at the mouse
 
 const SIZE_MIN = 5;
 const SIZE_MAX = 60;
@@ -176,19 +176,18 @@ function loadFromUrl() {
   const req = { ra, dec, size: clampSize(Number(p.get("size")) || SIZE_DEFAULT) };
   fillForm(req);
   const blink = p.get("blink") === "1";
-  // a link to a built field shows it like Blink did: view = 3 × field, field centred
-  if (goTo(req, blink ? { fovDeg: (req.size * 3) / 60, centre: true } : { centre: true }) && blink) loadField(req);
+  // a link to a built field shows it like Blink did: view = 3 × field; a plain link like Go
+  if (goTo(req, blink ? { fovDeg: (req.size * 3) / 60 } : {}) && blink) loadField(req);
   return true;
 }
 
-// ---------- T55 "Go": move the map so the position lies under the mouse (no build) ----------
+// ---------- T55 "Go": centre the position, zoomed all the way in, 📍 on it (no build) ----------
 
-const GO_MAX_FOV_DEG = 3;      // Go keeps the zoom, unless the view is wider than this ...
-const GO_FOV_DEG = 0.75;       // ... then it zooms to 45′ (Blink there = a 15′ field)
+const GO_ORDER = 7;            // deepest live HiPS order (3.2″ texels): Go zooms to where it is sharp
 
 /**
- * Go to req (as typed). The position ends up under the mouse, so the 📍 pill shows it; with no
- * mouse yet (page load), or opts.centre, in the middle. Keeps the zoom unless it is very wide.
+ * Go to req (as typed): centred and zoomed in to order 7 (opts.fovDeg overrides the zoom). The
+ * 📍 with its RA/Dec stands on the centre until the mouse moves (a page can't move the mouse).
  */
 function goTo(req, opts = {}) {
   let ra, dec;
@@ -201,7 +200,7 @@ function goTo(req, opts = {}) {
     return false;
   }
   clearMessages();
-  app.goal = { ra, dec, fovDeg: opts.fovDeg ?? null, centre: Boolean(opts.centre) };
+  app.goal = { ra, dec, fovDeg: opts.fovDeg ?? null };
   app.goalPending = !explore.getSky();                   // then startExplore shows it once the map is up
   if (!app.goalPending) showGoal();
   return true;
@@ -210,16 +209,9 @@ function goTo(req, opts = {}) {
 function showGoal() {
   const g = app.goal;
   if (!g) return;
-  const v = explore.view();
-  const fov = g.fovDeg ?? (v && v.fovArcmin / 60 > GO_MAX_FOV_DEG ? GO_FOV_DEG : undefined);
-  const at = g.centre ? null : cursorPointer();
-  if (at) {
-    const r = $("#sky").getBoundingClientRect();
-    explore.placeAt(g.ra, g.dec, at[0] - r.left, at[1] - r.top, fov);
-    stickHere();                                         // show the 📍 there, even over the Go button
-  } else {
-    explore.goTo(g.ra, g.dec, fov);
-  }
+  explore.goTo(g.ra, g.dec, g.fovDeg ?? explore.fovForOrder(GO_ORDER) ?? undefined);
+  const r = $("#sky").getBoundingClientRect();
+  showPinAt(r.left + r.width / 2, r.top + r.height / 2);   // 📍 + RA/Dec on the centre until the mouse moves
 }
 
 async function loadField(req) {
