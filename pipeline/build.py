@@ -148,6 +148,9 @@ def cached_exposures(ra: float, dec: float, refresh: bool = False, raw_root: Pat
     if not refresh and path.exists() and time.time() - path.stat().st_mtime < EXPOSURE_TTL_S:
         d = json.loads(path.read_text(encoding="utf-8"))
         return [Exposure(**e) for e in d["exposures"]], d["provenance"]
+    from . import mirror
+    if raw_root == RAW_ROOT and mirror.available():
+        return mirror.find_exposures_local(ra, dec)   # T31: local index, milliseconds; not cached
     exposures, prov = find_exposures(ra, dec)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(f".{threading.get_ident()}.part")
@@ -266,6 +269,25 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
             except Exception as e:  # noqa: BLE001 - one failed cutout shouldn't kill the field
                 errors.append(f"{chosen[futs[f]].obs_id} D{chosen[futs[f]].detector}: {e}")
             report("download", n, len(chosen), f"downloaded {n}/{len(chosen)}")
+
+    # T31: paths derived from the local mirror can be wrong for reprocessed images (l2b_retry,
+    # ~1%); IRSA answers 404 there. Look those up once via TAP and try again.
+    lost = [i for i, p in enumerate(paths) if p is None]
+    if lost:
+        try:
+            from .mirror import resolve_urls
+            fixed = resolve_urls([chosen[i].publisher_did for i in lost])
+        except Exception as ex:  # noqa: BLE001
+            fixed = {}
+            errors.append(f"TAP lookup for {len(lost)} failed paths: {ex}")
+        for i in lost:
+            url = fixed.get(chosen[i].publisher_did)
+            if url and url != chosen[i].fits_url:
+                chosen[i].fits_url = url
+                try:
+                    paths[i] = fetch(url, ra_deg, dec_deg, cut_deg)
+                except Exception as ex:  # noqa: BLE001
+                    errors.append(f"{chosen[i].obs_id} D{chosen[i].detector} (retry): {ex}")
 
     out = Path(out_root) / target_id
     (out / "frames").mkdir(parents=True, exist_ok=True)
