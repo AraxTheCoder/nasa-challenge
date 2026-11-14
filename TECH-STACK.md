@@ -1,77 +1,77 @@
 # Tech stack
 
-Overview of the technologies used in this repo, as of 2026-11-14. Status marks what is actually in
-the code (**in use**) versus what is only planned in `TEAM.md` / `docs/CONTRACTS.md` (**planned**).
-Interfaces and rules live in `docs/CONTRACTS.md`; this file only summarises.
+Overview of the technologies in this repo, as of 2026-11-14 (rewritten for T56; the first version
+described the pre-baked plan that the live-data decision replaced). Interfaces and rules live in
+`docs/CONTRACTS.md`; this file only summarises.
 
 ## Architecture at a glance
 
 ```
-IRSA (TAP + FITS cutouts) ──► pipeline/ (A, Python) ──► data/targets/<id>/  frames + target.json
-JPL Horizons / SB Ident   ──► detect/   (B, Python) ──► adds known_objects + detections
-                                                     ──► pipeline.publish ──► web/targets/
-                                         web/ (C, static site, GitHub Pages) reads only JSON + images
+IRSA TAP / local index (T31) ─┐
+IRSA cutouts / AWS S3 ranges ─┴► pipeline/ (A) ──► data/targets/<id>/  frames + target.json
+                                     ▲                        │
+SIMBAD, Gaia DR3 ──► pipeline.labels ┤                        │ served by
+MPC, SkyBoT, JPL ──► detect/ (B)     ┘                        ▼
+                              server/ (Live API, FastAPI) ◄──► web/ (static viewer, vanilla JS)
+IRSA / CDS HiPS, tilegen (T42/T47) ──► /api/sky/... ──► sky map in web/
 ```
 
-Everything is baked offline. The frontend makes no live API calls. The only interface between
-the tracks is the target folder (`index.json`, `target.json`, `frames/*.png|webp`), validated
+Everything is built live on request and cached; the viewer only talks to the Live API. The interface
+between the tracks is the target folder (`index.json`, `target.json`, `frames/*.png`), validated
 against `docs/target.schema.json`.
 
 ## Languages and runtime
 
-| What | Choice | Status |
-|---|---|---|
-| Pipeline and detection | Python 3 (`from __future__ import annotations`, dataclasses, type hints) | in use |
-| Frontend | HTML/CSS/JavaScript, static, ideally no build step (T11) | planned |
-| Data interchange | JSON (JSON Schema draft 2020-12), 8-bit PNG/WebP frames | in use |
+| What | Choice |
+|---|---|
+| Pipeline, detection, Live API, tile generator | Python 3.12+ (`from __future__ import annotations`, type hints) |
+| Frontend | HTML/CSS/JavaScript ES modules, no framework, no build step; WebGL for the sky map |
+| Data interchange | JSON (JSON Schema draft 2020-12), 8-bit PNG frames with alpha (alpha 0 = no data) |
 
-## Python dependencies (`pipeline/requirements.txt`)
+## Python dependencies (pinned, `requirements.lock`)
 
-| Package | Used for | Status |
-|---|---|---|
-| `astropy>=7` | time conversion (`astropy.time`), later FITS I/O, WCS, reprojection | in use (time) |
-| `pyvo>=1.6` | IRSA TAP queries (`pyvo.dal.TAPService`) | in use |
-| `numpy>=2` | arrays, epoch clustering | in use |
-| `requests>=2.31` | HTTP downloads of cutouts (T02) | listed, planned |
-| `astroquery` | possible alternative for JPL Horizons / IRSA access | mentioned in Decisions, not added |
+| Package | Used for |
+|---|---|
+| `astropy` | FITS, WCS, time, coordinates |
+| `reproject` | aligning cutouts onto one north-up grid |
+| `pyvo` | IRSA / Gaia / SIMBAD TAP queries |
+| `numpy`, `scipy` | arrays, interpolation, statistics |
+| `pillow` | PNG frames and tiles |
+| `requests` | HTTP downloads, JPL / SkyBoT APIs |
+| `fastapi`, `uvicorn` | Live API and tile generator |
+| `astropy-healpix` | HiPS tile geometry on the server |
+| dev: `pytest`, `httpx`, `jsonschema`, `playwright` | tests, contract checks, browser test |
 
-Further libraries for alignment (e.g. `reproject`), source extraction (e.g. `photutils`/`sep`),
-image rendering (e.g. `Pillow`) and schema validation (`jsonschema`) are not chosen yet. Add them
-to `requirements.txt` when a task needs them.
-
-The fixture generator `fixtures/make_demo_synthetic.py` uses the standard library only.
+The fixture generators in `fixtures/` use the standard library only. Updating a pin: README "Dependencies".
 
 ## External data services
 
-| Service | Used for | Access |
-|---|---|---|
-| NASA/IPAC IRSA, SPHEREx collections `spherex_dr1`, `spherex_qr3` (+ `*_deep`) | exposure list per sky position, FITS images and cutouts | TAP `https://irsa.ipac.caltech.edu/TAP` (ObsCore + CAOM `plane`/`artifact` join); cutouts via `?center=ra,dec&size=..deg` on the FITS URL |
-| JPL Horizons | SPHEREx observer position (ID `-163182`) | REST API, planned (T07) |
-| JPL Small-Body Identification API | known asteroids/comets in the field per frame time | REST API, planned (T07) |
+| Service | Used for |
+|---|---|
+| NASA/IPAC IRSA, SPHEREx `spherex_dr1` / `spherex_qr3` | exposure list (TAP), FITS cutouts, all-sky SPHEREx cube HiPS, 2MASS + AllWISE HiPS |
+| AWS Open Data `nasa-irsa-spherex` (us-east-1) | the same level-2 images, read with HTTP range requests (T33) |
+| CDS | SPHEREx per-detector HiPS, SIMBAD (Harvard mirror when CDS is down) |
+| ESA Gaia archive | Gaia DR3 positions + proper motions for labels |
+| Minor Planet Center (MPCORB.DAT, local copy) | known asteroids per field without a web call (T51, `detect.mpcorb`) |
+| IMCCE SkyBoT | candidate asteroids and comets when the local catalogue isn't built (T51) |
+| JPL Horizons, JPL SB Identification | positions as seen from SPHEREx (ID `-163182`); fallback candidate search |
 
-SPHEREx data facts relevant to the stack: one image per detector (D1-D6), 2040×2040 px,
-6.15″/px, linear variable filter (wavelength varies across the image, `WCS-WAVE` table),
-FLAGS bitmask plane. Details in the TEAM.md Log.
+SPHEREx facts that shape the stack: six detectors, 2040×2040 px, 6.15″/px, linear variable filters
+(wavelength varies across the image, `WCS-WAVE` table), FLAGS bitmask, ~6 months between all-sky passes.
 
-## Entry points (CLI)
+## Entry points
 
-| Command | Track | Status |
-|---|---|---|
-| `python -m pipeline.query --ra <deg> --dec <deg> [--out ...]` | A | in use (T01) |
-| `python -m pipeline.build --id <id> --ra <deg> --dec <deg> --size <arcmin>` | A | planned |
-| `python -m detect.run <target_dir>` | B | planned |
-| `python -m pipeline.publish <id> [--to web/targets]` | A | planned |
-| `python fixtures/make_demo_synthetic.py .` | – | in use |
+The full list with arguments is in `docs/CONTRACTS.md` → "Entry points". Day to day:
+`python web/dev.py` (API + viewer), `python -m pipeline.build …`, `python -m detect.run …`.
 
 ## Hosting, tooling and workflow
 
 | What | Choice |
 |---|---|
-| Hosting | GitHub Pages, static, pre-baked targets (T14) |
+| Running it | locally with `web/dev.py`; public hosting is T14 (open) |
+| Tile generator | Google Cloud VM `us-east4` next to the AWS bucket (T47, `deploy/`); the rest stays local |
+| Tests | pytest (`detect server pipeline tilegen tests`), Playwright browser test, Node checks in `web/tests/` |
+| CI | GitHub Actions on every push and PR (T46, `.github/workflows/tests.yml`) |
 | Version control | Git on GitHub, branches `<name>/T<id>-<slug>`, small merges to `main` |
-| Coordination | `TEAM.md` board, `CLAUDE.md` agent rules, one Claude Code session per person |
-| Claude Code config | `.claude/settings.json`: SessionStart hook runs `git fetch` + `git status` |
-| Local caches | `data/` (gitignored), no `.fits` in git, size budget ≤ 5 MB per target, ≤ 50 MB in `web/targets/` |
-| Ignored tooling | `.gitignore` already covers venv, pytest, ruff, mypy, Jupyter, node/Vite artefacts |
-
-No test framework, linter config or CI pipeline is set up yet.
+| Coordination | `TEAM.md` board, `tasks/` notes, `CLAUDE.md` agent rules, one Claude Code session per person |
+| Local caches | `data/` (gitignored); no `.fits` and no real fields in git; fixtures ≤ 5 MB each |

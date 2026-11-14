@@ -8,18 +8,34 @@ A public, browser-based blink comparator for SPHEREx data: pick a patch of sky, 
 survey epochs, and see what moved. Known asteroids and comets are labelled, so unlabelled movers
 stand out.
 
-**Status:** work in progress. The viewer and the Live API run end to end; until the pipeline can
-build real fields (T02–T04), every field is the synthetic demo, clearly labelled as such. See
-`TEAM.md` for the plan and task board.
+**Status:** work in progress, running on real data. Type any RA/Dec (or pick one of the five official
+test fields): the Live API fetches the SPHEREx images covering it (NASA/IPAC IRSA, AWS Open Data),
+aligns them and the viewer blinks them. What works today:
+
+- blink two frames, play the whole series like a video, or show the difference A − B;
+  wavelength-matched pairs across epochs, an epoch timeline and a wavelength filter
+- catalogue names (SIMBAD, Gaia DR3) that follow moving stars, motion paths, a motion class per object
+- known asteroids and comets in the field (MPC orbit catalogue, SkyBoT / JPL; positions as seen from SPHEREx)
+- spectrum and light curve at any point (aperture photometry on the SPHEREx images)
+- a pan-and-zoom map of the whole sky (SPHEREx all-sky maps, live deep zoom) with the field's epochs
+
+Open: our own mover detection (T06), so far only known objects are marked. Synthetic data appears only
+in fixture mode and tests, and is labelled as such everywhere. Plan and task board: `TEAM.md`.
 
 ## How it works
 
-1. `pipeline/`: queries IRSA for all SPHEREx exposures covering a position, downloads cutouts,
-   aligns them and writes display frames plus one `target.json` per target.
-2. `detect/`: finds sources that move between frames and cross-matches them with known small
-   bodies from JPL.
-3. `server/`: Live API. Builds a field on request for any RA/Dec (steps 1 and 2) and caches it.
-4. `web/`: static viewer. Asks the Live API for a field, shows build progress, then blinks the frames.
+1. `pipeline/`: finds all SPHEREx exposures covering a position (IRSA TAP or a local index),
+   reads cutouts (IRSA, or byte ranges from the AWS bucket), aligns them north up on one grid and
+   writes display frames plus one `target.json` per field. Also: catalogue labels, motion summaries,
+   photometry, shift-and-stack.
+2. `detect/`: known asteroids and comets in the field (local MPC orbit catalogue, SkyBoT / JPL), classification of detections
+   as known / unknown / artifact; mover detection itself is in progress (T06).
+3. `server/`: Live API. Builds a field on request for any RA/Dec (step 1), caches it, adds labels and
+   known objects when the viewer asks, serves photometry and sky-map tiles.
+4. `web/`: static viewer, no build step. Asks the Live API for a field, shows build progress, then
+   blinks, plays and compares the frames. Details and URL options: `web/README.md`.
+5. `tilegen/`: renders deep-zoom sky-map tiles from the SPHEREx images, locally or on a small VM next
+   to the AWS bucket (`deploy/`).
 
 Interfaces between the three parts: `docs/CONTRACTS.md`.
 
@@ -43,7 +59,7 @@ official test fields. Each time you come back: `cd nasa-challenge`, activate the
 
 | Option | What |
 |---|---|
-| `--fixture` / `--live` | synthetic demo field for every request / real SPHEREx data from IRSA. Default: live once `pipeline.build` exists, fixture until then |
+| `--fixture` / `--live` | synthetic demo field for every request / real SPHEREx data (default) |
 | `--api-port N`, `--web-port N` | other ports if 8000 / 8080 are taken |
 | `--lan` | others on your network can open the printed URL too |
 | `--host ADDR` | listen on one address only, e.g. `--host 10.0.0.2` for the WireGuard network (overrides `--lan`) |
@@ -72,12 +88,16 @@ Troubleshooting:
   reaches other machines only with WSL mirrored networking (`networkingMode=mirrored` in `.wslconfig`).
 - Without the launcher, or to run the parts separately: see `web/README.md` and `server/README.md`.
 
-Pipeline and detection on their own (track A/B, as they become available):
+In the viewer: `Space` blink, `P` play the series, `D` difference A − B, `X` swap A/B, `M` match B
+to A's wavelength, `←`/`→` step through frames. Click an object for its details and history.
+
+Pipeline and detection on their own (all entry points: `docs/CONTRACTS.md`):
 
 ```
 python -m pipeline.query --ra <deg> --dec <deg>            # list SPHEREx images covering a position (T01)
-python -m pipeline.build --id <id> --ra <deg> --dec <deg> --size <arcmin>   # planned (T02-T04)
-python -m detect.run data/targets/<id>                      # planned (T06-T08)
+python -m pipeline.build --id <id> --ra <deg> --dec <deg> --size <arcmin>   # build a field into data/targets/
+python -m detect.run data/targets/<id>                      # known asteroids/comets + classification
+python -m pipeline.photometry data/targets/<id> --ra <deg> --dec <deg>     # fluxes in every frame
 ```
 
 ## Dependencies
@@ -94,9 +114,9 @@ Tests: `python -m pip install -r requirements-dev.lock` (and `playwright install
 browser test).
 
 CI (`.github/workflows/tests.yml`, T46) runs on every push to main and every pull request: the Python
-tests, the contract checks in `tests/` (fixtures validate against the schema, presets are sane), the Node
+tests, the contract checks in `tests/` (both fixtures validate against the schema, presets are sane), the Node
 tests `web/tests/*.mjs` (e.g. the sky-map projection) and the browser test in fixture mode (no external servers). Run the same locally before pushing:
-`python -m pytest detect server pipeline tests -q && python web/tests/browser_test.py`.
+`python -m pytest detect server pipeline tilegen tests -q && python web/tests/browser_test.py`.
 
 Updating dependencies (whoever adds or bumps a package): change the pin in the `requirements*.txt`
 file, regenerate both locks, commit all of it together, and add a line under TEAM.md "Decisions":
@@ -110,22 +130,30 @@ uv pip compile requirements-dev.txt --python-version 3.12 --universal -o require
 
 | Path | What |
 |---|---|
-| `pipeline/` | data access and frame building (Python) |
-| `detect/` | mover detection and cross-match (Python) |
+| `pipeline/` | data access, frame building, labels, photometry (Python) |
+| `detect/` | known objects, classification, mover detection (Python) |
 | `server/` | Live API: builds and caches fields on request (Python, FastAPI) |
 | `web/` | static viewer (no build step); `web/dev.py` runs API + viewer locally |
-| `fixtures/` | tiny committed samples; `demo-synthetic` is simulated, not SPHEREx data |
+| `tilegen/`, `deploy/` | deep-zoom sky-map tiles; scripts for the tile VM |
+| `fixtures/` | tiny committed samples, both simulated (not SPHEREx data): `demo-synthetic` (minimal), `demo-epochs` (every field of the contract) |
+| `tests/` | contract checks run by CI |
 | `data/` | local downloads and caches, not in git |
 | `docs/` | challenge text, contracts, JSON schema |
+| `TEAM.md`, `tasks/`, `CLAUDE.md` | plan, task board, task notes, rules for the team's Claude Code sessions |
 
 ## Data credits
 
 - **SPHEREx** data from the NASA/IPAC Infrared Science Archive (IRSA), operated by
   Caltech/IPAC. _TODO: add the exact data set name, release (QR2/QR3) and DOI from the IRSA
   SPHEREx page, plus the acknowledgement text IRSA asks for._
+- SPHEREx level-2 images also read from the **AWS Open Data** bucket `nasa-irsa-spherex`; all-sky maps
+  from IRSA (SPHEREx cube, 2MASS, AllWISE HiPS) and **CDS** (SPHEREx per-detector HiPS).
 - **JPL Horizons** and the **JPL Small-Body Identification** API, Solar System Dynamics group,
-  Jet Propulsion Laboratory.
-- _TODO: astropy / astroquery / pyvo citations once we use them._
+  Jet Propulsion Laboratory; **IMCCE SkyBoT** (Paris Observatory); the **Minor Planet Center** orbit
+  catalogue MPCORB.
+- **SIMBAD** (CDS, Strasbourg; Harvard mirror) and **Gaia DR3** (ESA, Gaia archive TAP).
+- Software: astropy, astropy-healpix, reproject, pyvo, numpy, scipy, Pillow, FastAPI, uvicorn.
+  _TODO (T15): exact data set names, release, DOIs and the acknowledgement texts each archive asks for._
 
 Anything simulated or injected in this project is labelled as synthetic in the data and in the UI.
 

@@ -32,7 +32,7 @@ jobs:
           python -m playwright install --with-deps chromium
 
       - name: Python tests + contract checks
-        run: python -m pytest detect server pipeline tests -q
+        run: python -m pytest detect server pipeline tilegen tests -q
 
       - uses: actions/setup-node@v4
         with:

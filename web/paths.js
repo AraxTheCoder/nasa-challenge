@@ -42,7 +42,7 @@ function collect(t) {
     out.push({
       group: imp === 4 ? "catalogue" : "names", importance: imp, name: l.name, info: l.kind, source: l.source,
       mag: l.mag, magBand: l.mag_band, note: l.note, otype: l.otype, pm: l.pm_mas_yr, motion: l.motion, aliases: l.aliases ?? [],
-      positions: l.positions ?? [], synthetic: false,
+      positions: l.positions ?? [], synthetic: l.source === "synthetic", // v0.11: made-up label in a fixture
     });
   }
   for (const k of t.known_objects ?? []) {

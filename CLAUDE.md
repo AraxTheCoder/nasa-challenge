@@ -61,6 +61,8 @@ Source of truth, in order: `docs/CHALLENGE.md` (official text) > `docs/CONTRACTS
 - Branch `<name>/T<id>-<slug>`. Small commits. Merge main into your branch often.
 - When the task works, merge to main (or open a short PR if someone asks for review).
 - Stay inside the files of your task. Track folders: `pipeline/` = A, `detect/` = B, `web/` = C.
+  `app/` (URL `/app/`) is Jonathan's UI redesign (T55) and is for UI work only: everyone else keeps
+  working in `web/` (URL `/web/`) exactly as before and does not edit `app/`.
   If you need a change in someone else's area, write it under "Questions / Blockers" in TEAM.md
   instead of editing their code.
 - `docs/CONTRACTS.md` only changes together with a dated line under TEAM.md "Decisions" that says
