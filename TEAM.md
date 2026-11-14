@@ -62,6 +62,9 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T23 | A: Labelling over time: labels that follow moving objects, motion summary + motion class per object, trail image, shift-and-stack | Joerg | doing | `joerg/T23-labels-over-time` | [task file](tasks/T23-labels-over-time.md). Umbrella for T19 (done) + T22; from 4 Ideas |
 | T24 | All: Pin exact dependency versions so everyone runs the same | Joerg | done | `joerg/T24-pin-deps` | Lock files at root; README "Dependencies". Python 3.12+ |
 | T25 | C: Default field in the form (Barnard's Star) + hint that RA/Dec/field of view can be changed | Mati | doing | `mati/T25-form-defaults` | [tasks/T25](tasks/T25-form-defaults.md) |
+| T26 | A: Builds survive IRSA throttling: retry 503/timeouts with backoff, one shared download limit across concurrent builds (no frames dropped) | Jonathan | doing | `jonathan/T26-T28-speed` | Measured: IRSA answers `503 Server busy`, frames were silently dropped |
+| T27 | A: Cache the IRSA exposure list per position (disk, TTL) and drop the server's duplicate query, so FOV changes skip TAP | Jonathan | doing | `jonathan/T26-T28-speed` | TAP took 19 s for a trivial query today |
+| T28 | A: Reuse cached cutouts across FOV changes (a larger cached cutout serves a smaller FOV; minimum size bucket) | Jonathan | doing | `jonathan/T26-T28-speed` | 82% of each 4.6 MB cutout is the EPSF table, independent of FOV |
 
 ## Decisions
 
