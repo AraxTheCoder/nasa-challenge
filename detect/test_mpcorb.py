@@ -75,3 +75,48 @@ def test_build_reads_mpcorb_lines(tmp_path):
         assert z["name"][0].decode() == "29197 Gleim"
         assert z["epoch"][0] == 2461200.5 and z["a"][0] == pytest.approx(2.4569868)
         assert z["H"][0] == 15.2 and z["e"][0] == pytest.approx(0.1783809)
+
+
+def test_build_comets_reads_mpc_lines(tmp_path):
+    lines = [
+        "    CK23A030  2024 09 27.8438  0.391287  1.000183  308.5898   21.6839  139.0978  20261113   6.5  3.2  C/2023 A3 (Tsuchinshan-ATLAS)                            MPEC 2026-O98",
+        "0029P         2026 02 13.5110  5.795420  0.043393   49.8000  312.4000    9.3700  20261113   5.5  4.0  29P/Schwassmann-Wachmann                                 MPEC",
+    ]
+    src = tmp_path / "CometEls.txt"
+    src.write_text("\n".join(lines) + "\n")
+    assert mpcorb.build_comets(src, tmp_path / "comets.npz") == 2
+    with np.load(tmp_path / "comets.npz") as z:
+        assert [n.decode() for n in z["name"]] == ["C/2023 A3 (Tsuchinshan-ATLAS)", "29P/Schwassmann-Wachmann"]
+        assert z["tp"][0] == pytest.approx(2460581.3438, abs=1e-4)      # 2024-09-27.8438
+        assert z["epoch"][0] == 2461357.5 and z["e"][0] == pytest.approx(1.000183)
+    assert horizons_command("C/2023 A3 (Tsuchinshan-ATLAS)") == "DES=C/2023 A3;CAP;"
+    assert horizons_command("29P/Schwassmann-Wachmann") == "DES=29P;CAP;NOFRAG;"
+
+
+def _comet(q, e):
+    c = {"q": np.array([q]), "e": np.array([e]), "tp": np.array([2461000.5]), "w": np.array([0.0]),
+         "node": np.array([0.0]), "inc": np.array([0.0])}
+    c["P"], c["Q"] = mpcorb._rotation(c["w"], c["node"], c["inc"])
+    return c
+
+
+@pytest.mark.parametrize("e", [0.5, 0.999, 1.0, 1.2])
+def test_comet_state_at_perihelion_and_energy(e):
+    c = _comet(1.5, e)
+    r, v = mpcorb.comet_state(c, np.array([0]), 2461000.5, velocity=True)
+    assert np.linalg.norm(r) == pytest.approx(1.5, rel=1e-9)            # at perihelion: r = q
+    r, v = mpcorb.comet_state(c, np.array([0]), 2461060.5, velocity=True)
+    # vis-viva: v^2 = GM (2/r - 1/a), 1/a = (1 - e) / q
+    assert float(np.sum(v * v)) == pytest.approx(mpcorb.GM_SUN * (2 / np.linalg.norm(r) - (1 - e) / 1.5), rel=1e-6)
+
+
+def test_integrate_handles_objects_with_different_epochs():
+    el = _catalogue()
+    for k in ("a", "e", "inc", "node", "w", "M", "n", "H", "G", "q"):
+        el[k] = np.repeat(el[k], 2)
+    el["epoch"] = np.array([2461200.5, 2461100.5])
+    jd = 2461205.5
+    r, _ = mpcorb.integrate(el, np.array([0, 1]), [jd])[jd]
+    for i in (0, 1):
+        r_kp = mpcorb.kepler_state(el, np.array([i]), jd)
+        assert np.linalg.norm(r[:, i:i + 1] - r_kp) < 1e-4    # each from its own epoch (105 days for the second)
