@@ -31,6 +31,15 @@ const state = {
 
 export const currentTarget = () => state.target;
 
+/** A and B with their image URLs, for other modules (diff.js). null when no target is shown. */
+export function currentPair() {
+  const a = frameById(state.aId);
+  const b = frameById(state.bId);
+  if (!state.target || !a || !b) return null;
+  const { width = 1, height = 1 } = state.target.image ?? {};
+  return { a, b, urlA: frameUrl(a), urlB: frameUrl(b), width, height, matched: a.id !== b.id && wavelengthMatched(a, b) };
+}
+
 /** Show one frame (stops blinking). For other modules, e.g. objects.js jumping to an object. */
 export function showFrame(id) {
   if (!frameById(id)) return;
@@ -436,13 +445,16 @@ function startBlink() {
   if (state.shownId !== state.aId && state.shownId !== state.bId) show(state.aId);
   state.timer = setInterval(flip, state.intervalMs);
   updatePlayButton();
+  document.dispatchEvent(new CustomEvent("viewer:blink", { detail: { playing: true } }));
 }
 
 export function stopBlink() {
+  const was = state.playing;
   state.playing = false;
   clearInterval(state.timer);
   state.timer = null;
   updatePlayButton();
+  if (was) document.dispatchEvent(new CustomEvent("viewer:blink", { detail: { playing: false } }));
 }
 
 function updatePlayButton() {

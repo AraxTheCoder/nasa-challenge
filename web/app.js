@@ -10,6 +10,7 @@ import { DEFAULT_API, ApiError, health, requestField } from "./api.js";
 import { $, el, fmtElapsed } from "./util.js";
 import { checkTarget, clearTarget, initViewer, showTarget, stopBlink } from "./viewer.js";
 import { initObjects } from "./objects.js";
+import { initDiff } from "./diff.js";
 import * as explore from "./explore.js";
 
 const SIZE_MIN = 5;
@@ -579,10 +580,12 @@ async function main() {
   queueMicrotask(() => document.dispatchEvent(new CustomEvent("labels:changed", { detail: { on: app.labelsOn } })));
   initViewer();
   initObjects();
+  initDiff();
   bindPage();
   const p = params();
   if (p.get("api")) app.api = p.get("api");
   if (p.get("data")) {
+    $("#explore").hidden = true; // offline mode has no tile server; an empty map box only confuses
     await startOffline(p.get("data"));
     return;
   }
