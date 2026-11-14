@@ -32,7 +32,7 @@ from pipeline.motion import summarize
 RULES_VERSION = "1"
 MATCH_PX = 2.0                   # ~12": JPL positions (~1") + SPHEREx PSF/centroid + trailing
 STILL_PX = 0.5                   # less than this over the whole track = not a mover
-LOOKUP_SERVICES = ("SB Identification", "SkyBoT")  # provenance services of the known-object lookup (T07, T51)
+LOOKUP_SERVICES = ("SB Identification", "SkyBoT", "MPC orbit catalogue")  # known-object lookup (T07, T51)
 LINE_RMS_PX = 1.0                # straight-line residual inside one visit
 VISIT_GAP_DAYS = 0.25            # same visit grouping as detect.known_objects
 MAX_RATE_ARCSEC_PER_HR = 7200.0  # 2 deg/h: faster than practically any asteroid seen by SPHEREx
@@ -108,7 +108,7 @@ def _visit_rate(points: list[dict], mjd: dict[str, float], scale: float) -> floa
 
 
 def known_objects_looked_up(target: dict) -> bool:
-    """True if detect.known_objects (T07) asked for candidates: JPL sb_ident or, since T51, IMCCE SkyBoT."""
+    """True if the known-object lookup ran: JPL sb_ident (T07), IMCCE SkyBoT or the local MPC catalogue (T51)."""
     return any(any(k in (p.get("service") or "") for k in LOOKUP_SERVICES) for p in target.get("provenance", []))
 
 

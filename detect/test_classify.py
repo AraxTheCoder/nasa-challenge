@@ -110,6 +110,7 @@ def test_unknown_without_jpl_lookup_says_so_and_scores_lower():
 @pytest.mark.parametrize("service,looked_up", [
     ("JPL SB Identification (sb_ident, first pass)", True),
     ("IMCCE SkyBoT cone search (geocentric)", True),    # T51: SkyBoT finds the candidates, sb_ident only as fallback
+    ("MPC orbit catalogue MPCORB.DAT (local copy; n-body to frame times, T51)", True),
     ("JPL known objects (T07) failed", False),
 ])
 def test_known_object_lookup_counts_for_skybot_too(service, looked_up):

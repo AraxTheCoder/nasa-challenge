@@ -15,7 +15,7 @@ aligns them and the viewer blinks them. What works today:
 - blink two frames, play the whole series like a video, or show the difference A − B;
   wavelength-matched pairs across epochs, an epoch timeline and a wavelength filter
 - catalogue names (SIMBAD, Gaia DR3) that follow moving stars, motion paths, a motion class per object
-- known asteroids and comets in the field (IMCCE SkyBoT + JPL Horizons, positions as seen from SPHEREx)
+- known asteroids and comets in the field (MPC orbit catalogue, SkyBoT / JPL; positions as seen from SPHEREx)
 - spectrum and light curve at any point (aperture photometry on the SPHEREx images)
 - a pan-and-zoom map of the whole sky (SPHEREx all-sky maps, live deep zoom) with the field's epochs
 
@@ -28,7 +28,7 @@ in fixture mode and tests, and is labelled as such everywhere. Plan and task boa
    reads cutouts (IRSA, or byte ranges from the AWS bucket), aligns them north up on one grid and
    writes display frames plus one `target.json` per field. Also: catalogue labels, motion summaries,
    photometry, shift-and-stack.
-2. `detect/`: known asteroids and comets in the field (SkyBoT / JPL), classification of detections
+2. `detect/`: known asteroids and comets in the field (local MPC orbit catalogue, SkyBoT / JPL), classification of detections
    as known / unknown / artifact; mover detection itself is in progress (T06).
 3. `server/`: Live API. Builds a field on request for any RA/Dec (step 1), caches it, adds labels and
    known objects when the viewer asks, serves photometry and sky-map tiles.
@@ -149,7 +149,8 @@ uv pip compile requirements-dev.txt --python-version 3.12 --universal -o require
 - SPHEREx level-2 images also read from the **AWS Open Data** bucket `nasa-irsa-spherex`; all-sky maps
   from IRSA (SPHEREx cube, 2MASS, AllWISE HiPS) and **CDS** (SPHEREx per-detector HiPS).
 - **JPL Horizons** and the **JPL Small-Body Identification** API, Solar System Dynamics group,
-  Jet Propulsion Laboratory; **IMCCE SkyBoT** (Paris Observatory).
+  Jet Propulsion Laboratory; **IMCCE SkyBoT** (Paris Observatory); the **Minor Planet Center** orbit
+  catalogue MPCORB.
 - **SIMBAD** (CDS, Strasbourg; Harvard mirror) and **Gaia DR3** (ESA, Gaia archive TAP).
 - Software: astropy, astropy-healpix, reproject, pyvo, numpy, scipy, Pillow, FastAPI, uvicorn.
   _TODO (T15): exact data set names, release, DOIs and the acknowledgement texts each archive asks for._

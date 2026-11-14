@@ -1,6 +1,6 @@
 # Tech stack
 
-Overview of the technologies in this repo, as of 2026-11-14 (rewritten for T52; the first version
+Overview of the technologies in this repo, as of 2026-11-14 (rewritten for T55; the first version
 described the pre-baked plan that the live-data decision replaced). Interfaces and rules live in
 `docs/CONTRACTS.md`; this file only summarises.
 
@@ -11,7 +11,7 @@ IRSA TAP / local index (T31) ─┐
 IRSA cutouts / AWS S3 ranges ─┴► pipeline/ (A) ──► data/targets/<id>/  frames + target.json
                                      ▲                        │
 SIMBAD, Gaia DR3 ──► pipeline.labels ┤                        │ served by
-SkyBoT, JPL Horizons ──► detect/ (B) ┘                        ▼
+MPC, SkyBoT, JPL ──► detect/ (B)     ┘                        ▼
                               server/ (Live API, FastAPI) ◄──► web/ (static viewer, vanilla JS)
 IRSA / CDS HiPS, tilegen (T42/T47) ──► /api/sky/... ──► sky map in web/
 ```
@@ -52,7 +52,8 @@ The fixture generators in `fixtures/` use the standard library only. Updating a 
 | AWS Open Data `nasa-irsa-spherex` (us-east-1) | the same level-2 images, read with HTTP range requests (T33) |
 | CDS | SPHEREx per-detector HiPS, SIMBAD (Harvard mirror when CDS is down) |
 | ESA Gaia archive | Gaia DR3 positions + proper motions for labels |
-| IMCCE SkyBoT | candidate asteroids and comets in a field (T51) |
+| Minor Planet Center (MPCORB.DAT, local copy) | known asteroids per field without a web call (T51, `detect.mpcorb`) |
+| IMCCE SkyBoT | candidate asteroids and comets when the local catalogue isn't built (T51) |
 | JPL Horizons, JPL SB Identification | positions as seen from SPHEREx (ID `-163182`); fallback candidate search |
 
 SPHEREx facts that shape the stack: six detectors, 2040×2040 px, 6.15″/px, linear variable filters

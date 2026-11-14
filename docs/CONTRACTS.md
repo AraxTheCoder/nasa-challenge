@@ -1,6 +1,6 @@
 # Contracts (v0.11)
 
-v0.11 (T52) brings this file in line with the code: no pre-baked `web/targets/` and no `pipeline.publish`
+v0.11 (T55) brings this file in line with the code: no pre-baked `web/targets/` and no `pipeline.publish`
 (made obsolete by v0.3 live data); entry points and signatures as they are; the Live API routes the viewer
 already uses are written down (`/objects`, `/sky`, `/settings`, `/health`); `labels_requested` /
 `objects_requested` in target.json; label `source: "synthetic"` for made-up labels in fixtures; a second,
@@ -227,8 +227,9 @@ from the geocentre.
 - `motion.pa_deg`: direction of motion, degrees east of north.
 - `reason` (v0.9, optional): one plain-words sentence why the detection got its status, e.g.
   "follows (4) Vesta (JPL) within 0.4 px on 3 frame(s)" or "seen in one frame only". Shown in the UI.
-- Pipeline for detections: T06 finds tracks → `detect.known_objects` (T07: candidates from IMCCE SkyBoT,
-  JPL sb_ident as fallback, positions from JPL Horizons as seen from SPHEREx) fills `known_objects`
+- Pipeline for detections: T06 finds tracks → `detect.known_objects` (T07/T51: asteroids from a local copy
+  of the MPC orbit catalogue (`detect.mpcorb`) when built, else candidates from IMCCE SkyBoT or JPL
+  sb_ident with positions from JPL Horizons; always as seen from SPHEREx) fills `known_objects`
   → `detect.classify` (T08) sets `status`, `matched_object`, `score`, `motion`, `reason`.
   `detect.run.detect_target` (T51) runs these steps; T06 plugs in there.
 
@@ -247,7 +248,7 @@ python -m detect.run <target_dir> [--vmag 20]            # T51: known objects + 
 python -m detect.known_objects <target_dir> [--vmag 20]  # T07: known asteroids/comets
 python -m detect.classify <target_dir>                   # T08: status/score/reason per detection
 python web/warm.py [--only <name>] [--refresh]           # T05: pre-build the official test fields
-python fixtures/make_demo_epochs.py                      # T52: regenerate the schema-0.2 fixture
+python fixtures/make_demo_epochs.py                      # T55: regenerate the schema-0.2 fixture
 ```
 
 ```python

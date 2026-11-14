@@ -1,7 +1,7 @@
-# T52: Docs match the code (idea I2)
+# T55: Docs match the code (idea I2)
 
 - **Owner:** Mati  ·  **Status:** done
-- **Branch:** `mati/T52-docs-current`
+- **Branch:** `mati/T52-docs-current` (claimed as T52; renumbered to T55 after an ID clash with Joerg's T52)
 - **Depends on / feeds:** T15 (submission text reads the README), T14 (deploy docs)
 
 ## Goal
