@@ -263,6 +263,30 @@ Format: `[name] idea — status: new`. Agents don't act on an idea until a human
   582 lines, `web/app.js` 605. Move filter / pairs / matching / playback out of `viewer.js` into `compare.js`,
   and the sky-map wiring (T30/T36/T42) out of `app.js` into the explore module. Pure refactor, no framework
   needed; the browser test (CI) guards it. ~1 h. — status: new
+- [Mati] Four task proposals from a cross-check of a GPT write-up on SPHEREx science (2026-11-14, Claude).
+  The write-up's physics is correct (every number re-checked) but generic: it misses the linear-variable-filter
+  spectra, saturation and the time domain, which our data shows. These four points from it are worth doing.
+  Drafted as tasks; Joerg/Jonathan please say yes/no/owner under Questions, then a human moves them to the
+  Board. — status: new
+  - **(a) Spectral feature markers on the T49 spectrum chart.** Faint vertical guides with short names:
+    H₂O ice 3.05, PAH 3.3, CH₃OH ice ~3.5, CO₂ ice 4.27, CO ice 4.67 µm; Pa-β 1.28, Br-γ 2.17, Br-α 4.05 µm
+    (all checked); hover explains each; a toggle. Fits SPHEREx's ices goal, educational for the public.
+    C, `web/photometry.js` only. ~1 h. Suggested owner: Mati. Done when: markers on, browser checks.
+  - **(b) VSX + CatWISE2020 labels.** VSX (AAVSO variable-star index): type, period, amplitude for variables
+    (RW Aur, R Dra are official test targets). CatWISE2020: WISE positions + proper motions, the natural
+    catalogue for brown dwarfs (WISE 0855, Eps Ind B). Both via VizieR/IRSA TAP into `labels` (`source:
+    "vsx"` / `"catwise2020"`), moved to frame time like Gaia. A, `pipeline/labels.py` (T19/T23/T37 area).
+    ~1.5 h. Suggested owner: Joerg. Contract: new `source` values only (additive).
+  - **(c) Fuller spectra from all exposures.** T49 measures only the frames picked for blinking (builds
+    keep 2 images per epoch+detector: 36 of ~358 for Barnard's Star), so spectra have ~12 points per
+    epoch. Measure every exposure covering the position instead (T31 index lists them; T33 range reads
+    fetch only the rows around the star), cached per position. A, `pipeline/photometry.py` + the index /
+    S3 readers. ~2 h. Suggested owner: Jonathan (index + S3 are his), viewer side unchanged.
+  - **(d) "Follows the detector, not the sky" artifact rule.** A detection whose pixel position on the
+    *detector* stays fixed while its sky position jumps (ghosts, persistence, hot pixels) is an artifact;
+    also: seen on one detector only while overlapping frames of another detector show nothing. B,
+    `detect/classify.py` (T08), needs real detections (T06) to tune. ~1 h. Suggested owner: whoever does
+    T06, or Mati once T06 delivers.
 
 ## Questions / Blockers
 
@@ -343,6 +367,10 @@ Things waiting on a human.
   APIRouter, `GET /api/targets/<id>/photometry`) and one `app.include_router(...)` line in `server/app.py`;
   it reads the cached cutouts via `pipeline.build.cached_cutout` / `wavelength_at`. Shout in tasks/T49 if
   you'd rather wire it differently.
+- 2026-11-14 [Mati → Joerg, Jonathan] Please look at the four task proposals (a)–(d) under Ideas
+  ("Four task proposals from a cross-check …") and answer here: include yes/no, and owner. Suggested:
+  (a) Mati, (b) Joerg (labels), (c) Jonathan (index + S3), (d) with T06. Once a human says yes, they go
+  onto the Board with task files.
 
 ## Log
 
