@@ -1,5 +1,5 @@
-// T55: the 📍 marker: the pin sits just left of the spot, the spot's RA/Dec in two lines to its
-// right, so the mouse (or the marked point) is between them.
+// T55: the 📍 marker: the needle tip on the spot (on the mouse in pick mode), the spot's RA/Dec in
+// two lines centred under it.
 //  - After "Go", or after picking a spot: the marker stands on that sky position (moves with the
 //    map, not with the mouse) and fades out after 5 s.
 //  - Pick mode (📍 button): the marker follows the mouse over the map; a left click (not a drag)
@@ -32,9 +32,6 @@ function setMode(mode) {
 
 function show(clientX, clientY, ra, dec) {
   st.node.hidden = false;
-  // standing still (after Go / a pick): needle tip on the point, RA/Dec centred below the pin;
-  // following the mouse: pin left of the cursor, RA/Dec to its right
-  st.node.classList.toggle("cursor-pin-standing", st.mode === "pinned");
   st.node.style.transform = `translate(${clientX}px, ${clientY}px)`;
   st.ra.textContent = `RA ${ra.toFixed(4)}°`;
   st.dec.textContent = `Dec ${sign(dec)}${Math.abs(dec).toFixed(4)}°`;
