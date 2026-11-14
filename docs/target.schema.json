@@ -313,7 +313,10 @@
           "source": {
             "enum": [
               "simbad",
-              "gaia_dr3"
+              "gaia_dr3",
+              "vsx",
+              "catwise2020",
+              "horizons"
             ]
           },
           "named": {
@@ -409,6 +412,14 @@
             "items": {
               "type": "string"
             }
+          },
+          "note": {
+            "type": "string",
+            "description": "v0.11 (T52): one line about the object, e.g. VSX type, period and range"
+          },
+          "mag_band": {
+            "type": "string",
+            "description": "v0.11 (T52): band of `mag` (G = Gaia, V or a VSX passband, W2 = WISE); absent = G"
           }
         }
       }

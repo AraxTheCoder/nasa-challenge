@@ -183,6 +183,11 @@ Dated, one line each, with why.
   two variable stars and "spectra on the fly" is the extra-kudos item; both need calibrated fluxes, not PNGs.
   New endpoint only; target.json unchanged; synthetic targets answer 200 `no_data`.
 
+- 2026-11-14 [Joerg] CONTRACTS v0.11: label sources `vsx`, `catwise2020`, `horizons` + optional `note`,
+  `mag_band`; `known_objects[].source` `mpcorb`; `GET /api/targets/<id>/objects` (known objects in the
+  background after each build). Why: name variables, brown dwarfs and planets (official targets include two
+  of each kind), and known asteroids no longer hold up builds (T51, T52). Additive.
+
 ## Ideas
 
 Format: `[name] idea — status: new`. Agents don't act on an idea until a human moves it to the Board.

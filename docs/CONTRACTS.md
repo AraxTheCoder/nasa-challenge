@@ -1,4 +1,10 @@
-# Contracts (v0.10)
+# Contracts (v0.11)
+
+v0.11 (T52, T51): labels get more sources: `vsx` (variable stars), `catwise2020` (red moving WISE sources,
+brown dwarf candidates), `horizons` (planets and moons, seen from SPHEREx); optional `note` (one line about
+the object) and `mag_band` (band of `mag`, absent = G). `known_objects[].source` may be `mpcorb` (computed
+from the MPC orbit catalogue), `skybot` or `jpl-sbident`. New `GET /api/targets/<id>/objects` (see
+"Known objects on request"). Additive; `schema_version` stays `"0.2"`.
 
 v0.10 adds `GET /api/targets/<id>/photometry` (T49): aperture photometry at a position in every frame of a
 built target, for spectra and light curves (see "Photometry"). New endpoint only; target.json unchanged.
@@ -334,6 +340,18 @@ GET /api/targets/<id>/labels   → 202 {"status": "building", "message"} while r
 ```
 
 When done, `target.json` has `labels` filled (same format as before, T19) and `"labels_requested": true`.
+
+### Known objects on request (v0.11, T51)
+
+Builds return as soon as the frames are ready; the known asteroids/comets (and, once T06 exists, detections)
+are filled in by a background job that starts after every live build:
+
+```
+GET /api/targets/<id>/objects  → 202 {"status": "building", "message"} while running,
+                                 200 {"status": "ready", "n"} once target.json has them
+```
+
+When done, `target.json` has `known_objects` (and `detections`) filled and `"objects_requested": true`.
 
 ### Per-epoch HiPS (v0.6, T32)
 
