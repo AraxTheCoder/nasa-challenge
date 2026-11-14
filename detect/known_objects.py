@@ -314,13 +314,32 @@ class Jpl:
 
 # ---------- the step ----------
 
-def find_known_objects(target: dict, jpl: Jpl | None = None, vmag_lim: float = DEFAULT_VMAG) -> list[dict]:
-    """known_objects for a target dict (does not modify it)."""
+def find_known_objects(target: dict, jpl: Jpl | None = None, vmag_lim: float = DEFAULT_VMAG,
+                       local: bool | None = None) -> list[dict]:
+    """known_objects for a target dict (does not modify it).
+
+    local: use the local MPC catalogue (detect.mpcorb) if built. Default: yes unless a client was
+    passed in (tests inject fakes and expect the remote path)."""
     from pipeline.labels import Grid
 
+    from . import mpcorb
+    use_local = (jpl is None if local is None else local) and mpcorb.available()
     jpl = jpl or Jpl()
     grid = Grid(target)
     frames = target["frames"]
+    if use_local:
+        # T51: local MPC orbit catalogue, ~2 s per field. SPHEREx's own position from Horizons
+        # (one request); without it the geocentre (a few arcsec off for main-belt asteroids).
+        mjds = sorted({f["mjd"] for f in frames})
+        try:
+            st = jpl.spherex_states([round(m + MJD_TO_JD, 6) for m in mjds])
+            observer = {m: st[round(m + MJD_TO_JD, 6)][:3] for m in mjds}
+        except Exception as e:  # noqa: BLE001
+            print(f"known_objects: no SPHEREx position from Horizons ({e}); using the geocentre", file=sys.stderr)
+            observer = None
+        objs = mpcorb.find(target, vmag_lim, observer_km=observer, grid=grid)
+        jpl.log.append(mpcorb.provenance())
+        return objs
     visits = group_visits(frames)
     mid_jds = [round((v[0]["mjd"] + v[-1]["mjd"]) / 2 + MJD_TO_JD, 6) for v in visits]
     states = jpl.spherex_states(mid_jds)
@@ -360,8 +379,9 @@ def find_known_objects(target: dict, jpl: Jpl | None = None, vmag_lim: float = D
 
 def add_known_objects(target: dict, jpl: Jpl | None = None, vmag_lim: float = DEFAULT_VMAG) -> dict:
     """Fill target["known_objects"] and append the JPL requests to provenance. Returns the target."""
+    local = jpl is None
     jpl = jpl or Jpl()
-    target["known_objects"] = find_known_objects(target, jpl, vmag_lim)
+    target["known_objects"] = find_known_objects(target, jpl, vmag_lim, local=local)
     calls = jpl.log
     if calls:
         # One provenance entry per service (all its queries), so the list stays readable.
