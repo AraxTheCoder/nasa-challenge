@@ -299,3 +299,21 @@ def test_early_labels_and_objects_land_with_the_build(tmp_path, monkeypatch):
     assert [p["service"] for p in t["provenance"]] == ["build", "SIMBAD", "MPC orbit catalogue"]
     assert client.get(f"/api/targets/{body['id']}/objects").json() == {"status": "ready", "n": 1}
     assert client.get(f"/api/targets/{body['id']}/labels").json() == {"status": "ready", "n": 1}
+
+
+def test_sky_labels_endpoint_caches(tmp_path, monkeypatch):
+    import pipeline.labels
+    calls = []
+
+    def fake(ra, dec, radius):
+        calls.append((ra, dec, radius))
+        return {"center": {"ra_deg": ra, "dec_deg": dec}, "radius_deg": radius, "mjd": 61041.0,
+                "labels": [{"name": "M 31"}], "provenance": [{"service": "SIMBAD"}]}
+
+    monkeypatch.setattr(pipeline.labels, "sky_labels", fake)
+    client = TestClient(create_app(tmp_path / "targets", fixture=True))
+    a = client.get("/api/sky-labels", params={"ra": 10.68, "dec": 41.27, "radius": 0.8}).json()
+    b = client.get("/api/sky-labels", params={"ra": 10.70, "dec": 41.26, "radius": 0.9}).json()
+    assert a == b and len(calls) == 1                     # same grid cell: computed once
+    assert a["labels"] == [{"name": "M 31"}] and list((tmp_path / "sky_labels").glob("*.json"))
+    assert client.get("/api/sky-labels", params={"ra": 1, "dec": 95}).status_code == 400

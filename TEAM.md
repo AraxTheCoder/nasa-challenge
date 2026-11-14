@@ -108,6 +108,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T69 | C: Shift-and-stack in the viewer: stack the frames along an object's motion (or a guessed one), faint movers sharpen, stars smear (idea I14) | | open | | [tasks/T69](tasks/T69-stack-in-viewer.md). Partly done: `pipeline.stack` (T23). |
 | T70 | B/C: Motion classes for real detections: asteroid-like / nearby star / distant body from rate, direction and shape, checked on T06 output (idea I15) | | open | | [tasks/T70](tasks/T70-detection-motion-classes.md). Partly done: classes for labels (T23), status + reason incl. class for detections (T08). |
 | T71 | All: the Live API sets up its own data on start, in the background: MPC orbit catalogue (T51/T53, refreshed weekly) and the SPHEREx image index (T31) when missing; builds use the fallbacks until ready | Joerg | done | `joerg/T71-auto-data` | [tasks/T71](tasks/T71-auto-data.md). Teammates no longer need the one-time setup commands |
+| T72 | C: Catalogue names anywhere on the explore map (not only the shown field's movers): `GET /api/sky-labels` (SIMBAD, VSX, CatWISE, cached per 0.25 deg cell), drawn when zoomed in to 2 deg, names where they fit, dots + hover for the rest | Joerg | done | `joerg/T72-map-labels` | [tasks/T72](tasks/T72-map-labels.md). Joerg: "why can't I see the labels in the explorer?" |
 
 ## Decisions
 

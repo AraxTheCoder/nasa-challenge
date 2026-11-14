@@ -92,3 +92,26 @@ def test_planets_none_near_means_no_horizons_call(monkeypatch):
     monkeypatch.setattr(ko.Jpl, "positions_id", lambda *a: (_ for _ in ()).throw(AssertionError("Horizons asked")))
     t = {**TARGET, "center": {"ra_deg": 90.0, "dec_deg": 85.0}}   # far from the ecliptic
     assert L.planet_labels(t, L.Grid(t)) == ([], None)
+
+
+def test_sky_region_snaps_to_grid():
+    assert L.sky_region(269.4463, 4.7682, 0.4) == L.sky_region(269.43, 4.76, 0.3)    # same cache entry
+    ra, dec, r = L.sky_region(10.68, 41.27, 0.8)
+    assert (dec, r) == (41.25, 1.0) and abs(ra - 10.68) < 0.34
+    assert L.sky_region(359.99, 0.0, 9)[2] == L.SKY_RADII[-1] and 0 <= L.sky_region(359.99, 0.0, 1)[0] < 360
+
+
+def test_sky_labels_rows_and_order(monkeypatch):
+    def fake_add(t, sources=None):
+        assert L.planet_labels not in sources          # planets move: not on the all-epoch map
+        p = [{"frame_id": "s0", "ra_deg": 1.0, "dec_deg": 2.0, "x": 0, "y": 0}]
+        t["labels"] = [
+            {"name": "HD  1", "kind": "star", "otype": "*", "source": "simbad", "named": True, "mag": 7.0, "importance": 2, "positions": p},
+            {"name": "M  31", "kind": "galaxy", "otype": "G", "source": "simbad", "named": True, "mag": None, "importance": 0, "positions": p},
+            {"name": "Gaia DR3 1", "kind": "star", "otype": "*", "source": "gaia_dr3", "named": False, "mag": 9.0, "importance": 4, "positions": p}]
+        t["provenance"].append({"service": "SIMBAD"})
+        return t
+    monkeypatch.setattr(L, "add_labels", fake_add)
+    out = L.sky_labels(10.0, 41.0, 0.5)
+    assert [r["name"] for r in out["labels"]] == ["M 31", "HD 1"]          # Gaia only for merging; names tidied
+    assert out["labels"][0]["ra_deg"] == 1.0 and "positions" not in out["labels"][0]
