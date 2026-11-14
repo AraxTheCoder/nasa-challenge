@@ -114,6 +114,19 @@ def pick_images(ra: float, dec: float, detector: int, k: int = IMAGES_PER_TILE) 
     return urls
 
 
+def _world2pix(wcs, lon, lat):
+    """Sky -> detector pixels. Points far outside the detector make the SIP inversion diverge
+    (astropy NoConvergence crashed 60 tiles on 2026-11-14); those are returned as NaN = no data."""
+    x, y = wcs.all_world2pix(lon, lat, 0, quiet=True)
+    x, y = np.asarray(x, float), np.asarray(y, float)
+    # quiet=True returns the last iterate for diverging points: reject anything implausible
+    lin_x, lin_y = wcs.wcs_world2pix(lon, lat, 0)
+    bad = ~np.isfinite(x) | ~np.isfinite(y) | (np.hypot(x - lin_x, y - lin_y) > 200)
+    x[bad] = np.nan
+    y[bad] = np.nan
+    return x, y
+
+
 def _covers(fits_url: str, ra: float, dec: float, margin_px: int = 20) -> bool:
     from pipeline.s3 import NotInBucket, S3Image
 
@@ -121,7 +134,10 @@ def _covers(fits_url: str, ra: float, dec: float, margin_px: int = 20) -> bool:
         im = S3Image.get(fits_url)
     except NotInBucket:
         return False
-    x, y = im.wcs.all_world2pix(ra, dec, 0)
+    x, y = _world2pix(im.wcs, np.atleast_1d(ra), np.atleast_1d(dec))
+    x, y = float(x[0]), float(y[0])
+    if not (np.isfinite(x) and np.isfinite(y)):
+        return False
     return margin_px <= x <= im.nx - 1 - margin_px and margin_px <= y <= im.ny - 1 - margin_px
 
 
@@ -135,8 +151,8 @@ def _sample(fits_url: str, lon: np.ndarray, lat: np.ndarray) -> np.ndarray | Non
         im = S3Image.get(fits_url)
     except NotInBucket:          # reprocessed file under another path: the other images still do
         return None
-    x, y = im.wcs.all_world2pix(lon, lat, 0)
-    inside = (x >= 0) & (x <= im.nx - 1) & (y >= 0) & (y <= im.ny - 1)
+    x, y = _world2pix(im.wcs, lon, lat)
+    inside = np.isfinite(x) & np.isfinite(y) & (x >= 0) & (x <= im.nx - 1) & (y >= 0) & (y <= im.ny - 1)
     if not inside.any():
         return None
     out = np.full(lon.shape, np.nan, np.float32)

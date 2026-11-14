@@ -183,8 +183,11 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     let t = layer.tiles.get(k);
     if (t) {
       t.used = performance.now();
+      // Priority is per frame: the first request in a frame sets it, later ones in the same frame
+      // may only raise it (a tile visible last frame but only a preload now must drop back).
+      if (t.want !== st.frame) t.prio = prio;
+      else t.prio = Math.min(t.prio, prio);
       t.want = st.frame;
-      if (t.state === "queued") t.prio = Math.min(t.prio, prio);
       return t;
     }
     t = { state: "queued", tex: null, used: performance.now(), want: st.frame, prio, key: k };
