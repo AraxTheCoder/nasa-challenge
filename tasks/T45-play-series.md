@@ -1,6 +1,6 @@
 # T45: Play the series like a video
 
-- **Owner:** Mati  ·  **Status:** open
+- **Owner:** Mati  ·  **Status:** doing
 - **Branch:** `mati/T45-play`
 - **Depends on / feeds:** T11/T12 (viewer, timeline, wavelength filter); idea #1 of the gap scan
 - **From:** core Objective: "Your tool will display a series of images of that patch like a little video".
