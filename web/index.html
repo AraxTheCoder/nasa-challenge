@@ -20,9 +20,10 @@
       <label title="Side of the square field, 5–60 arcmin. Larger fields catch faster movers but take longer to build.">Field of view
         <input name="size" type="number" min="5" max="60" step="1" value="15" required> arcmin</label>
       <button type="submit" class="primary">Show</button>
-      <select id="preset" aria-label="Test fields" title="The five test fields named in the challenge" hidden>
-        <option value="">Test fields…</option>
+      <select id="preset" aria-label="Quick picks" title="The five test fields named in the challenge, and more fields where something moves (T65)" hidden>
+        <option value="">Pick a field…</option>
       </select>
+      <button type="button" id="surprise" class="link" title="Open a random field from the quick picks" hidden>Surprise me</button>
       <button type="button" id="form-help" class="help-btn" aria-controls="form-tip" aria-expanded="false"
               title="How to enter coordinates">?</button>
       <!-- RA/Dec help bubble (T29). Switched off for now: FORM_TIP_ENABLED in app.js, or ?tip=1. -->
@@ -46,6 +47,7 @@
   </header>
 
   <div id="messages" class="messages" role="status" aria-live="polite"></div>
+  <p id="pick-why" class="pick-why" hidden></p>
 
   <section id="job" class="job" hidden aria-live="polite">
     <div class="job-head">

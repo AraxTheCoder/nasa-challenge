@@ -20,6 +20,7 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `traces.js` | the field's objects drawn on the sky map (T35) |
 | `util.js` | DOM and formatting helpers |
 | `presets.json` | the five official test fields (SIMBAD positions moved to epoch 2026.0, with query + timestamp) |
+| `discover.json`, `make_discover.py` | more quick picks (T65): fastest-moving stars + brown dwarfs SPHEREx covers in ≥ 2 epochs, with a reason each; "Surprise me" picks one. Regenerate: `python web/make_discover.py` (needs the local image index) |
 | `dev.py` | one-command launcher: Live API + viewer, opens the browser (`python web/dev.py --help`) |
 | `warm.py` | pre-builds the five test fields in a Live API cache before a demo (`python web/warm.py --help`) |
 | `tests/browser_test.py` | end-to-end browser test against `python -m server --fixture` (also in CI) |

@@ -183,6 +183,9 @@ table.frames { width: 100%; border-collapse: collapse; font-size: 12px; font-var
 button.primary { background: var(--accent); color: #04111f; border-color: var(--accent); font-weight: 600; }
 button.link { background: none; border: none; color: var(--accent); padding: 4px 6px; }
 button.link:hover { text-decoration: underline; }
+/* T65: why a quick pick is interesting, under the header */
+.pick-why { margin: 8px 16px 0; padding: 6px 10px; border-left: 3px solid var(--accent); color: var(--muted); font-size: 0.9em; max-width: 900px; }
+.pick-why strong { color: var(--text); }
 
 /* ---------- build progress ---------- */
 .job {
