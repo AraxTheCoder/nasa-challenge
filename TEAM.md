@@ -90,10 +90,24 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T51 | B: `detect/run.py` so builds get known asteroids/comets now: JPL lookup (T07) + classify (T08) after every build; mover detection (T06) plugs into the same function later | Joerg | done | `joerg/T51-detect-run` | [tasks/T51](tasks/T51-detect-run.md). Builds call `detect.run.detect()` but the module never existed, so every field had 0 objects. Jonathan: T06 adds tracks here |
 | T52 | A: More labels (idea I4 + more): VSX variable stars (type, period, range), CatWISE2020 brown dwarfs / high proper motion (moved to frame time), planets + bright moons (seen from SPHEREx) | Joerg | done | `joerg/T52-more-labels` | [tasks/T52](tasks/T52-more-labels.md). New label `source` values + optional `note` (CONTRACTS v0.11) |
 | T53 | B: Comets in the local orbit catalogue (MPC CometEls.txt), like the asteroids in T51 | Joerg | done | `joerg/T52-more-labels` | [tasks/T53](tasks/T53-local-comets.md). SkyBoT fallback had comets, the local path not yet |
-| T54 | A/C: Known objects + labels start while the images download (they need only frame times + field geometry), so a new field is complete when its frames are | Joerg | doing | `joerg/T52-more-labels` | [tasks/T54](tasks/T54-early-objects-labels.md). New field: frames 11 s, objects +2.5 s, labels +2-3 s today |
+| T54 | A/C: Known objects + labels start while the images download (they need only frame times + field geometry), so a new field is complete when its frames are | Joerg | done | `joerg/T52-more-labels` | [tasks/T54](tasks/T54-early-objects-labels.md). New field: frames 11 s, objects +2.5 s, labels +2-3 s today |
 | T56 | All: Docs match the code (idea I2): README status/run/how-it-works, CONTRACTS without pre-baked `web/targets/` + `pipeline.publish`, undocumented API routes, a schema-0.2 fixture with pairs/labels/varied detections | Mati | done | `mati/T52-docs-current` | [tasks/T56](tasks/T56-docs-current.md). Was claimed as T52, then T55 (ID clashes with Joerg's T52, Jonathan's T55). Also: classify fix for SkyBoT/MPC, tilegen tests in CI |
 | T55 | C: UI redesign under `/app/` (copy of `web/`); `web/` and `/web/` stay as they are for all other work | Jonathan | doing | `jonathan/T55-app-ui` | [tasks/T55](tasks/T55-app-ui.md). UI work only; everyone else keeps working in `web/` |
 | T57 | A: Faster "Show": the US VM (tilegen, `us-east4`) reads + cuts the SPHEREx images next to the bucket and sends only the small cutout FITS (gzip); build/photometry/caches stay local; fallback S3, then IRSA | Jonathan | doing | `jonathan/T57-vm-cutouts` | [tasks/T57](tasks/T57-vm-cutouts.md). Download was ~36 s of ~45 s for a new field |
+| T58 | All: Limits before a public deploy: rate limit per IP, cap on concurrent builds, `refresh=1` only with a token, cache size cap with eviction (idea I1) | | open | | [tasks/T58](tasks/T58-public-limits.md). Server side, ~1 h. Suggested owner: Jonathan (server). |
+| T59 | A/C: Per-detector co-adds per epoch: mean/median of the aligned frames per detector and epoch as extra frames, for faint red sources (idea I3) | | open | | [tasks/T59](tasks/T59-coadds.md). A ~2 h + C ~0.5 h. Works best together with T66 (more frames per field). |
+| T60 | A/C: Contamination flags in the viewer: per-frame FLAGS bits exported with the frame, overlay toggle, flag names at the inspected pixel (idea I5) | | open | | [tasks/T60](tasks/T60-contamination-flags.md). A ~1.5 h + C ~1 h. |
+| T61 | B: Appear / disappear / brightness change between epochs, not only motion: sources present in one epoch and not another, or much brighter / fainter (idea I6a) | | open | | [tasks/T61](tasks/T61-appear-vanish-brighten.md). Needs T06 source extraction. |
+| T62 | B/C: Candidate ranking + a dedicated candidate list in the viewer: motion significance, consistency across frames, catalogue match, artifact probability from FLAGS (idea I6c) | | open | | [tasks/T62](tasks/T62-candidate-list.md). Partly done: score + reason per detection (T08), unknown first in the objects panel (T13). |
+| T63 | C/A: Spectrum context: what a normal source looks like, and why a deviation is interesting (expected baseline + feature markers on the T49 chart) (idea I8) | Mati | doing | `mati/T63-spectrum-context` | [tasks/T63](tasks/T63-spectrum-context.md). Rephrased from idea I8 (feature markers) by Mati: know what normal looks like, then explain anomalies. C `web/photometry.js` + maybe a small fit in `pipeline/photometry.py`. |
+| T64 | A/C: Data release in the UI: release per frame (DR1 / QR3) in target.json, shown in frame info, "newer data available: rebuild" when a cached field is older (idea I9) | | open | | [tasks/T64](tasks/T64-data-release.md). |
+| T65 | A/C: Auto target selection: propose interesting fields (high proper-motion stars, brown dwarfs, asteroids passing through, fields with unknown movers, "surprise me") (idea I10) | | open | | [tasks/T65](tasks/T65-auto-targets.md). From Joerg's idea. |
+| T66 | A: Fuller spectra from all exposures: photometry on every exposure covering a position (not only the 36 frames kept for blinking), cached per position (idea I11) | | open | | [tasks/T66](tasks/T66-fuller-spectra.md). ~2 h. Suggested owner: Jonathan (index + S3). |
+| T67 | B: "Follows the detector, not the sky" artifact rule: a detection fixed in detector pixels while its sky position jumps (ghost, persistence, hot pixel) is an artifact (idea I12) | | open | | [tasks/T67](tasks/T67-detector-artifacts.md). B, `detect/classify.py`. ~1 h. |
+| T68 | C: Split the big web files: filter / pairs / playback out of `viewer.js`, sky-map wiring out of `app.js` (pure refactor, browser test guards it) (idea I13) | | blocked | | [tasks/T68](tasks/T68-split-web-files.md). Blocked by T55: refactoring `web/` now would make porting to `app/` harder. |
+| T69 | C: Shift-and-stack in the viewer: stack the frames along an object's motion (or a guessed one), faint movers sharpen, stars smear (idea I14) | | open | | [tasks/T69](tasks/T69-stack-in-viewer.md). Partly done: `pipeline.stack` (T23). |
+| T70 | B/C: Motion classes for real detections: asteroid-like / nearby star / distant body from rate, direction and shape, checked on T06 output (idea I15) | | open | | [tasks/T70](tasks/T70-detection-motion-classes.md). Partly done: classes for labels (T23), status + reason incl. class for detections (T08). |
+| T71 | All: the Live API sets up its own data on start, in the background: MPC orbit catalogue (T51/T53, refreshed weekly) and the SPHEREx image index (T31) when missing; builds use the fallbacks until ready | Joerg | done | `joerg/T71-auto-data` | [tasks/T71](tasks/T71-auto-data.md). Teammates no longer need the one-time setup commands |
 
 ## Decisions
 
@@ -203,38 +217,32 @@ Ideas are numbered (I1, I2, …) to refer to them; numbers stay fixed, a new ide
 - I1 [Mati] **Limits before a public deploy** (T14): anyone can request any field and `refresh=1`, i.e. trigger
   unlimited IRSA/AWS downloads and JPL queries. Rate limit per IP, cap concurrent builds, disable
   `refresh` publicly (token), cache size cap with eviction. Server ~1 h.
-  (gap scan vs. the official text, 2026-11-14) — status: new
-- I2 [Mati] **Docs out of date** (consistency, CLAUDE.md): README "Status" still says every field is synthetic;
-  CONTRACTS still describes pre-baked `web/targets/`, its size budget and `pipeline.publish`, which the
-  live-data decision made obsolete (needs a Decisions line); the committed fixture is schema 0.1 without
-  pairs / labels / varied detections (the browser test generates a richer one; commit it as a second
-  fixture). ~1 h.
-  (gap scan vs. the official text, 2026-11-14) — status: done (T56)
+  (gap scan vs. the official text, 2026-11-14) — status: on the Board (T58)
 - I3 [Mati] **Per-detector co-adds per epoch** (consideration: "add together all the data taken by each of the
   six detector arrays to improve the signal-to-noise"): mean/median of the aligned frames per detector
   and epoch as extra frames (`kind: "coadd"`, `n_exposures`; contract change). Helps faint red brown
   dwarfs (WISE 0855, Eps Ind B) that single 0.75-3 µm exposures barely show. A ~2 h + C ~0.5 h.
-  (gap scan vs. the official text, 2026-11-14) — status: new
+  (gap scan vs. the official text, 2026-11-14) — status: on the Board (T59)
 - I4 [Mati] **(b) VSX + CatWISE2020 labels.** VSX (AAVSO variable-star index): type, period, amplitude for variables
   (RW Aur, R Dra are official test targets). CatWISE2020: WISE positions + proper motions, the natural
   catalogue for brown dwarfs (WISE 0855, Eps Ind B). Both via VizieR/IRSA TAP into `labels` (`source:
   "vsx"` / `"catwise2020"`), moved to frame time like Gaia. A, `pipeline/labels.py` (T19/T23/T37 area).
   ~1.5 h. Suggested owner: Joerg. Contract: new `source` values only (additive).
   Also covers gap-scan item 7 (CatWISE2020 labels on the frames).
-  (proposal (b) from the cross-check of a GPT write-up on SPHEREx science, 2026-11-14; owner question under Questions) — status: on the Board as T52 (Joerg)
+  (proposal (b) from the cross-check of a GPT write-up on SPHEREx science, 2026-11-14; owner question under Questions) — status: done (Joerg's T52: VSX, CatWISE2020, planets + moons)
 - I5 [Mati] **Contamination flags** (consideration: "display metadata, like contamination flags"): only the
   hardware mask reaches the viewer (as no-data). Export a small per-frame flags image (or bit counts)
   with the frame; viewer: flags overlay toggle + flag names at the inspected pixel (OUTLIER may be a
   mover, SOURCE is a catalogued star, PERSIST is a ghost). A ~1.5 h + C ~1 h.
-  (gap scan vs. the official text, 2026-11-14) — status: new
+  (gap scan vs. the official text, 2026-11-14) — status: on the Board (T60)
 - I6 [Joerg] Feature list from Joerg (2026-11-14), what's not covered yet. Already covered: timeline
   (T12), blink (T11), matched pairs (T12/T17), layer toggles + motion paths + hover info (T22),
   objects list + status markers (T13), mover detection (T06), all-sky pan/zoom with epochs
   (T30/T32), Barnard's Star as validation (T19/T23). New: — status: partly done (see the tags below)
-  - I6a (open, needs T06) Appear / disappear / brightness change between epochs, not only motion (detect side, B).
-  - I6b (open, needs T06) "Uncatalogued?" check: a detection with no SIMBAD/Gaia label within ~1 px gets flagged
+  - I6a (on the Board: T61, needs T06) Appear / disappear / brightness change between epochs, not only motion (detect side, B).
+  - I6b (done by T08: a detection within 2 px of a SIMBAD/Gaia label is "known" or "sits on a catalogued star"; no match = unknown) "Uncatalogued?" check: a detection with no SIMBAD/Gaia label within ~1 px gets flagged
     (labels are already in target.json, so this is a cheap cross-match).
-  - I6c (partly: score + reason per detection, T08; the list is open) Candidate ranking (motion significance, consistency across frames, catalogue match, artifact
+  - I6c (on the Board: T62; score + reason per detection done in T08) Candidate ranking (motion significance, consistency across frames, catalogue match, artifact
     probability from the FLAGS bits) and a dedicated candidate list in the viewer.
   - I6d (→ part of T06) Photutils for source extraction (not in requirements.lock yet: add with a pin + lock update).
 - I7 [Mati] **Embed + share** (consideration: "easily embed it in other websites"): `?embed=1` compact layout
@@ -245,41 +253,41 @@ Ideas are numbered (I1, I2, …) to refer to them; numbers stay fixed, a new ide
   H₂O ice 3.05, PAH 3.3, CH₃OH ice ~3.5, CO₂ ice 4.27, CO ice 4.67 µm; Pa-β 1.28, Br-γ 2.17, Br-α 4.05 µm
   (all checked); hover explains each; a toggle. Fits SPHEREx's ices goal, educational for the public.
   C, `web/photometry.js` only. ~1 h. Suggested owner: Mati. Done when: markers on, browser checks.
-  (proposal (a) from the cross-check of a GPT write-up on SPHEREx science, 2026-11-14; owner question under Questions) — status: new
+  (proposal (a) from the cross-check of a GPT write-up on SPHEREx science, 2026-11-14; owner question under Questions) — status: on the Board (T63, rephrased: spectrum context, expected baseline + why a deviation is interesting)
 - I9 [Mati] **Data release in the UI** ("easy to update with the latest data releases"): carry the release
   (DR1 / QR3, from obs_collection) per frame into target.json, show it in frame info + footer, and let
   the API say when a cached field predates the newest release ("newer data available: Rebuild").
-  (gap scan vs. the official text, 2026-11-14) — status: new
+  (gap scan vs. the official text, 2026-11-14) — status: on the Board (T64)
 - I10 [Joerg] Auto target selection: instead of only typed coordinates, propose interesting fields
   automatically, e.g. high-proper-motion stars and brown dwarfs (Gaia/SIMBAD/CatWISE), known asteroids
   passing through SPHEREx frames (JPL, T07), fields where our detection (T06) finds unknown movers,
-  or a "surprise me" pick ranked by how much moves there. Shown as a list / quick picks. — status: new
+  or a "surprise me" pick ranked by how much moves there. Shown as a list / quick picks. — status: on the Board (T65)
   (the five official test fields are quick picks already: T20/T25)
 - I11 [Mati] **(c) Fuller spectra from all exposures.** T49 measures only the frames picked for blinking (builds
   keep 2 images per epoch+detector: 36 of ~358 for Barnard's Star), so spectra have ~12 points per
   epoch. Measure every exposure covering the position instead (T31 index lists them; T33 range reads
   fetch only the rows around the star), cached per position. A, `pipeline/photometry.py` + the index /
   S3 readers. ~2 h. Suggested owner: Jonathan (index + S3 are his), viewer side unchanged.
-  (proposal (c) from the cross-check of a GPT write-up on SPHEREx science, 2026-11-14; owner question under Questions) — status: new
+  (proposal (c) from the cross-check of a GPT write-up on SPHEREx science, 2026-11-14; owner question under Questions) — status: on the Board (T66)
 - I12 [Mati] **(d) "Follows the detector, not the sky" artifact rule.** A detection whose pixel position on the
   *detector* stays fixed while its sky position jumps (ghosts, persistence, hot pixels) is an artifact;
   also: seen on one detector only while overlapping frames of another detector show nothing. B,
   `detect/classify.py` (T08), needs real detections (T06) to tune. ~1 h. Suggested owner: whoever does
   T06, or Mati once T06 delivers.
-  (proposal (d) from the cross-check of a GPT write-up on SPHEREx science, 2026-11-14; owner question under Questions) — status: new
+  (proposal (d) from the cross-check of a GPT write-up on SPHEREx science, 2026-11-14; owner question under Questions) — status: on the Board (T67)
 - I13 [Mati] Split the two big web files before they tangle (Claude's size check, 2026-11-14): `web/viewer.js`
   582 lines, `web/app.js` 605. Move filter / pairs / matching / playback out of `viewer.js` into `compare.js`,
   and the sky-map wiring (T30/T36/T42) out of `app.js` into the explore module. Pure refactor, no framework
-  needed; the browser test (CI) guards it. ~1 h. — status: new
+  needed; the browser test (CI) guards it. ~1 h. — status: on the Board (T68, blocked by T55)
 - I14 [Joerg] Shift-and-stack: add frames after shifting each along a guessed motion; faint movers
   sharpen, stars smear. Standard for distant-object searches; matches the challenge's "add together
-  or subtract images". — status: partly done (`python -m pipeline.stack`, T23; not in the viewer)
+  or subtract images". — status: on the Board (T69; `pipeline.stack` exists, T23)
 - I15 [Joerg] Motion classification for detections: from the track, rate + direction + shape, shown as
   a label, e.g. "asteroid-like, 30"/h" (seen in one burst only), "moves between epochs only: nearby
   star / brown dwarf", "large jump between epochs, slow drift within one: distant solar-system body".
   Rough numbers: main belt ~150 px/day; Barnard 1.7 px/yr; a body at 500 AU swings ~+-0.11 deg/yr
   from Earth's orbit, i.e. up to ~14' between epochs (about one default field!), ~1 px/day within
-  an epoch. — status: partly done (classes for labels: T23; detections get status + reason incl. class: T08;
+  an epoch. — status: on the Board (T70; classes for labels done, T23)
   real detections wait for T06)
 - I16 [Joerg] (on the Board as T35) Tracing over the stitched sky: draw labels, paths and motion tracks (and detections) on the
   explore map (T30/T32 per-epoch HiPS), not only on a single field, so a mover can be followed across
@@ -613,3 +621,16 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   (Joerg more labels, Mati docs), see Questions.
 - 2026-11-14 Mati (Claude): T56 done (idea I2; claimed as T52, then T55; renumbered twice because Joerg's T52 and Jonathan's T55 were claimed in parallel, theirs stay). README, CONTRACTS v0.11, TECH-STACK (rewritten), web/server/fixtures READMEs match the code. New fixture `fixtures/targets/demo-epochs/` (regenerate: `python fixtures/make_demo_epochs.py`), try it with `web/?data=../fixtures/targets/&target=demo-epochs`. Bug fixed on the way (Mati OK'd): since T51, `detect.classify` didn't recognise SkyBoT or the MPC catalogue as a known-object lookup, so unknown detections were capped at 0.6 with a wrong "not looked up" note. Joerg: if T51/T53 add another lookup service, add its provenance name to `LOOKUP_SERVICES` in detect/classify.py. CI now also runs `tilegen` tests. Still open: data credits + team names in README (T15).
 - 2026-11-14 Mati (Claude): answer to Jonathan's ID question: the docs task is now T56 (T52 = Joerg's more labels, T55 = Jonathan's UI redesign). Commits before this say T52/T55 for it. Tip for all agents: `git fetch` right before choosing a new ID.
+- 2026-11-14 Mati (Claude): Ideas → Board on Mati's request: I1 → T58, I3 → T59, I5 → T60, I6a → T61, I6c → T62, I8 → T63 (rephrased by Mati: know what normal looks like, then explain why a deviation is interesting), I9 → T64, I10 → T65, I11 → T66, I12 → T67, I13 → T68 (blocked: wait for Jonathan's T55 UI redesign before refactoring `web/`), I14 → T69, I15 → T70. All open, no owner yet (suggested owners in the task files). Not new tasks: I2 deleted (done as T56), I4 done by T52, I6b done by T08, I6d is part of T06, I16 = T35, I17–I20 already done. I7 (embed + share) stays an idea.
+
+- 2026-11-14 [Joerg + Claude] T51-T54 done, all on main. Known objects: local MPC orbit catalogue
+  (`detect/mpcorb.py`, 1.58 M asteroids + 973 comets, Sun + planets n-body, matches JPL Horizons to
+  0.05" for asteroids, <= 4" for comets), ~2-3 s per field instead of minutes (JPL sb_ident allows 20
+  requests / 5 min). One-time setup per machine: `python -m detect.mpcorb fetch && python -m detect.mpcorb
+  build` (else SkyBoT, ~25 s). Labels (T52, CONTRACTS v0.12): VSX variables (type, period, range),
+  CatWISE2020 red movers (brown dwarf candidates; strict cuts, no fakes left in the five official fields),
+  planets + bright moons from Horizons seen from SPHEREx. T54: labels + known objects run during the
+  download, a new field is complete in ~12 s. Gotchas: VizieR CDS host down today (CfA mirror used);
+  CatWISE on the CfA mirror needs `-out.all` (column lists return no rows).
+  [to Jonathan] `/app/` (T55) is a copy of `web/` from before these: port `sourceName`/`note`/`mag_band`
+  (web/util.js, paths.js, inspector.js) and `loadObjects` (web/app.js) when you sync it.

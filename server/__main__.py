@@ -30,11 +30,16 @@ def main() -> None:
     ap.add_argument("--cutouts-remote", default=os.environ.get("SPHEREX_CUTOUTS_REMOTE", TEAM_TILEGEN),
                     help="tilegen service that cuts the SPHEREx images for builds next to the bucket (T57; "
                          f"default: $SPHEREX_CUTOUTS_REMOTE or {TEAM_TILEGEN}; 'none' = read S3 directly)")
+    ap.add_argument("--no-data-setup", action="store_true",
+                    help="don't fetch/build the orbit catalogue and image index in the background (T71)")
     args = ap.parse_args()
     if str(args.tiles_remote).lower() in ("none", ""):
         args.tiles_remote = None
     if str(args.cutouts_remote).lower() in ("none", ""):
         args.cutouts_remote = None
+    if not args.fixture and not args.no_data_setup:
+        from . import data_setup
+        data_setup.start(REPO / "data")     # T71: background; the fallbacks serve until it is done
     uvicorn.run(create_app(args.cache, fixture=args.fixture, tiles_remote=args.tiles_remote,
                            use_remote=args.use_remote, cutouts_remote=args.cutouts_remote),
                 host=args.host, port=args.port)

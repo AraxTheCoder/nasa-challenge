@@ -32,6 +32,8 @@ HW_MASK = sum(1 << b for b in (0, 1, 2, 6, 9, 10, 11, 14, 17, 25, 26, 27, 28))
 PER_GROUP = 2        # images per (epoch, detector); 3 epochs x 6 detectors x 2 = 36 cutouts
 THREADS = 8          # IRSA cutout service: more parallel requests only get more 503s
 S3_THREADS = 24      # AWS bucket (T33): not throttled, 7 MB/s at 32 parallel from Europe
+REMOTE_THREADS = 8   # T57 cutout VM: 36 cutouts in 3.3 s at 8 parallel, 6.3 s at 24 (2026-11-14)
+ALIGN_THREADS = 2    # T57: resample while downloading; 0.22 s per image serial, half on 2 threads
 TIMEOUT_S = 180
 
 Progress = Callable[..., None]
@@ -324,11 +326,31 @@ def _labels_with_budget(target: dict, final_json: Path) -> None:
     threading.Thread(target=finish_later, daemon=True, name="labels-late").start()
 
 
+def remap_to_frames(items: list[dict], stub_frames: list[dict], frames: list[dict]) -> list[dict]:
+    """T54: positions computed on the early stub -> the built target's frames (matched by obs_id and
+    detector). Frames that were dropped (failed download, little coverage) lose their positions;
+    objects left without any are dropped."""
+    final = {(f["obs_id"], f["detector"]): f["id"] for f in frames}
+    to_final = {f["id"]: final.get((f["obs_id"], f["detector"])) for f in stub_frames}
+    out = []
+    for it in items:
+        pos = [{**p, "frame_id": to_final[p["frame_id"]]} for p in it.get("positions", [])
+               if to_final.get(p["frame_id"])]
+        if pos:
+            out.append({**it, "positions": pos})
+    return out
+
+
 def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: float,
                  out_root: Path = Path("data/targets"), progress: Progress | None = None,
                  per_group: int = PER_GROUP, name: str | None = None, refresh: bool = False,
-                 final_root: Path | None = None, labels: bool = False) -> Path:
-    """Query, download, align, render. Returns the target folder with a valid target.json."""
+                 final_root: Path | None = None, labels: bool = False, early=None) -> Path:
+    """Query, download, align, render. Returns the target folder with a valid target.json.
+
+    early: T54, called once the frames are chosen (before any download) with a stub target: centre,
+    image grid and one frame per chosen exposure (provisional ids, obs_id, detector, mjd). Labels and
+    known objects need nothing more, so the caller can compute them while the images download; map
+    the results to the final frames with `remap_to_frames`."""
     def report(step, done=None, total=None, message=""):
         if progress:
             progress(step, done, total, message)
@@ -341,17 +363,31 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
 
     npix = max(16, int(round(size_arcmin * 60 / PIXEL_SCALE_ARCSEC)))
     cut_deg = size_arcmin / 60 * 1.5 + 0.01   # room for the rotation of the original frames
+    if early is not None:
+        early({"id": target_id, "synthetic": False, "center": {"ra_deg": ra_deg, "dec_deg": dec_deg},
+               "size_arcmin": size_arcmin,
+               "image": {"width": npix, "height": npix, "pixel_scale_arcsec": PIXEL_SCALE_ARCSEC},
+               "frames": [{"id": f"c{i:03d}", "mjd": round(e.mjd_mid, 6), "obs_id": e.obs_id, "detector": e.detector,
+                           "time_utc": e.time_utc, "epoch": e.epoch} for i, e in enumerate(chosen)],
+               "labels": [], "known_objects": [], "detections": [], "provenance": []})
     downloads_started = _now()
     n_cached = sum(cached_cutout(e.fits_url, ra_deg, dec_deg, cut_deg) is not None for e in chosen)
     paths: list[Path | None] = [None] * len(chosen)
     errors = []
     report("download", 0, len(chosen), f"{len(chosen)} of {len(exposures)} SPHEREx images, "
                                        f"{n_cached} already cached")
-    with ThreadPoolExecutor(S3_THREADS) as pool:
+    out_w = output_wcs(ra_deg, dec_deg, npix)
+    # T57: each image is aligned as soon as it has arrived, while the rest still download
+    # (0.2 s per image; 2 threads halve that, more don't help).
+    aligned: dict[int, object] = {}
+    from . import s3
+    threads = REMOTE_THREADS if s3.remote_available() else S3_THREADS
+    with ThreadPoolExecutor(threads) as pool, ThreadPoolExecutor(ALIGN_THREADS) as align_pool:
         futs = {pool.submit(fetch, e.fits_url, ra_deg, dec_deg, cut_deg): i for i, e in enumerate(chosen)}
         for n, f in enumerate(as_completed(futs), 1):
             try:
                 paths[futs[f]] = f.result()
+                aligned[futs[f]] = align_pool.submit(resample, paths[futs[f]], out_w, npix, ra_deg, dec_deg)
             except Exception as e:  # noqa: BLE001 - one failed cutout shouldn't kill the field
                 errors.append(f"{chosen[futs[f]].obs_id} D{chosen[futs[f]].detector}: {e}")
             report("download", n, len(chosen), f"downloaded {n}/{len(chosen)}")
@@ -379,14 +415,14 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
     (out / "frames").mkdir(parents=True, exist_ok=True)
     for old in (out / "frames").glob("*"):
         old.unlink()
-    out_w = output_wcs(ra_deg, dec_deg, npix)
     frames = []
     for i, (e, p) in enumerate(zip(chosen, paths)):
         report("align", i, len(chosen), f"aligning {e.obs_id} D{e.detector}")
         if p is None:
             continue
         try:
-            img, wave, bw = resample(p, out_w, npix, ra_deg, dec_deg)
+            done = aligned.get(i)                 # aligned during the download (not for T31 retries)
+            img, wave, bw = done.result() if done is not None else resample(p, out_w, npix, ra_deg, dec_deg)
         except Exception as ex:  # noqa: BLE001
             errors.append(f"{e.obs_id} D{e.detector}: {ex}")
             continue
