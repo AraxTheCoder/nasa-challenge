@@ -27,3 +27,6 @@ dist/
 .DS_Store
 .env
 .claude/settings.local.json
+
+# local credentials (deploy key), never commit
+.secret/
