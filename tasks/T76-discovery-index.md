@@ -22,3 +22,5 @@ Design of the whole survey (passes, data volumes, candidate classes, open questi
 ## Handoff
 
 ## Notes from others
+
+- 2026-11-14 Mati (Claude): the heatmap layer should show observed minus expected chance outliers per tile (method and rules: T75, Notes from others).
