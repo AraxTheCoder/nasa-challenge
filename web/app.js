@@ -12,6 +12,8 @@ import { checkTarget, clearTarget, initViewer, showTarget, stopBlink } from "./v
 import { initObjects } from "./objects.js";
 import { initDiff } from "./diff.js";
 import { initPhotometry } from "./photometry.js";
+import { initLamPick, lamFromUrl, setLamUrl } from "./lampick.js";
+import { nearestBand, parseLam } from "./lambda.js";
 import * as explore from "./explore.js";
 
 const SIZE_MIN = 5;
@@ -508,14 +510,27 @@ function setupBand(layer) {
   box.hidden = !(layer?.depth > 1);
   if (box.hidden) return;
   const input = $("#explore-band");
+  const lamBox = $("#explore-band-lam");   // T78: type the wavelength, the map takes the closest channel
   input.max = String(layer.depth - 1);
   input.value = String(layer.slice);
   const show = () => {
     const w = waves[Number(input.value)];
-    $("#explore-band-out").textContent = Number.isFinite(w) ? `${w.toFixed(3)} µm` : `#${input.value}`;
+    lamBox.value = Number.isFinite(w) ? w.toFixed(3) : "";
+    $("#explore-band-out").textContent = `ch. ${Number(input.value) + 1}/${layer.depth}`;
   };
+  const toBand = (i) => { input.value = String(i); explore.setBand(i); show(); };
   input.oninput = () => { explore.setBand(Number(input.value)); show(); };
-  show();
+  lamBox.onchange = () => {
+    const lam = parseLam(lamBox.value);
+    const i = lam == null ? -1 : nearestBand(waves, lam);
+    if (i < 0) { show(); return; }       // not a wavelength: back to the current channel
+    toBand(i);
+    setLamUrl(lam);
+  };
+  const urlLam = lamFromUrl();
+  const i = urlLam == null ? -1 : nearestBand(waves, urlLam);
+  if (i >= 0 && i !== layer.slice) toBand(i);
+  else show();
 }
 
 async function startExplore() {
@@ -663,6 +678,7 @@ async function main() {
   initObjects();
   initDiff();
   initPhotometry();
+  initLamPick();
   bindPage();
   const p = params();
   if (p.get("api")) app.api = p.get("api");

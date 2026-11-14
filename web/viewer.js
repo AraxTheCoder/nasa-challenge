@@ -49,6 +49,13 @@ export function showFrame(id) {
   stopBlink();
   show(id);
 }
+/** Set A and B (stops playback); clears the wavelength filter if it would hide one of them. For lampick.js (T78). */
+export function selectPair(aId, bId) {
+  if (!frameById(aId) || !frameById(bId)) return;
+  stopBlink();
+  if (!isVisibleId(aId) || !isVisibleId(bId)) setFilter({ min: null, max: null, detector: null });
+  setPair(aId, bId);
+}
 export const isSynthetic = (t) => t.synthetic !== false; // missing flag counts as synthetic
 
 /** Light checks only; the full schema is docs/target.schema.json and is enforced upstream. */
