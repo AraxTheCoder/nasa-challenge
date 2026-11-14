@@ -1,4 +1,7 @@
-# Contracts (v0.16)
+# Contracts (v0.17)
+
+v0.17 (T86): the spectral-outliers answer gains chart data (`bands_um`, `envelope`, `colours`, `points`;
+`version` 2), for the colour–colour diagram and band-shape chart. New fields only.
 
 v0.16 (T55): tile settings get a third mode, `balanced` (default when a remote tile generator is configured):
 each live tile goes to this machine or the VM, whichever is expected to finish it first; `GET /api/settings`
@@ -402,6 +405,11 @@ answers at once. T86 (`pipeline.spectral_outliers`) ranks them. Answer (200):
 - `items` are sorted by `score` (summed significance of consistent deviations; halved for blends, ×0.3 for
   jagged residuals). `scores` has every judged source, for colouring.
 - `items[].ra_deg/dec_deg` open the source's spectrum with `GET /api/photometry?ra=&dec=`.
+- Chart data (v0.17, `version` 2): `bands_um` (22 band centres); `envelope` {`p16`, `p50`, `p84`}: the ordinary
+  sources' band shape (log10, own level taken out); `colours` {short, mid, long: [µm, µm]};
+  `points`: every judged source `{id, name, otype, ra_deg, dec_deg, x, y, outlier, reference, score, shape,
+  model}` with `x` = short − mid and `y` = mid − long colour in magnitudes (+ = redder), `shape` its band
+  shape and `model` what an ordinary source of its kind would show (log10, null = no band).
 - Synthetic targets: 200 `{"status": "no_data"}`. Unknown target: 404.
 
 ### Target id and cache

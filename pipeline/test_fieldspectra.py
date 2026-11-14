@@ -126,3 +126,14 @@ def test_blend_and_galaxy_caveats():
     out = SO.find_outliers(fs)
     it = out["items"][0]
     assert it["name"] == "star 5" and any("galaxy" in c for c in it["caveats"])
+
+
+def test_chart_data_points_and_envelope():
+    excess = lambda w: 1 + 1.5 * np.clip((w - 2.8) / 2.0, 0, None)
+    out = SO.find_outliers(_field(odd={5: excess}))
+    pts = {p["id"]: p for p in out["points"]}
+    assert len(pts) == 60 and len(out["bands_um"]) == 22 and len(out["envelope"]["p16"]) == 22
+    assert pts["s5"]["outlier"] and not pts["s6"]["outlier"]
+    ordinary_y = np.median([p["y"] for p in pts.values() if not p["outlier"]])
+    assert pts["s5"]["y"] > ordinary_y + 0.2          # more light at 3.4-4.8 µm: up in the colour diagram
+    assert all(a <= b for a, b in zip(out["envelope"]["p16"], out["envelope"]["p84"]) if a is not None and b is not None)

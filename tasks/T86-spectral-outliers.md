@@ -1,6 +1,6 @@
 # T86: Spectral outliers
 
-- **Owner:** Joerg  ·  **Status:** doing
+- **Owner:** Joerg  ·  **Status:** done
 - **Branch:** `joerg/T85-field-spectra` (together with T85)
 - **Depends on / feeds:** T85 (field spectra), T84 (masking rules), T63 (feature list); feeds T76 (discovery
   index), T75 (HPC survey). Includes idea I23 (Mati) as a second opinion.
@@ -32,8 +32,10 @@ where and how in plain words ("too bright at 3–5 µm: warm dust?", "dip at 3.0
 - [x] Live API + `web/outliers.js` panel "Unusual spectra in this field" (button to start, progress, list
       with a residual chart per source, click opens the spectrum, `outliers:list` event for the map)
 - [ ] I23 catalogue prediction as second opinion: not done, moved to T87
-- [ ] Visualisation: colour–colour diagram of the field (outliers highlighted, click selects) + selected source's
-      band shape vs. its expected ordinary shape and the field's spread
+- [x] Visualisation (in the panel): colour–colour diagram of the field (x = 1.0–1.35 minus 1.9–2.5 µm, y = 1.9–2.5
+      minus 3.4–4.8 µm, mag; outliers orange, sized by score; click selects) + the selected source's band shape vs.
+      what an ordinary source of its kind would show (dashed) and 68 % of the field's ordinary sources (grey).
+      List rows select too. Colours: the spectrum panel's validated pair (#d95926 / #3987e5, validate_palette.js dark)
 
 ## Findings
 - **RW Aur itself can't be judged**: saturated core in 229 of 237 exposures (same as T84). Listed under
@@ -53,6 +55,12 @@ where and how in plain words ("too bright at 3–5 µm: warm dust?", "dip at 3.0
   22 bands of ~9 % width dilute 1-channel features (PAH 3.3, Br-α); faint sources lose long-λ bands.
 
 ## Questions / needs from others
+
+## Findings (visualisation)
+- RW Aur field: the ordinary stars form a tight horizontal sequence at y ≈ −1.05 mag; the galaxy 2MASS
+  J05071499+3023365 sits far above it (+0.41: much more light at 3.4–4.8 µm); the red outliers just above.
+- RA 180 Dec 0: no clean sequence (mostly galaxies and faint stars), which is itself the answer to "why are
+  galaxies the outliers here".
 
 ## Handoff
 `python -m pipeline.spectral_outliers data/targets/<id>` prints the ranking; the endpoint is in CONTRACTS
