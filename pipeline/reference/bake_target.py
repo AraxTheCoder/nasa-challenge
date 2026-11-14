@@ -1,4 +1,4 @@
-"""Stopgap until pipeline.build (T02-T04) exists: bake one REAL target folder into the Live API cache.
+"""SUPERSEDED by pipeline.build (2026-11-14). Was a stopgap until it existed: bake one REAL target folder into the Live API cache.
 
     python pipeline/reference/bake_target.py --ra 269.4463 --dec 4.7682 --size 15 \
         --name "Barnard's Star" --detectors 1 6 [--cache data/targets]
