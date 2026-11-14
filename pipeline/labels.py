@@ -40,7 +40,29 @@ KIND = {
     "SB*": "spectroscopic binary", "**": "double star", "WD*": "white dwarf", "WD?": "white dwarf candidate",
     "Or*": "young variable star", "TT*": "T Tauri star", "Y*O": "young star", "Pe*": "peculiar star",
     "G": "galaxy", "QSO": "quasar", "AGN": "active galaxy", "X": "X-ray source", "Neb": "nebula",
+    "LM*": "low-mass star", "LM?": "low-mass star candidate", "LSB": "low-surface-brightness galaxy",
+    "IR": "infrared source", "Em*": "emission-line star", "Ce*": "Cepheid variable", "dS*": "delta Scuti variable",
+    "C*": "carbon star", "S*": "S-type star", "RG*": "red giant", "AB*": "AGB star", "HB*": "horizontal-branch star",
+    "Be*": "Be star", "HS*": "hot subdwarf", "s*b": "blue supergiant", "s*r": "red supergiant",
+    "GiG": "galaxy in a group", "GiC": "galaxy in a cluster", "GrG": "group of galaxies", "ClG": "galaxy cluster",
+    "SyG": "Seyfert galaxy", "Sy1": "Seyfert 1 galaxy", "Sy2": "Seyfert 2 galaxy", "bCG": "blue compact galaxy",
+    "EmG": "emission-line galaxy", "rG": "radio galaxy", "Rad": "radio source", "mR": "radio source",
+    "HH": "Herbig-Haro object", "MoC": "molecular cloud", "DNe": "dark nebula", "RNe": "reflection nebula",
+    "HII": "HII region", "PN": "planetary nebula", "OpC": "open cluster", "GlC": "globular cluster",
+    "Cl*": "star cluster", "As*": "stellar association", "UV": "UV source", "gam": "gamma-ray source",
+    "Mas": "maser", "OH*": "OH/IR star", "CV*": "cataclysmic variable", "No*": "nova", "SN*": "supernova",
+    "Psr": "pulsar", "XB*": "X-ray binary", "Ae*": "Herbig Ae/Be star", "Ro*": "rotating variable",
+    "Pu*": "pulsating variable", "Ir*": "irregular variable", "El*": "ellipsoidal variable",
+    "FIR": "far-infrared source", "MIR": "mid-infrared source", "NIR": "near-infrared source",
+    "smm": "submillimetre source", "mm": "millimetre source", "cm": "radio source", "Opt": "optical source",
+    "blu": "blue object", "EmO": "emission-line object", "PoC": "part of a cloud", "SFR": "star-forming region",
+    "PoG": "part of a galaxy", "IG": "interacting galaxies", "PaG": "pair of galaxies", "BiC": "brightest galaxy in a cluster",
 }
+# Types worth a name on the image even when the SIMBAD name looks like a catalogue number.
+NOTABLE_OTYPES = {"BD*", "BD?", "PM*", "WD*", "Mi*", "LP*", "Ce*", "RR*", "TT*", "Or*", "Y*O", "QSO", "AGN",
+                  "SN*", "No*", "CV*", "XB*", "Psr", "PN", "HH", "Ae*", "Sy1", "Sy2", "SyG"}
+FIELD_OBJECT_ARCSEC = 15.0   # the SIMBAD object nearest the requested centre within this = "the field's object"
+MERGE_ARCSEC = 3.0           # labels closer than this (~0.5 px) are one object on the image
 SKIP_OTYPES = {"Pl", "Pl?"}  # exoplanets are not separately visible
 # Catalogue-number names; everything else counts as a "real" name the UI shows by default.
 SURVEY_PREFIXES = ("Gaia", "2MASS", "TYC", "UCAC", "WISE", "[", "SDSS", "GALEX", "LAMOST", "ATO ", "GES ",
@@ -159,6 +181,58 @@ def gaia_labels(target: dict, grid: Grid) -> tuple[list[dict], dict | None]:
     return labels, prov
 
 
+def _sep(p, q) -> float:
+    d = math.radians
+    a = (math.sin(d(q["dec_deg"] - p["dec_deg"]) / 2) ** 2 + math.cos(d(p["dec_deg"])) * math.cos(d(q["dec_deg"]))
+         * math.sin(d(q["ra_deg"] - p["ra_deg"]) / 2) ** 2)
+    return math.degrees(2 * math.asin(min(1.0, math.sqrt(a)))) * 3600
+
+
+def merge_duplicates(labels: list[dict]) -> list[dict]:
+    """One label per object on the image: SIMBAD components (RW Aur, RW Aur A, RW Aur B) and an object's
+    Gaia twin closer than MERGE_ARCSEC become `aliases` of the best label (SIMBAD over Gaia, named over
+    catalogue numbers, shorter name). The kept label takes the Gaia magnitude if it had none."""
+    order = sorted(labels, key=lambda l: (l["source"] != "simbad", not l["named"], len(l["name"])))
+    kept: list[dict] = []
+    for l in order:
+        host = next((k for k in kept if _sep(k["positions"][0], l["positions"][0]) < MERGE_ARCSEC), None)
+        if host is None:
+            l.setdefault("aliases", [])
+            kept.append(l)
+            continue
+        if l["name"] != host["name"] and l["name"] not in host["aliases"]:
+            host["aliases"].append(l["name"])
+        if host.get("mag") is None and l.get("mag") is not None:
+            host["mag"] = l["mag"]
+        if not host["named"] and l["named"]:  # keep a human-readable name in front
+            if l["name"] in host["aliases"]:
+                host["aliases"].remove(l["name"])
+            host["aliases"].append(host["name"])
+            host["name"], host["named"] = l["name"], True
+    return kept
+
+
+def rank_importance(labels: list[dict], target: dict) -> None:
+    """`importance`: 0 = the field's object (nearest SIMBAD object to the requested centre), 1 = notable
+    motion, 2 = notable type or a real name, 3 = catalogue-number SIMBAD object, 4 = Gaia-only star.
+    The viewer always names the most important few and shows the rest on hover (T34)."""
+    c = {"ra_deg": target["center"]["ra_deg"], "dec_deg": target["center"]["dec_deg"]}
+    sim = [l for l in labels if l["source"] == "simbad"]
+    near = min(sim, key=lambda l: _sep(c, l["positions"][0]), default=None)
+    for l in labels:
+        moving = (l.get("motion") or {}).get("class") not in (None, "still")
+        if l is near and _sep(c, near["positions"][0]) <= FIELD_OBJECT_ARCSEC:
+            l["importance"] = 0
+        elif moving:
+            l["importance"] = 1
+        elif l["source"] == "simbad" and (l["named"] or l["otype"] in NOTABLE_OTYPES):
+            l["importance"] = 2
+        elif l["source"] == "simbad":
+            l["importance"] = 3
+        else:
+            l["importance"] = 4
+
+
 def add_labels(target: dict) -> dict:
     """Fill target["labels"] (replacing any old ones) and append provenance. Returns the target.
 
@@ -177,7 +251,9 @@ def add_labels(target: dict) -> dict:
     scale = target["image"]["pixel_scale_arcsec"]
     for l in labels:
         l["motion"] = summarize(l["positions"], target["frames"], scale)
-    labels.sort(key=lambda l: (not l["named"], l["source"] != "simbad", l["mag"] if l["mag"] is not None else 99))
+    labels = merge_duplicates(labels)
+    rank_importance(labels, target)
+    labels.sort(key=lambda l: (l["importance"], l["mag"] if l["mag"] is not None else 99, l["name"]))
     for i, l in enumerate(labels):
         l["id"] = f"l{i:03d}"
     target["labels"] = labels

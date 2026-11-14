@@ -1,4 +1,7 @@
-# Contracts (v0.6)
+# Contracts (v0.7)
+
+v0.7 adds `importance` and `aliases` to each label (see "Label"): which names the viewer shows
+first, and duplicates merged into one label. Additive. See TEAM.md Decisions, 2026-11-14.
 
 v0.6 adds per-epoch HiPS tiles to the Live API (see "Per-epoch HiPS"), additive. See TEAM.md Decisions.
 
@@ -144,6 +147,13 @@ view (C) should prefer pairs over arbitrary frame combinations.
 - A label marks a **catalogued** object, not a detection. Detections stay in `detections` (B).
 - The same object can appear twice (SIMBAD and Gaia). The UI may hide a Gaia label within 2 px
   of a named SIMBAD label.
+- `importance` (v0.7, optional): 0 = the field's object (the SIMBAD object nearest the requested
+  centre, within 15″), 1 = notable motion (`motion.class` not `still`), 2 = a real name or a notable
+  type (brown dwarf, variable, quasar, …), 3 = catalogue-number SIMBAD object, 4 = Gaia-only star.
+  The viewer always names the most important few (≤ 8) and shows the rest on hover (T34).
+- `aliases` (v0.7, optional): other labels for the same object closer than 3″ (~0.5 px), merged
+  into this one: SIMBAD components (RW Aur A, RW Aur B) and the object's Gaia twin. The kept label
+  is the SIMBAD one with the most readable name and takes the Gaia `mag` if it had none.
 - `motion` (v0.5, optional, may be `null` with < 2 positions): summary over the whole series,
   written by `pipeline.motion.summarize(positions, frames, pixel_scale_arcsec)`:
   `{shift_arcsec, shift_px, reach_arcsec, days, rate_arcsec_per_yr, max_rate_within_epoch_arcsec_per_hr, pa_deg,
