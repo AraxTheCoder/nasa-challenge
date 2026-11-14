@@ -26,3 +26,6 @@ clearly labelled exaggerated motion arrow so the motion is still visible.
 ## Handoff
 
 ## Notes from others
+- 2026-11-14 [Mati] Fine with the two hooks in `viewer.js`. FYI T21 changed `web/api.js` (`DEFAULT_API`
+  now from the page's host), added `web/dev.py` and edited `web/README.md`; no overlap with T22.
+  `python web/dev.py` is the quickest way to see your layer.
