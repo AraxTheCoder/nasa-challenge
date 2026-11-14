@@ -12,11 +12,14 @@
 
 import { $, el, fmtNum, fmtTime } from "./util.js";
 import { currentTarget, targetBase } from "./viewer.js";
+import { getApiBase, getSky } from "./explore.js";
+import { nearestLabel } from "./skylabels.js";
 import { analyse, FEATURES, FIT_MAX_UM, fmtT } from "./spectrum.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const TRANSITION_COLOURS = ["#3987e5", "#d95926", "#199e70"]; // categorical slots 1-3, dark mode, validated
-const st = { target: null, measuring: false, token: 0, pos: null, data: null, context: true, features: false };
+const st = { target: null, measuring: false, token: 0, pos: null, sky: null, data: null, context: true, features: false };
+const home = { parent: null, next: null };   // where the panel sits in the field view (T79 moves it under the map)
 let chartId = 0;
 
 function svg(tag, attrs = {}, ...children) {
@@ -174,7 +177,8 @@ function render() {
   const frames = d.frames ?? [];
   const good = frames.filter((f) => !f.masked && Number.isFinite(f.flux_ujy));
   const changes = matchedChanges(frames);
-  const where = st.pos ? `at the clicked star (RA ${fmtNum(d.ra_deg, 4)}°, Dec ${fmtNum(d.dec_deg, 4)}°)` : `at the field centre (RA ${fmtNum(d.ra_deg, 4)}°, Dec ${fmtNum(d.dec_deg, 4)}°)`;
+  const at = `(RA ${fmtNum(d.ra_deg, 4)}°, Dec ${fmtNum(d.dec_deg, 4)}°)`;
+  const where = st.sky ? `at the point clicked on the map ${at}` : st.pos ? `at the clicked star ${at}` : `at the field centre ${at}`;
   const what = d.all_exposures ? `exposures (all SPHEREx images of this spot)` : "frames";
   const parts = [el("p", { class: "ph-where small" }, `${good.length} of ${frames.length} ${what} measured ${where}.`)];
   if (frames.length && !good.length) {
@@ -332,6 +336,88 @@ async function loadAll(url, token) {
   }
 }
 
+/** T79: the panel under the frame viewer (field) or right under the map (a map click). */
+function placePanel(underMap) {
+  const panel = $("#photometry");
+  if (!home.parent) { home.parent = panel.parentNode; home.next = panel.nextSibling; }
+  if (underMap) { if (panel.previousElementSibling !== $("#explore")) $("#explore").after(panel); }
+  else if (panel.parentNode !== home.parent) home.parent.insertBefore(panel, home.next);
+}
+
+/** A click on the frame image (in or out of "Measure a star" mode): measure there. */
+function measureAtStage(e) {
+  const t = currentTarget();
+  if (!t) return;
+  const r = $("#stage").getBoundingClientRect();
+  const { width = 1, height = 1 } = t.image ?? {};
+  st.pos = { x: ((e.clientX - r.left) / r.width) * width - 0.5, y: ((e.clientY - r.top) / r.height) * height - 0.5 };
+  st.sky = null;
+  setMeasuring(false);
+  placePanel(false);
+  drawMarker();
+  getSky()?.redraw();
+  load();
+}
+
+/** T79: a click on the map: every exposure at that sky point, no field needed. */
+async function loadSky(ra, dec) {
+  const api = getApiBase();
+  if (!api) return;
+  const token = ++st.token;
+  st.sky = { ra, dec };
+  st.pos = null;
+  st.data = null;
+  drawMarker();
+  getSky()?.redraw();
+  placePanel(true);
+  $("#photometry").hidden = false;
+  $("#ph-body").replaceChildren(el("p", { class: "muted small" },
+    `Measuring every SPHEREx exposure at RA ${fmtNum(ra, 4)}°, Dec ${fmtNum(dec, 4)}° (the first time takes ~15-30 s)…`));
+  $("#ph-status").textContent = "measuring…";
+  $("#photometry").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  await loadAll(`${api.replace(/\/$/, "")}/api/photometry?ra=${ra.toFixed(5)}&dec=${dec.toFixed(5)}`, token);
+}
+
+function mapMarker(ctx, proj) {
+  if (!st.sky) return;
+  const s = proj.toScreen(st.sky.ra, st.sky.dec);
+  if (!s.front) return;
+  ctx.save();
+  ctx.strokeStyle = "#ffd27a"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(s.x, s.y, 7, 0, 2 * Math.PI); ctx.stroke();
+  for (const [a, b] of [[-14, -9], [9, 14]]) {
+    ctx.beginPath(); ctx.moveTo(s.x + a, s.y); ctx.lineTo(s.x + b, s.y); ctx.moveTo(s.x, s.y + a); ctx.lineTo(s.x, s.y + b); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Map: a press + release that barely moved is a click (a drag pans); wait a moment so a double click still zooms. */
+function hookMap() {
+  const sky = getSky();
+  const box = $("#sky");
+  if (!sky || !box || box.dataset.phClick) return;
+  box.dataset.phClick = "1";
+  let proj = null, down = null, timer = null;
+  sky.addDrawHook((ctx, p) => { proj = p; mapMarker(ctx, p); });
+  box.addEventListener("pointerdown", (e) => { down = e.isPrimary ? { x: e.clientX, y: e.clientY } : null; });
+  box.addEventListener("pointerup", (e) => {
+    const d = down;
+    down = null;
+    if (!d || !proj || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
+    if (e.target.closest?.("button, a, input, select, label, .paths-tip")) return;
+    clearTimeout(timer);
+    const canvas = box.querySelector("canvas") ?? box;
+    const r = canvas.getBoundingClientRect();
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+    timer = setTimeout(() => {
+      const snap = nearestLabel(px, py);   // a labelled dot within a few px wins
+      const pos = snap ? [snap.ra_deg, snap.dec_deg] : proj.fromScreen(px, py);
+      if (pos) loadSky(((pos[0] % 360) + 360) % 360, pos[1]);
+    }, 280);
+  });
+  box.addEventListener("dblclick", () => clearTimeout(timer));
+}
+
 function setMeasuring(on) {
   st.measuring = on;
   if (on) $("#stage").scrollIntoView({ block: "nearest", behavior: "smooth" }); // the button sits below the image
@@ -343,20 +429,21 @@ function setMeasuring(on) {
 export function initPhotometry() {
   $("#ph-measure").addEventListener("click", () => setMeasuring(!st.measuring));
   $("#ph-centre").addEventListener("click", () => { st.pos = null; drawMarker(); load(); });
-  $("#ph-catcher").addEventListener("click", (e) => {
-    const t = currentTarget();
-    if (!t) return;
-    const r = $("#stage").getBoundingClientRect();
-    const { width = 1, height = 1 } = t.image ?? {};
-    st.pos = { x: ((e.clientX - r.left) / r.width) * width - 0.5, y: ((e.clientY - r.top) / r.height) * height - 0.5 };
-    setMeasuring(false);
-    drawMarker();
-    load();
+  $("#ph-catcher").addEventListener("click", measureAtStage);
+  // T79: a plain click on the image measures too; clicks on labels/paths keep opening the inspector.
+  $("#stage").addEventListener("click", (e) => {
+    if (st.measuring || e.target.closest?.(".path-hit, .paths-tip, #ph-catcher, button, a, input, select, label")) return;
+    measureAtStage(e);
   });
+  document.addEventListener("explore:ready", hookMap);
+  hookMap();
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && st.measuring) setMeasuring(false); });
   document.addEventListener("viewer:target", (e) => {
     st.target = e.detail?.target ?? null;
     st.pos = null;
+    st.sky = null;
+    placePanel(false);
+    getSky()?.redraw();
     st.data = null;
     document.getElementById("ph-layer")?.remove();
     setMeasuring(false);
