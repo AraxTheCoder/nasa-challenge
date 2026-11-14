@@ -34,8 +34,8 @@ def _all_exposures(ra: float, dec: float) -> dict:
     from pipeline.photometry import measure_all, spectrum_cache
     key = (round(ra % 360, 4), round(dec, 4))
     cached = spectrum_cache(*key)
-    if cached.is_file():
-        return {"status": "ready", **json.loads(cached.read_text(encoding="utf-8"))}
+    if cached.is_file():               # measure_all reads the cache (and re-checks old anomalies, T84)
+        return {"status": "ready", **measure_all(*key)}
     with _all_lock:
         job = _all_jobs.get(key)
         if job is None:
