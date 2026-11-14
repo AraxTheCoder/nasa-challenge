@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "target.json v0.2",
+  "title": "target.json (contracts v0.4)",
   "type": "object",
   "required": [
     "schema_version",
@@ -276,6 +276,63 @@
           "dt_days": {
             "type": "number",
             "minimum": 0
+          }
+        }
+      }
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "otype",
+          "source",
+          "named",
+          "positions"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "otype": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "simbad",
+              "gaia_dr3"
+            ]
+          },
+          "named": {
+            "type": "boolean"
+          },
+          "mag": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "pm_mas_yr": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "positions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/framePosition"
+            }
           }
         }
       }
