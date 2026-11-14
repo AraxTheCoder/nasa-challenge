@@ -37,7 +37,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
-| T01 | A: IRSA query: list all SPHEREx exposures covering an RA/Dec (SIA/TAP), with time, detector, access URL | Joerg | doing | `joerg/T01-irsa-query` | Record the query + timestamp for provenance |
+| T01 | A: IRSA query: list all SPHEREx exposures covering an RA/Dec (SIA/TAP), with time, detector, access URL | Joerg | done | `joerg/T01-irsa-query` | `python -m pipeline.query --ra .. --dec ..`; COSMOS: 214 images, 3 epochs |
 | T02 | A: Download cutouts for one target into `data/`, with a cache so re-runs don't re-download | | open | | Needs T01 |
 | T03 | A: Align cutouts to one common WCS grid (north up) and get the wavelength at the target position per frame | | open | | Needs T02. Wavelength varies across a SPHEREx image |
 | T04 | A: Render frames to PNG/WebP and write `target.json` per CONTRACTS, validated against the schema | | open | | Needs T03. First real target = end-to-end milestone |
@@ -91,3 +91,22 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   synthetic fixture, folders, SessionStart hook). Next: assign tracks, paste official challenge
   text, agree on contracts, claim T01/T06/T11. Gotchas: the fixture is fully synthetic, never show
   it as SPHEREx data; the SPHEREx data DOI in README is still a TODO.
+- 2026-11-14 [joerg + Claude] Done: T01 merged (`pipeline/query.py`). Looked at real data for COSMOS
+  (RA 150.1, Dec +2.2), detector 2: 39 cutouts aligned and blinked, private page shared by Joerg on
+  request. Next (Joerg): T02 cutout download + cache. Findings and gotchas for everyone:
+  - Data: `spherex_dr1` (Apr 2025 - May 2026) + `spherex_qr3` (May 2026 on), plus `*_deep` near the
+    ecliptic poles. One row per detector image (D1-D6), 2040x2040 px, 6.15"/px, ~3.5 deg FOV.
+    COSMOS has 3 epochs: Apr-May 2025, Nov 2025, May 2026.
+  - Every visit sees the target at a different wavelength (LVF, ~0.03 um steps between consecutive
+    exposures). Stars change brightness with wavelength, so plain median differencing leaves star
+    residuals. B: compare frames at similar wavelength or normalise per star.
+  - Visits come in bursts of 2-4 exposures 2 min apart, bursts hours/days apart. A main-belt
+    asteroid crosses a 13' cutout in < 1 day, so it appears in one burst only.
+  - FITS FLAGS plane names are in the header (MSKNnnnn). Bit 21 SOURCE = on a catalogued source
+    (~35% of pixels, not bad data). Bit 19 OUTLIER may include real movers, don't mask blindly.
+    Hardware mask used: bits 0,1,2,6,9,10,11,14,17,25,26,27,28.
+  - Wavelength at a pixel: `WCS-WAVE` table, an n x n grid (9 or 11) of (wavelength, bandwidth)
+    on 1-based detector pixels; cutout -> detector offset via CRPIX1A/CRPIX2A.
+  - Cutouts: append `?center=ra,dec&size=0.25deg` to the FITS URL. 10-25 s and ~4 MB each (mostly
+    the EPSF table), so fetch in parallel (8 threads: 39 cutouts in ~2 min).
+  - C: frames rotate between visits, so corners of the common grid have no data; show as "no data".
