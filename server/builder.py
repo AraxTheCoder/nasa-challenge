@@ -165,8 +165,11 @@ class Builder:
         # Build into a temp root so a half-finished build is never served from the cache.
         tmp_root = self.cache_root / ".building"
         tmp_root.mkdir(exist_ok=True)
-        built = Path(build_target(job.id, job.ra_deg, job.dec_deg, job.size_arcmin,
-                                  out_root=tmp_root, **kwargs))
+        try:
+            built = Path(build_target(job.id, job.ra_deg, job.dec_deg, job.size_arcmin,
+                                      out_root=tmp_root, **kwargs))
+        except LookupError as e:  # pipeline.build: no usable SPHEREx images here
+            raise NoData(str(e)) from None
 
         try:
             from detect.run import detect
