@@ -7,10 +7,11 @@
 //   viewer:target {target}   a target was shown (null = cleared)
 //   viewer:frame  {frameId}  a frame was shown
 
-import { $, el } from "./util.js";
+import { $, el, sourceName } from "./util.js";
 import "./trail.js"; // T23 trail view, same viewer events
 import "./inspector.js"; // T23 object inspector, opened by clicking an object
 import "./traces.js"; // T35 traces on the explore map
+import "./skylabels.js"; // T72 catalogue names anywhere on the explore map
 
 const SVG = "http://www.w3.org/2000/svg";
 document.head.append(el("link", { rel: "stylesheet", href: new URL("./paths.css", import.meta.url).href }));
@@ -41,8 +42,8 @@ function collect(t) {
       : l.source === "gaia_dr3" ? 4 : notable ? 1 : l.named ? 2 : 3;
     out.push({
       group: imp === 4 ? "catalogue" : "names", importance: imp, name: l.name, info: l.kind, source: l.source,
-      mag: l.mag, otype: l.otype, pm: l.pm_mas_yr, motion: l.motion, aliases: l.aliases ?? [],
-      positions: l.positions ?? [], synthetic: false,
+      mag: l.mag, magBand: l.mag_band, note: l.note, otype: l.otype, pm: l.pm_mas_yr, motion: l.motion, aliases: l.aliases ?? [],
+      positions: l.positions ?? [], synthetic: l.source === "synthetic", // v0.11: made-up label in a fixture
     });
   }
   for (const k of t.known_objects ?? []) {
@@ -210,10 +211,11 @@ function fillTip(o) {
   const first = o.pts[0], last = o.pts[o.pts.length - 1];
   const scale = st.target.image?.pixel_scale_arcsec ?? 6.15;
   const rows = [["Type", o.info + (o.otype && o.otype !== "*" ? ` (${o.otype})` : "")]];
-  rows.push(["Source", o.source === "simbad" ? "SIMBAD" : o.source === "gaia_dr3" ? "Gaia DR3" : (o.source ?? "–")]);
+  rows.push(["Source", sourceName(o.source)]);
+  if (o.note) rows.push(["About", o.note]);
   if (o.importance === 0) rows.push(["", "the object at the position you asked for"]);
   if (o.aliases?.length) rows.push(["Also", o.aliases.slice(0, 4).join(", ") + (o.aliases.length > 4 ? ` +${o.aliases.length - 4}` : "")]);
-  if (o.mag != null) rows.push(["Brightness", `G = ${o.mag.toFixed(1)} mag`]);
+  if (o.mag != null) rows.push(["Brightness", `${o.magBand ?? "G"} = ${o.mag.toFixed(1)} mag`]);
   if (o.pm != null) {
     const pa = o.extent > 0 ? paDeg(last.x - first.x, last.y - first.y) : null;
     rows.push(["Proper motion", `${(o.pm / 1000).toFixed(o.pm >= 1000 ? 2 : 3)}″/yr` + (pa != null && o.pm > 20 ? ` toward ${compass(pa)} (${pa.toFixed(0)}°)` : "")]);

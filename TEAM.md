@@ -92,7 +92,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T53 | B: Comets in the local orbit catalogue (MPC CometEls.txt), like the asteroids in T51 | Joerg | done | `joerg/T52-more-labels` | [tasks/T53](tasks/T53-local-comets.md). SkyBoT fallback had comets, the local path not yet |
 | T54 | A/C: Known objects + labels start while the images download (they need only frame times + field geometry), so a new field is complete when its frames are | Joerg | done | `joerg/T52-more-labels` | [tasks/T54](tasks/T54-early-objects-labels.md). New field: frames 11 s, objects +2.5 s, labels +2-3 s today |
 | T56 | All: Docs match the code (idea I2): README status/run/how-it-works, CONTRACTS without pre-baked `web/targets/` + `pipeline.publish`, undocumented API routes, a schema-0.2 fixture with pairs/labels/varied detections | Mati | done | `mati/T52-docs-current` | [tasks/T56](tasks/T56-docs-current.md). Was claimed as T52, then T55 (ID clashes with Joerg's T52, Jonathan's T55). Also: classify fix for SkyBoT/MPC, tilegen tests in CI |
-| T55 | C: UI redesign under `/app/` (copy of `web/`); `web/` and `/web/` stay as they are for all other work | Jonathan | doing | `jonathan/T55-app-ui` | [tasks/T55](tasks/T55-app-ui.md). UI work only; everyone else keeps working in `web/` |
+| T55 | C: UI redesign under `/app/` (copy of `web/`); `web/` and `/web/` stay as they are for all other work | Jonathan | doing | `main` | [tasks/T55](tasks/T55-app-ui.md). UI work only; everyone else keeps working in `web/` |
 | T57 | A: Faster "Show": the US VM (tilegen, `us-east4`) reads + cuts the SPHEREx images next to the bucket and sends only the small cutout FITS (gzip); build/photometry/caches stay local; fallback S3, then IRSA | Jonathan | done | `jonathan/T57-vm-cutouts` | [tasks/T57](tasks/T57-vm-cutouts.md). Fresh 15' field: 52.8 s → 19.9 s. Default on; `--cutouts-remote none` turns it off |
 | T58 | All: Limits before a public deploy: rate limit per IP, cap on concurrent builds, `refresh=1` only with a token, cache size cap with eviction (idea I1) | | open | | [tasks/T58](tasks/T58-public-limits.md). Server side, ~1 h. Suggested owner: Jonathan (server). |
 | T59 | A/C: Per-detector co-adds per epoch: mean/median of the aligned frames per detector and epoch as extra frames, for faint red sources (idea I3) | | open | | [tasks/T59](tasks/T59-coadds.md). A ~2 h + C ~0.5 h. Works best together with T66 (more frames per field). |
@@ -563,3 +563,6 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Jonathan (Claude): T57 follow-up: unknown week folders in the image index are learnt from a
   bucket listing (0.7 s per week) instead of TAP (up to 145 s per build in a fresh checkout); TAP stays the
   fallback. Re-measured: fresh 15' field 22.4 s.
+- 2026-11-14 Jonathan (Claude): T55 now works directly on main (no worktree/branch). `app/` refreshed to the
+  current `web/` (07974ed: T52/T63/T72, skylabels.js, spectrum.js) before any redesign edit. `/app/` (UI redesign)
+  and `/web/` (everyone's viewer) are both served by `python web/dev.py`. Others: keep working in `web/`.

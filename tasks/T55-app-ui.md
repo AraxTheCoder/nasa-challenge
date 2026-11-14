@@ -1,7 +1,7 @@
 # T55: UI redesign under /app/ (web/ stays as it is)
 
 - **Owner:** Jonathan  ·  **Status:** doing
-- **Branch:** `jonathan/T55-app-ui`
+- **Branch:** `main` (directly, no worktree/branch; from 2026-11-14 ~17:00)
 - **Depends on / feeds:** T11–T49 viewer work (copied from `web/`)
 
 ## Goal
@@ -16,7 +16,7 @@ Rework the UI without blocking anyone: the redesign lives in `app/` (URL `/app/`
 - [ ] When done: decide (TEAM.md Decisions) whether `app/` replaces `web/`
 
 ## Findings
-- Copy taken from main at 6026134 (2026-11-14).
+- Copy taken from main at 6026134 (2026-11-14); refreshed from `web/` at 07974ed (2026-11-14, before any redesign edit): T52 labels, T63 spectrum, T72 map names, new `skylabels.js` + `spectrum.js`.
 
 ## Questions / needs from others
 - [to everyone] Don't build features in `app/`; keep working in `web/` as before. `app/` is UI work only.
