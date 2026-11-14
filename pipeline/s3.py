@@ -217,6 +217,19 @@ def is_not_found(e: Exception) -> bool:
     return getattr(getattr(e, "response", None), "status_code", None) == 404
 
 
+def week_version(rel: str, week: str) -> str | None:
+    """The processing version folder of a week (e.g. dr1, 2025W47_2A -> l2b-v27-2026-208), by listing
+    the bucket (one request, ~0.6 s from Europe; TAP took 20-145 s on 2026-11-14). Reprocessed
+    `l2b_retry-...` folders hold only a few images, so the plain one wins."""
+    import re
+    prefix = f"{rel}/level2/{week}/"
+    r = _session().get(S3_ROOT, params={"list-type": "2", "prefix": prefix, "delimiter": "/"}, timeout=(5, 30))
+    r.raise_for_status()
+    versions = re.findall(r"<Prefix>" + re.escape(prefix) + r"([^/<]+)/</Prefix>", r.text)
+    plain = sorted(v for v in versions if "retry" not in v)
+    return (plain or sorted(versions) or [None])[-1]
+
+
 def find_in_bucket(fits_url: str) -> str | None:
     """The real IRSA-style URL of an image whose derived path is wrong (other processing version,
     e.g. l2b_retry-...), by listing the bucket: one request for the week's versions, one per version.

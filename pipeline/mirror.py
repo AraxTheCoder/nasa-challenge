@@ -180,6 +180,35 @@ def build(root: Path = MIRROR, learn_weeks: bool = True) -> Path:
     return out
 
 
+def learn_weeks_from_bucket(images, index) -> int:
+    """T57: processing versions of unknown week folders from a bucket listing (~0.6 s per week, in
+    parallel) instead of TAP (20-145 s per build on 2026-11-14). `images`: (collection, obs_id, detector)
+    of images whose week is unknown. Learnt weeks go to index.versions and uri_learned.csv (one
+    example path per week, the format learn_versions reads). Returns how many weeks were learnt."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from . import s3
+    weeks = {}
+    for coll, obs, det in images:
+        weeks.setdefault((coll.split("_")[1], obs.rsplit("_", 2)[0]), (obs, det))
+
+    def ask(key):
+        try:
+            return key, s3.week_version(*key)
+        except Exception:  # noqa: BLE001 - TAP is the fallback
+            return key, None
+    with ThreadPoolExecutor(min(8, len(weeks)) or 1) as pool:
+        found = [(k, v) for k, v in pool.map(ask, weeks) if v]
+    if found:
+        with open(index.path.parent / "uri_learned.csv", "a", encoding="utf-8") as fh:
+            for (rel, week), ver in found:
+                index.versions[f"{rel}/{week}"] = ver
+                obs, det = weeks[(rel, week)]
+                fh.write(f"{IRSA_ROOT}ibe/data/spherex/{rel}/level2/{week}/{ver}/{det}/"
+                         f"level2_{obs}D{det}_spx_{ver}.fits\n")
+    return len(found)
+
+
 def learn_all_weeks(root: Path = MIRROR, cols: dict | None = None) -> int:
     """Resolve one image per week folder whose processing version we don't know yet (one TAP call
     per 500), so map tiles never wait for TAP (~10 s each on 2026-11-14). Returns weeks learnt."""
@@ -294,6 +323,9 @@ def find_exposures_local(ra_deg: float, dec_deg: float, index: Index | None = No
         coll, obs, det = str(d["collection"][k]), str(d["obs_id"][k]), int(d["detector"][k])
         did = f"ivo://irsa.ipac/{coll}?{obs}/D{det}"
         rows.append((i, k, coll, obs, det, did, derive_url(coll, obs, det, index.versions)))
+    if any(r[6] is None for r in rows) and learn_weeks_from_bucket(
+            {(r[2], r[3], r[4]) for r in rows if r[6] is None}, index):
+        rows = [r[:6] + (r[6] or derive_url(r[2], r[3], r[4], index.versions),) for r in rows]
     missing = [r[5] for r in rows if r[6] is None]
     resolved = resolve_urls(missing) if missing else {}
     if resolved:                                       # learn the weeks so the next build skips TAP

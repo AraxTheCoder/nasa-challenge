@@ -560,3 +560,6 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   a wrong derived path (l2b_retry) is found by listing the bucket (1.3 s, was 38 s via TAP) and no longer
   pauses the VM; VM `data/` now survives deploys (was rebuilt each time because of `data/.gitkeep`).
   Nothing to do on your side: pull + restart the API. Gotcha: the line to the PC (~3 MB/s) is the limit now.
+- 2026-11-14 Jonathan (Claude): T57 follow-up: unknown week folders in the image index are learnt from a
+  bucket listing (0.7 s per week) instead of TAP (up to 145 s per build in a fresh checkout); TAP stays the
+  fallback. Re-measured: fresh 15' field 22.4 s.

@@ -31,6 +31,10 @@ detection, photometry and caches stay local and unchanged. Fallback: direct S3, 
 - One image with a wrong derived path (reprocessed `l2b_retry`) used to cost 38 s (TAP lookup) and,
   as a 502, paused the VM for all other images. Now: VM answers `X-Cutout: missing`, the VM stays in
   use, and `s3.find_in_bucket` finds the real path by listing the bucket (2 requests, 1.3 s).
+- Image search: weeks the local index has no processing version for went to TAP (one build waited
+  145 s in a fresh worktree). Now `mirror.learn_weeks_from_bucket` lists the bucket (0.7 s per week,
+  parallel), TAP only as fallback. Jonathan's main checkout knows all 151 weeks, so it never hit this;
+  fresh checkouts / new data releases do. Re-measured after that: fresh field 22.4 s.
 - The VM's `data/` was a fresh folder after every deploy (`data/.gitkeep` in the archive made tar
   create it, so the link went to `data/data`): image index rebuilt (~2 min) and all caches lost.
 
