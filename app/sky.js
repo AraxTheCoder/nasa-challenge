@@ -117,7 +117,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   const G = makeGl(canvas);
   const { gl } = G;
 
-  const st = { ra, dec, fov, cam: null, w: 1, h: 1, dpr: 1, base: null, overlays: [], shown: -1,
+  const st = { ra, dec, fov, cam: null, w: 1, h: 1, dpr: 1, base: null, overlays: [], shown: -1, shownEpoch: null,
     dirty: true, loads: 0, queue: [], inflight: new Set(), rendering: false, hooks: [], frame: 0, errors: 0, debug: false, stats: null, listeners: { change: [], tiles: [] } };
 
   // ----- camera + projection -----
@@ -571,7 +571,9 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     gl.clear(gl.COLOR_BUFFER_BIT);
     drawLayer(st.base, 1);
     st.overlays.forEach((l, i) => {
-      if (i === st.shown) drawLayer(l, 1);
+      // T55: with an epoch group shown, every field's layer of that epoch is drawn together
+      const shown = st.shownEpoch != null ? l.meta?.epoch === st.shownEpoch : i === st.shown;
+      if (shown) drawLayer(l, 1);
       else prefetch(l);                 // keep the other epochs loaded, so a switch is instant
     });
     ctx2d.setTransform(st.dpr, 0, 0, st.dpr, 0, 0);
@@ -742,6 +744,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       for (const l of st.overlays) for (const t of l.tiles.values()) if (t.tex) gl.deleteTexture(t.tex);
       st.overlays = [];
       st.shown = -1;
+      st.shownEpoch = null;
       const made = await Promise.all(layers.map(async (l) => {
         try { return Object.assign(new Layer(l.url, await readProperties(l.url), l), { meta: l }); }
         catch (e) { console.warn(e); return null; }
@@ -750,7 +753,20 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       markDirty();
       return st.overlays.map((l) => l.meta);
     },
-    showOverlay(i) { st.shown = i; markDirty(); },
+    showOverlay(i) { st.shown = i; st.shownEpoch = null; markDirty(); },
+    /** T55: add more overlays (other fields' epochs) without dropping the ones there. Returns their metas. */
+    async addOverlays(layers) {
+      const made = await Promise.all(layers.map(async (l) => {
+        try { return Object.assign(new Layer(l.url, await readProperties(l.url), l), { meta: l }); }
+        catch (e) { console.warn(e); return null; }
+      }));
+      const ok = made.filter(Boolean);
+      st.overlays.push(...ok);
+      markDirty();
+      return ok.map((l) => l.meta);
+    },
+    /** T55: draw every overlay whose meta.epoch is `epoch` (all fields at once); null = none. */
+    showEpochGroup(epoch) { st.shownEpoch = epoch; st.shown = -1; markDirty(); },
     setDebug(on) { st.debug = !!on; markDirty(); },
     /** {order, wanted, maxOrder, visible, sharp, blurry, empty, atMax, allSharp, loads, queued, errors} */
     stats() {

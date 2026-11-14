@@ -14,7 +14,7 @@ export const DEFAULT_SURVEY = "spherex-live";
 
 let sky = null;
 let apiBase = null;        // T41: our server caches + prefetches the map tiles (/api/sky/<id>)
-let field = null;          // {ra, dec, size} of the blink field, drawn as an outline
+let outlines = [];         // T55: [{state, pts}] red outlines of the blinked field cells
 let epochLayers = [];
 
 export const getSky = () => sky;
@@ -83,79 +83,83 @@ export function setDebug(on) { sky?.setDebug(on); }
 export function addDrawHook(fn) { sky?.addDrawHook(fn); }
 export function redraw() { sky?.redraw(); }
 
-/** Red outline = a square field of sizeArcmin around (ra, dec) (a link to a built field). */
-export function markField(ra, dec, sizeArcmin) {
+/**
+ * T55: red outlines of the blinked field cells, [{ra, dec, size (arcmin), state}]: dashed while a cell
+ * builds, solid once it is ready, grey where SPHEREx has no data. Squares on the sky, like the fields.
+ */
+export function setOutlines(cells) {
+  outlines = (cells ?? []).map((c) => ({ state: c.state, pts: squarePoints(c.ra, c.dec, c.size) }));
+  sky?.redraw();
+}
+
+/** Points along the edge of a square field of sizeArcmin around (ra, dec) (densified: follows the projection). */
+function squarePoints(ra, dec, sizeArcmin) {
   const h = sizeArcmin / 120, c = Math.cos((dec * Math.PI) / 180) || 1e-6;
   const corners = [[-h, -h], [h, -h], [h, h], [-h, h], [-h, -h]];
   const pts = [];
   for (let i = 0; i < 4; i++) {
     const [ax, ay] = corners[i], [bx, by] = corners[i + 1];
-    for (let t = 0; t < 8; t++) {            // densified, so the outline follows the projection
-      pts.push([ra + (ax + ((bx - ax) * t) / 8) / c, dec + ay + ((by - ay) * t) / 8]);
-    }
-  }
-  markRegion(pts);
-}
-
-/** Red outline = this closed polygon of [ra, dec] points (deg). */
-export function markRegion(points) {
-  field = points?.length > 2 ? points : null;
-  sky?.redraw();
-}
-
-/**
- * T55 Blink: the part of the current view a centred square field of sizeArcmin covers (the whole
- * view when it fits), as [ra, dec] points along its edges, so the red outline shows what is built.
- */
-export function viewRegion(sizeArcmin) {
-  if (!sky) return null;
-  const v = sky.view();
-  const pxPerArcmin = v.width / (v.fov * 60), half = (sizeArcmin / 2) * pxPerArcmin;
-  const x0 = Math.max(0, v.width / 2 - half), x1 = Math.min(v.width, v.width / 2 + half);
-  const y0 = Math.max(0, v.height / 2 - half), y1 = Math.min(v.height, v.height / 2 + half);
-  const corners = [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]];
-  const pts = [];
-  for (let i = 0; i < 4; i++) {
-    const [ax, ay] = corners[i], [bx, by] = corners[i + 1];
-    for (let t = 0; t < 16; t++) {
-      const p = sky.proj.fromScreen(ax + ((bx - ax) * t) / 16, ay + ((by - ay) * t) / 16);
-      if (p) pts.push(p);
-    }
+    for (let t = 0; t < 8; t++) pts.push([ra + (ax + ((bx - ax) * t) / 8) / c, dec + ay + ((by - ay) * t) / 8]);
   }
   return pts;
 }
 
-function drawField(ctx, proj) {
-  if (!field) return;
-  ctx.save();
-  ctx.strokeStyle = "#ff5252";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  let started = false;
-  for (const [ra, dec] of [...field, field[0]]) {
-    const s = proj.toScreen(ra, dec);
-    if (!s.front) { started = false; continue; }
-    if (!started) { ctx.moveTo(s.x, s.y); started = true; } else ctx.lineTo(s.x, s.y);
-  }
-  ctx.stroke();
-  ctx.restore();
-}
-
-/** T32: per-epoch HiPS from our Live API. layers: [{epoch, label, url (absolute)}]. All are
- * prefetched; one is drawn at a time, so blinking is instant once loaded (requirement R2). */
-export async function setEpochLayers(layers) {
+/** [ra, dec] points over the whole view (a grid of samples at most ~step px apart), to find the cells it touches. */
+export function viewSamples(maxStepArcmin = 10) {
   if (!sky) return [];
-  epochLayers = await sky.setOverlays(layers);
-  return epochLayers;
+  const v = sky.view();
+  const pxPerArcmin = v.width / (v.fov * 60);
+  const nx = Math.max(4, Math.ceil(v.width / (maxStepArcmin * pxPerArcmin))), ny = Math.max(4, Math.ceil(v.height / (maxStepArcmin * pxPerArcmin)));
+  const out = [];
+  for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) {
+    const p = sky.proj.fromScreen((v.width * i) / nx, (v.height * j) / ny);
+    if (p) out.push(p);
+  }
+  return out;
 }
 
-export function showEpoch(i) {
-  sky?.showOverlay(i);
+const OUTLINE_STYLE = {
+  building: { color: "#ff5252", dash: [6, 5] },
+  ready: { color: "#ff5252", dash: [] },
+  empty: { color: "rgb(160 170 190 / 0.6)", dash: [3, 5] },
+};
+
+function drawField(ctx, proj) {
+  for (const o of outlines) {
+    const style = OUTLINE_STYLE[o.state] ?? OUTLINE_STYLE.building;
+    ctx.save();
+    ctx.strokeStyle = style.color;
+    ctx.setLineDash(style.dash);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    let started = false;
+    for (const [ra, dec] of [...o.pts, o.pts[0]]) {
+      const s = proj.toScreen(ra, dec);
+      if (!s.front) { started = false; continue; }
+      if (!started) { ctx.moveTo(s.x, s.y); started = true; } else ctx.lineTo(s.x, s.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/** T32/T55: per-epoch HiPS of the blinked fields (Live API), [{epoch, label, url (absolute)}] per
+ * field; added as they arrive. All are prefetched, one epoch (all fields) is drawn at a time. */
+export async function addEpochLayers(layers) {
+  if (!sky) return [];
+  const added = await sky.addOverlays(layers);
+  epochLayers.push(...added);
+  return added;
+}
+
+/** Show epoch number `epoch` in every field at once (null: none). */
+export function showEpoch(epoch) {
+  sky?.showEpochGroup(epoch);
   // T35: traces.js highlights each object's position in the shown epoch
-  document.dispatchEvent(new CustomEvent("explore:epoch", { detail: { epoch: epochLayers[i]?.epoch ?? null } }));
+  document.dispatchEvent(new CustomEvent("explore:epoch", { detail: { epoch } }));
 }
 
-export function hideEpochs() {
+export function clearEpochs() {
   epochLayers = [];
   sky?.setOverlays([]);
 }

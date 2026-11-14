@@ -1,8 +1,10 @@
 // SPHEREx Blink (T55 redesign, /app/): the sky map is the whole page. The Live API
-// (docs/CONTRACTS.md v0.3) builds any RA/Dec field on request; its SPHEREx epochs then show as map
-// layers (blinkable), with traces and names of the field's objects drawn on the map.
-// "Go" only moves the map to the typed RA/Dec and pins it; "Blink" builds the field at the view centre.
-// ?ra=&dec=&size= in the page URL goes there on load (+ &blink=1 builds it); ?api=<base> sets the API.
+// (docs/CONTRACTS.md v0.3) builds fields on request; their SPHEREx epochs then show as map layers
+// (blinkable), with traces and names of the fields' objects drawn on the map.
+// "Go" only moves the map to the typed RA/Dec and pins it. "Blink" covers what is on screen with
+// fields from a fixed sky grid (fieldgrid.js), built in parallel and cached by the Live API, so
+// coming back is instant; a view of at most one cell builds one field of the view's size instead.
+// ?ra=&dec=&size= in the page URL goes there on load (+ &blink=1 blinks that view); ?api=<base> sets the API.
 //
 // Unlike web/ there is no frame viewer, analysis or side panel below the map, and no offline
 // (?data=) mode, which only fed the frame viewer.
@@ -10,22 +12,18 @@
 import { DEFAULT_API, ApiError, health, requestField } from "./api.js";
 import { $, el, fmtElapsed } from "./util.js";
 import * as explore from "./explore.js";
-import "./traces.js";      // T35: paths + per-epoch positions of the field's objects on the map
+import "./traces.js";      // T35: paths + per-epoch positions of the fields' objects on the map
 import "./skylabels.js";   // T72: catalogue names anywhere on the map
 import { initHud } from "./hud.js";   // T55: drag the floating panels anywhere
 import { parseDec, parseRa } from "./coords.js";
 import { initCursorPin, isPicking, pinAt, setPicking } from "./cursorpin.js";   // T55: 📍 marker + pick mode
+import { CELL_ARCMIN, cellsCovering } from "./fieldgrid.js";
 
 const SIZE_MIN = 5;
 const SIZE_MAX = 210;   // API limit = one SPHEREx detector (3.49 deg), server/coords.py
 const SIZE_DEFAULT = 15;
-const STEP_LABELS = {
-  query: "Searching IRSA for SPHEREx images",
-  download: "Downloading cutouts",
-  align: "Aligning frames",
-  render: "Rendering frames",
-  detect: "Looking for moving sources",
-};
+const MAX_CELLS = 30;   // more grid fields than this: ask to zoom in (each is a full build)
+const PARALLEL = 8;     // grid fields built at the same time (8 x 30' measured 2026-11-14: 103 s for all)
 
 // Catalogue labels: default OFF in /app/ (web/ defaults on); the choice is remembered per browser
 // under its own key, so switching it in /web/ (same origin) doesn't change /app/.
@@ -37,14 +35,16 @@ function labelsPref() {
 const app = {
   labelsOn: labelsPref(),
   api: DEFAULT_API,
-  request: null,     // last {ra, dec, size} asked for
   presets: [],
-  loadToken: 0,      // bumps on every new load; stale async results check it and bail out
+  loadToken: 0,      // bumps on every new blink; stale async results check it and bail out
   abort: null,
   jobStart: 0,
   jobTimer: null,
-  shownTarget: null,
-  shownTargetUrl: null,
+  cells: [],         // the blinked fields: [{key, ra, dec, size, state, id, url, target}]
+  shownTarget: null, // all ready fields merged into one target (for traces.js / skylabels.js)
+  epochs: [],        // epoch numbers with layers in any field
+  epochShown: null,
+  epochSynthetic: false,
 };
 
 const params = () => new URLSearchParams(location.search);
@@ -69,13 +69,13 @@ function showLoadError(err) {
   } else if (err.kind === "no_data") {
     showMessage(`No SPHEREx images here: ${err.message}`, "warn");
   } else {
-    showMessage(`Building the field failed: ${err.message}`);
+    showMessage(`Building the fields failed: ${err.message}`);
   }
 }
 
-// ---------- the shown field ----------
+// ---------- the shown fields ----------
 
-/** Hand the field to the map overlays (traces.js, skylabels.js); labels only while switched on. */
+/** Hand the fields to the map overlays (traces.js, skylabels.js); labels only while switched on. */
 function publishTarget(target) {
   const shown = target && !app.labelsOn ? { ...target, labels: [] } : target;
   $("#synthetic-badge").hidden = !target || target.synthetic === false;   // missing flag counts as synthetic
@@ -83,20 +83,45 @@ function publishTarget(target) {
   document.dispatchEvent(new CustomEvent("viewer:target", { detail: { target: shown } }));
 }
 
+/**
+ * Several fields as one target for the overlays: frames, labels, known objects and detections of
+ * all of them, frame ids prefixed per field (each field numbers its frames from f000).
+ */
+function mergeTargets(ts) {
+  if (ts.length <= 1) return ts[0] ?? null;
+  const pre = (k) => (id) => `${k}:${id}`;
+  const posMap = (p, k) => (p ?? []).map((x) => ({ ...x, frame_id: pre(k)(x.frame_id) }));
+  const out = {
+    id: ts.map((t) => t.id).join("+"), name: `${ts.length} fields`, schema_version: ts[0].schema_version,
+    synthetic: ts.some((t) => t.synthetic !== false), center: ts[0].center, size_arcmin: ts[0].size_arcmin,
+    labels_requested: ts.every((t) => t.labels_requested), objects_requested: ts.every((t) => t.objects_requested),
+    frames: [], labels: [], known_objects: [], detections: [],
+  };
+  ts.forEach((t, k) => {
+    out.frames.push(...(t.frames ?? []).map((f) => ({ ...f, id: pre(k)(f.id) })));
+    out.labels.push(...(t.labels ?? []).map((l) => ({ ...l, positions: posMap(l.positions, k) })));
+    out.known_objects.push(...(t.known_objects ?? []).map((o) => ({ ...o, positions: posMap(o.positions, k) })));
+    out.detections.push(...(t.detections ?? []).map((d) => ({ ...d, id: pre(k)(d.id), track: posMap(d.track, k) })));
+  });
+  return out;
+}
+
+function publishCells() {
+  const ready = app.cells.filter((c) => c.state === "ready" && c.target);
+  app.shownTarget = mergeTargets(ready.map((c) => c.target));
+  publishTarget(app.shownTarget);
+}
+
 /** Light checks only; the full schema is docs/target.schema.json and is enforced upstream. */
 function checkTarget(t, expectedId) {
   if (!t || !Array.isArray(t.frames) || t.frames.length === 0) {
     throw new Error(`target "${expectedId ?? t?.id}" has no frames`);
   }
-  const warnings = [];
-  if (expectedId && t.id !== expectedId) warnings.push(`target.json id "${t.id}" differs from "${expectedId}".`);
-  if (typeof t.synthetic !== "boolean") warnings.push("target.json has no synthetic flag; treating it as synthetic.");
-  return warnings;
 }
 
 // ---------- loading ----------
 
-/** Start a new load: cancels the previous one. Returns its token + abort signal. */
+/** Start a new blink: cancels the previous one. Returns its token + abort signal. */
 function beginLoad() {
   app.abort?.abort();
   app.abort = new AbortController();
@@ -108,18 +133,6 @@ async function fetchJson(url, signal) {
   const res = await fetch(url, { signal, cache: "no-cache" });
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
   return res.json();
-}
-
-async function openTarget(targetUrl, expectedId, token, signal) {
-  const target = await fetchJson(targetUrl, signal);
-  if (token !== app.loadToken) return;
-  const warnings = checkTarget(target, expectedId);
-  app.shownTargetUrl = targetUrl;
-  syncExplore(target);
-  publishTarget(target);
-  if (app.labelsOn && !target.labels_requested) setLabels(true);
-  loadObjects(target);
-  warnings.forEach((w) => showMessage(w, "warn"));
 }
 
 function readForm() {
@@ -150,7 +163,7 @@ function fillDefaults() {
   if (f) fillForm(presetRequest(f));
 }
 
-/** ?ra=&dec= after Go; after Blink also &size=&blink=1, so a reload or shared link builds it again. */
+/** ?ra=&dec= after Go; after Blink also &size= (the view's longer side) and &blink=1, so a reload or link blinks it again. */
 function setPageUrl(req, push, blink = false) {
   const url = new URL(location.href);
   url.searchParams.set("ra", req.ra);
@@ -167,7 +180,7 @@ function setPageUrl(req, push, blink = false) {
   else history.replaceState(null, "", url);
 }
 
-/** Do what the page URL asks for: go to ?ra=&dec= (and build it if &blink=1). False if nothing. */
+/** Do what the page URL asks for: go to ?ra=&dec= (and blink a view &size= wide if &blink=1). False if nothing. */
 function loadFromUrl() {
   const p = params();
   const ra = p.get("ra")?.trim();
@@ -176,8 +189,8 @@ function loadFromUrl() {
   const req = { ra, dec, size: clampSize(Number(p.get("size")) || SIZE_DEFAULT) };
   fillForm(req);
   const blink = p.get("blink") === "1";
-  // a link to a built field shows the field (view = field size, square outline); a plain link like Go
-  if (goTo(req, blink ? { fovDeg: req.size / 60 } : {}) && blink) loadField(req);
+  app.blinkAfterGo = blink;                       // showGoal starts the blink once the view is there
+  goTo(req, blink ? { fovDeg: req.size / 60 } : {});
   return true;
 }
 
@@ -211,6 +224,7 @@ function showGoal() {
   if (!g) return;
   explore.goTo(g.ra, g.dec, g.fovDeg ?? explore.fovForOrder(GO_ORDER) ?? undefined);
   pinAt(g.ra, g.dec);                                     // 📍 + RA/Dec on the position, fades after 5 s
+  if (app.blinkAfterGo) { app.blinkAfterGo = false; startBlink({ push: false }); }
 }
 
 /** 📍 button: pick a position on the map. The picked spot goes into the form and the URL (like Go). */
@@ -220,23 +234,202 @@ function onPicked(ra, dec) {
   setPageUrl(req, true);
 }
 
-async function loadField(req) {
+// ---------- T55 "Blink": cover the screen with grid fields, build them in parallel ----------
+
+/** The fields Blink would build for the current view: grid cells, or one field for a small view. */
+function blinkPlan() {
+  const v = explore.view();
+  if (!v) return null;
+  const long = Math.max(v.fovArcmin, v.heightArcmin);
+  const cells = long <= CELL_ARCMIN
+    ? [{ key: "view", ra: v.ra, dec: v.dec, size: clampSize(Math.ceil(long)) }]
+    : cellsCovering(explore.viewSamples(), [v.ra, v.dec]);
+  return { v, long, cells };
+}
+
+function startBlink({ push = true } = {}) {
+  const plan = blinkPlan();
+  if (!plan) return;
+  const { v, long, cells } = plan;
+  if (cells.length > MAX_CELLS) {
+    clearMessages();
+    showMessage(`The view needs ${cells.length} fields; zoom in to at most ${MAX_CELLS} and Blink again.`, "warn");
+    return;
+  }
+  const req = { ra: v.ra.toFixed(4), dec: v.dec.toFixed(4), size: clampSize(Math.ceil(long)) };
+  fillForm(req);
+  setPageUrl(req, push, true);
+  runBlink(cells, req);
+}
+
+async function runBlink(cells, req) {
   const { token, signal } = beginLoad();
-  app.request = req;
+  resetFields();
+  app.cells = cells.map((c) => ({ ...c, state: "building" }));
+  explore.setOutlines(app.cells);                       // dashed right away: you can move off and find them again
+  let done = 0, empty = 0, firstError = null;
+  const progress = () => showJob(req, { done, total: app.cells.length,
+    message: `${done - empty} ready${empty ? `, ${empty} without SPHEREx data` : ""}` });
+  progress();
+  const queue = [...app.cells];
+  const worker = async () => {
+    for (let c = queue.shift(); c; c = queue.shift()) {
+      try {
+        const { id, targetUrl } = await requestField(app.api,
+          { ra: c.ra.toFixed(4), dec: c.dec.toFixed(4), size: c.size }, { signal });
+        const target = await fetchJson(targetUrl, signal);
+        if (token !== app.loadToken) return;
+        checkTarget(target, id);
+        Object.assign(c, { state: "ready", id, url: targetUrl, target });
+        cellReady(c, token);
+      } catch (err) {
+        if (err.name === "AbortError" || token !== app.loadToken) return;
+        c.state = "empty";
+        empty++;
+        if (!(err instanceof ApiError && err.kind === "no_data")) firstError ??= err;
+      }
+      done++;
+      explore.setOutlines(app.cells);
+      progress();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(PARALLEL, app.cells.length) }, worker));
+  if (token !== app.loadToken) return;
+  hideJob();
+  if (firstError) showLoadError(firstError);
+  else if (empty === app.cells.length) showMessage("No SPHEREx images here.", "warn");
+}
+
+/** Forget the blinked fields (outlines, epoch layers, overlays). */
+function resetFields() {
+  app.cells = [];
+  app.epochs = [];
+  app.epochShown = null;
+  app.epochSynthetic = false;
+  clearInterval(epochTimer);
+  epochTimer = null;
+  explore.setOutlines([]);
+  explore.clearEpochs();
+  renderEpochs();
+  publishCells();
+  $("#objects-note").textContent = "";
+  $("#labels-note").textContent = "";
+}
+
+/** A field is built: its epochs join the map layers, its objects the traces. */
+function cellReady(c, token) {
+  explore.setOutlines(app.cells);
+  publishCells();
+  addEpochLayers(c, token);
+  if (app.labelsOn && !c.target.labels_requested) requestExtra(c, "labels", token);
+  if (!c.target.synthetic && !c.target.objects_requested) requestExtra(c, "objects", token);
+}
+
+// ---------- epochs: one button per epoch number, shown in every field at once ----------
+
+let epochTimer = null;
+
+async function addEpochLayers(c, token) {
+  let info;
   try {
-    const onProgress = (progress, id) => { if (token === app.loadToken) showJob(req, progress, id); };
-    const { id, targetUrl } = await requestField(app.api, req, { onProgress, signal });
-    if (token !== app.loadToken) return;
-    await openTarget(targetUrl, id, token, signal);
-  } catch (err) {
-    if (err.name === "AbortError" || token !== app.loadToken) return;
-    showLoadError(err);
-  } finally {
-    if (token === app.loadToken) hideJob();
+    const res = await fetch(`${app.api}/api/hips/${encodeURIComponent(c.id)}`);
+    if (!res.ok) return;
+    info = await res.json();
+  } catch { return; }
+  if (token !== app.loadToken || !info.layers?.length) return;
+  const added = await explore.addEpochLayers(info.layers.map((l) => ({ ...l, cell: c.key, url: new URL(l.url, app.api).href })));
+  if (token !== app.loadToken || !added.length) return;
+  app.epochSynthetic ||= Boolean(info.synthetic);
+  app.epochs = [...new Set([...app.epochs, ...added.map((l) => l.epoch)])].sort((a, b) => a - b);
+  if (app.epochShown == null) app.epochShown = app.epochs[0];
+  renderEpochs();
+  explore.showEpoch(app.epochShown);
+}
+
+function pickEpoch(e) {
+  app.epochShown = e;
+  explore.showEpoch(e);
+  for (const b of $("#explore-epochs").querySelectorAll("button[data-epoch]")) {
+    b.setAttribute("aria-pressed", String(Number(b.dataset.epoch) === e));
   }
 }
 
-function showJob(req, progress = {}, id = null) {
+function renderEpochs() {
+  const box = $("#explore-epochs");
+  const blinking = Boolean(epochTimer);
+  box.replaceChildren();
+  box.hidden = !app.epochs.length;
+  if (!app.epochs.length) return;
+  const buttons = app.epochs.map((e) => el("button", { type: "button", class: "link", "data-epoch": String(e),
+    "aria-pressed": String(e === app.epochShown), onclick: () => pickEpoch(e) }, `Ep. ${e}`));
+  const blink = el("button", { type: "button", class: "link", "aria-pressed": String(blinking),
+    title: "Flip through the epochs in the map" }, blinking ? "❚❚ Stop" : "▶ Blink epochs");
+  blink.addEventListener("click", () => {
+    const on = !epochTimer;
+    clearInterval(epochTimer);
+    epochTimer = null;
+    if (on) {
+      epochTimer = setInterval(() => {
+        const i = app.epochs.indexOf(app.epochShown);
+        pickEpoch(app.epochs[(i + 1) % app.epochs.length]);
+      }, 700);
+    }
+    renderEpochs();
+  });
+  // no caption for real data; synthetic layers stay visibly labelled (CLAUDE.md)
+  box.append(...(app.epochSynthetic ? [el("span", { class: "muted small" }, "synthetic:")] : []), ...buttons, blink);
+}
+
+// ---------- labels and known objects: asked per field, merged when they arrive ----------
+
+/** kind "labels" (T37, SIMBAD + Gaia) or "objects" (T51, known asteroids/comets): poll, then reload the field. */
+async function requestExtra(c, kind, token) {
+  const flag = `${kind}Pending`;
+  if (c[flag]) return;
+  c[flag] = true;
+  updateNotes();
+  try {
+    for (let i = 0; i < (kind === "labels" ? 120 : 360); i++) {
+      const res = await fetch(`${app.api}/api/targets/${encodeURIComponent(c.id)}/${kind}`);
+      const body = await res.json();
+      if (token !== app.loadToken) return;
+      if (body.status === "ready") break;
+      if (body.status !== "building") throw new Error(body.message ?? `HTTP ${res.status}`);
+      await new Promise((r) => setTimeout(r, kind === "labels" ? 1500 : 5000));
+    }
+    const fresh = await fetchJson(c.url);
+    if (token !== app.loadToken) return;
+    c.target = fresh;
+    publishCells();
+  } catch (err) {
+    if (token === app.loadToken && kind === "labels") showMessage(`Labels unavailable: ${err.message}`, "warn");
+  } finally {
+    c[flag] = false;
+    if (token === app.loadToken) updateNotes();
+  }
+}
+
+function updateNotes() {
+  const ready = app.cells.filter((c) => c.state === "ready");
+  const labelsBusy = ready.some((c) => c.labelsPending);
+  $("#labels-note").textContent = !app.labelsOn || !ready.length ? ""
+    : labelsBusy ? "asking SIMBAD + Gaia…" : `${app.shownTarget?.labels?.length ?? 0}`;
+  $("#objects-note").textContent = ready.some((c) => c.objectsPending) ? "looking up known asteroids and comets…" : "";
+}
+
+async function setLabels(on) {
+  app.labelsOn = on;
+  try { localStorage.setItem(LABELS_KEY, on ? "1" : "0"); } catch { /* private mode: not remembered */ }
+  $("#labels-toggle").checked = on;
+  document.dispatchEvent(new CustomEvent("labels:changed", { detail: { on } }));  // skylabels.js follows
+  publishCells();
+  if (on) for (const c of app.cells) if (c.state === "ready" && !c.target.labels_requested) requestExtra(c, "labels", app.loadToken);
+  updateNotes();
+}
+
+// ---------- progress ----------
+
+function showJob(req, progress = {}) {
   const job = $("#job");
   if (job.hidden) {
     job.hidden = false;
@@ -245,21 +438,13 @@ function showJob(req, progress = {}, id = null) {
     app.jobTimer = setInterval(tickJob, 1000);
     tickJob();
   }
-  $("#job-title").textContent = `${STEP_LABELS[progress.step] ?? "Building field"}…`;
+  const n = progress.total;
+  $("#job-title").textContent = n > 1 ? `Building the ${n} fields on screen…` : "Building the field…";
   const bar = $("#job-progress");
-  const counted = Number.isFinite(progress.done) && Number.isFinite(progress.total) && progress.total > 0;
-  if (counted) {
-    bar.max = progress.total;
-    bar.value = progress.done;
-  } else {
-    bar.removeAttribute("value"); // indeterminate
-  }
-  $("#job-message").textContent = [
-    `RA ${req.ra}, Dec ${req.dec}, ${req.size}′`,
-    counted ? `${progress.done} / ${progress.total}` : null,
-    progress.message,
-    id,
-  ].filter(Boolean).join(" · ");
+  bar.max = Math.max(1, n);
+  bar.value = progress.done;
+  $("#job-message").textContent = [`RA ${req.ra}, Dec ${req.dec}, ${req.size}′ view`, `${progress.done} / ${n}`,
+    progress.message].filter(Boolean).join(" · ");
 }
 
 function tickJob() {
@@ -306,7 +491,7 @@ function bindPage() {
     const req = readForm();
     if (!req.ra || !req.dec) return;
     fillForm(req);
-    if (goTo(req)) setPageUrl(req, true);   // Go: jump + pin only; Blink builds the field
+    if (goTo(req)) setPageUrl(req, true);   // Go: jump + pin only; Blink builds the fields
   });
   $("#preset").addEventListener("change", onPresetPicked);
   $("#field-form").addEventListener("input", (e) => {
@@ -316,7 +501,7 @@ function bindPage() {
   $("#job-cancel").addEventListener("click", () => {
     app.abort?.abort();
     hideJob();
-    showMessage("Stopped waiting. The server keeps building this field; ask again later and it comes from the cache.", "warn");
+    showMessage("Stopped waiting. The server keeps building these fields; Blink here again later and they come from the cache.", "warn");
   });
 
   window.addEventListener("popstate", () => {
@@ -324,82 +509,22 @@ function bindPage() {
     app.abort?.abort();
     hideJob();
     clearMessages();
-    app.shownTarget = null;
-    app.shownTargetUrl = null;
-    publishTarget(null);
+    resetFields();
     fillDefaults();
   });
 }
 
 // ---------- sky map (T30/T36) ----------
 
-function syncExplore(target) {
-  app.shownTarget = target;
-  const c = target?.center;
-  if (!c) return;
-  const region = app.request?.region;
-  if (region) {
-    explore.markRegion(region);          // built from Blink: keep the outline of the view, don't move the map
-  } else {                               // opened from a link: show the field like Blink did (view = field)
-    explore.goTo(c.ra_deg, c.dec_deg, Math.max(0.25, target.size_arcmin / 60));
-    explore.markField(c.ra_deg, c.dec_deg, target.size_arcmin);
-  }
-  showEpochLayers(target);
-}
-
-// T32: the field's epochs as map layers, with buttons + blink, so epochs can be compared in the map.
-let epochTimer = null;
-let epochShown = 0;
-
-async function showEpochLayers(target) {
-  const box = $("#explore-epochs");
-  clearInterval(epochTimer);
-  box.replaceChildren();
-  box.hidden = true;
-  let info;
-  try {
-    const res = await fetch(`${app.api}/api/hips/${encodeURIComponent(target.id)}`);
-    if (!res.ok) return;
-    info = await res.json();
-  } catch { return; }
-  if (app.shownTarget !== target || !info.layers?.length) return;
-  const layers = await explore.setEpochLayers(info.layers.map((l) => ({ ...l, url: new URL(l.url, app.api).href })));
-  if (!layers.length || app.shownTarget !== target) return;
-  const buttons = layers.map((l, i) => el("button", { type: "button", class: "link", title: l.label,
-    "aria-pressed": String(i === 0) }, `Ep. ${l.epoch}`));
-  const pick = (i) => {
-    epochShown = i;
-    explore.showEpoch(i);
-    buttons.forEach((b, j) => b.setAttribute("aria-pressed", String(j === i)));
-  };
-  buttons.forEach((b, i) => b.addEventListener("click", () => pick(i)));
-  const blink = el("button", { type: "button", class: "link", "aria-pressed": "false",
-    title: "Flip through the epochs in the map" }, "▶ Blink epochs");
-  blink.addEventListener("click", () => {
-    const on = blink.getAttribute("aria-pressed") !== "true";
-    blink.setAttribute("aria-pressed", String(on));
-    blink.textContent = on ? "❚❚ Stop" : "▶ Blink epochs";
-    clearInterval(epochTimer);
-    if (on) epochTimer = setInterval(() => pick((epochShown + 1) % layers.length), 700);
-  });
-  // no caption for real data; synthetic layers stay visibly labelled (CLAUDE.md)
-  box.append(...(info.synthetic ? [el("span", { class: "muted small" }, "synthetic:")] : []), ...buttons, blink);
-  box.hidden = false;
-  pick(0);
-}
-
-/** How much the map shows, and the field Blink would build from it (the mouse position is in the 📍 pill). */
-/** Side of the square field Blink builds: covers the whole view (its longer side), within the API's 5–210′. */
-const blinkSize = (v) => clampSize(Math.ceil(Math.max(v.fovArcmin, v.heightArcmin)));
-
-/** How much the map shows, and the field Blink would build from it (the mouse position is in the 📍 pill). */
+/** How much the map shows, and what Blink would build for it (the mouse position is in the 📍 pill). */
 function updateExplorePos() {
-  const v = explore.view();
-  if (!v) return;
+  const plan = blinkPlan();
+  if (!plan) return;
+  const { v, cells } = plan;
   const arc = (a) => (a >= 120 ? `${(a / 60).toFixed(1)}°` : `${Math.round(a)}′`);
-  const size = blinkSize(v), all = size >= Math.max(v.fovArcmin, v.heightArcmin) - 0.5;
-  $("#explore-pos").textContent = `view ${arc(v.fovArcmin)} × ${arc(v.heightArcmin)} · Blink builds ${size}′`
-    + (all ? "" : ` (max; zoom in to blink all of it)`);
+  const what = cells.length === 1 && cells[0].key === "view" ? `1 field of ${cells[0].size}′`
+    : cells.length > MAX_CELLS ? `${cells.length} fields: zoom in` : `${cells.length} fields`;
+  $("#explore-pos").textContent = `view ${arc(v.fovArcmin)} × ${arc(v.heightArcmin)} · Blink: ${what}`;
 }
 
 function setupBand(layer) {
@@ -419,18 +544,7 @@ function setupBand(layer) {
 }
 
 async function startExplore() {
-  // T55: Blink builds what is on screen (a square over the whole view, up to the API's 210′) and the
-  // red outline marks exactly that part of the view, so after moving around during the build you find it again
-  $("#explore-blink").addEventListener("click", () => {
-    const v = explore.view();
-    if (!v) return;
-    const size = blinkSize(v);
-    const req = { ra: v.ra.toFixed(4), dec: v.dec.toFixed(4), size, region: explore.viewRegion(size) };
-    explore.markRegion(req.region);                      // shown right away, not only once it is built
-    fillForm(req);
-    setPageUrl(req, true, true);
-    loadField(req);
-  });
+  $("#explore-blink").addEventListener("click", () => startBlink());
   const f = readForm();
   let start = {};
   try { start = { ra: parseRa(f.ra), dec: parseDec(f.dec) }; } catch { /* empty or odd form: default view */ }
@@ -447,7 +561,6 @@ async function startExplore() {
     setupTilesSwitch();
     setupBand(sky.base);
     if (app.goalPending) { app.goalPending = false; showGoal(); }   // Go asked before the map existed
-    if (app.shownTarget) syncExplore(app.shownTarget);   // a field loaded before the map was ready
     updateExplorePos();
   } catch (err) {
     showMessage(`Sky map unavailable: ${err.message}`, "warn");
@@ -476,73 +589,6 @@ async function setupTilesSwitch() {
       showMessage(`Could not switch tiles: ${err.message}`, "warn");
     }
   });
-}
-
-// ---------- T37: catalogue labels only on request ----------
-
-async function setLabels(on) {
-  app.labelsOn = on;
-  try { localStorage.setItem(LABELS_KEY, on ? "1" : "0"); } catch { /* private mode: not remembered */ }
-  $("#labels-toggle").checked = on;
-  document.dispatchEvent(new CustomEvent("labels:changed", { detail: { on } }));  // skylabels.js follows
-  const t = app.shownTarget;
-  const note = $("#labels-note");
-  note.textContent = "";
-  if (!t || !app.shownTargetUrl) return;
-  if (!on || t.labels_requested) {
-    publishTarget(t);
-    if (on) note.textContent = `${t.labels?.length ?? 0}`;
-    return;
-  }
-  const id = t.id;
-  note.textContent = "asking SIMBAD + Gaia…";
-  try {
-    for (let i = 0; i < 120; i++) {
-      const res = await fetch(`${app.api}/api/targets/${encodeURIComponent(id)}/labels`);
-      const body = await res.json();
-      if (app.shownTarget?.id !== id || !app.labelsOn) return;
-      if (body.status === "ready") break;
-      if (body.status !== "building") throw new Error(body.message ?? `HTTP ${res.status}`);
-      await new Promise((r) => setTimeout(r, 1500));
-    }
-    const fresh = await fetchJson(app.shownTargetUrl);
-    if (app.shownTarget?.id !== id || !app.labelsOn) return;
-    app.shownTarget = fresh;
-    publishTarget(fresh);
-    note.textContent = `${fresh.labels?.length ?? 0}`;
-  } catch (err) {
-    note.textContent = "";
-    showMessage(`Labels unavailable: ${err.message}`, "warn");
-  }
-}
-
-/**
- * T51: known asteroids and comets arrive after the field (the Live API computes them in the
- * background). Poll /objects, then reload target.json so the traces include them.
- */
-async function loadObjects(target) {
-  const note = $("#objects-note");
-  note.textContent = "";
-  if (target.synthetic || target.objects_requested || !app.shownTargetUrl) return;
-  const id = target.id;
-  note.textContent = "looking up known asteroids and comets…";
-  try {
-    for (let i = 0; i < 360; i++) {
-      const res = await fetch(`${app.api}/api/targets/${encodeURIComponent(id)}/objects`);
-      const body = await res.json();
-      if (app.shownTarget?.id !== id) return;
-      if (body.status === "ready") break;
-      if (body.status !== "building") throw new Error(body.message ?? `HTTP ${res.status}`);
-      await new Promise((r) => setTimeout(r, 5000));
-    }
-    const fresh = await fetchJson(app.shownTargetUrl);
-    if (app.shownTarget?.id !== id) return;
-    note.textContent = "";
-    app.shownTarget = fresh;
-    publishTarget(fresh);
-  } catch (err) {
-    if (app.shownTarget?.id === id) note.textContent = `Known objects unavailable: ${err.message}`;
-  }
 }
 
 async function main() {
