@@ -87,8 +87,11 @@ async function openTarget(targetUrl, expectedId, token, signal) {
   const target = await fetchJson(targetUrl, signal);
   if (token !== app.loadToken) return;
   const warnings = checkTarget(target, expectedId);
-  showTarget(target, targetUrl);
+  app.shownTargetUrl = targetUrl;
+  // T37: labels are shown only when switched on (and then asked for on demand)
+  showTarget(app.labelsOn ? target : { ...target, labels: [] }, targetUrl);
   syncExplore(target);
+  if (app.labelsOn && !target.labels_requested) setLabels(true);
   warnings.forEach((w) => showMessage(w, "warn"));
 }
 
@@ -413,27 +416,84 @@ function syncExplore(target) {
   if (!c) return;
   explore.goTo(c.ra_deg, c.dec_deg, Math.max(0.25, (target.size_arcmin * 3) / 60));
   explore.markField(c.ra_deg, c.dec_deg, target.size_arcmin);
+  showEpochLayers(target);
 }
 
-function updateExplorePos() {
+// T32: the field's epochs as map layers, with buttons + blink, so epochs can be compared in the map.
+let epochTimer = null;
+let epochShown = 0;
+
+async function showEpochLayers(target) {
+  const box = $("#explore-epochs");
+  clearInterval(epochTimer);
+  box.replaceChildren();
+  box.hidden = true;
+  if (app.dataRoot) return;                       // offline mode: no tile server
+  let info;
+  try {
+    const res = await fetch(`${app.api}/api/hips/${encodeURIComponent(target.id)}`);
+    if (!res.ok) return;
+    info = await res.json();
+  } catch { return; }
+  if (app.shownTarget !== target || !info.layers?.length) return;
+  const layers = await explore.setEpochLayers(info.layers.map((l) => ({ ...l, url: new URL(l.url, app.api).href })));
+  if (!layers.length || app.shownTarget !== target) return;
+  const buttons = layers.map((l, i) => el("button", { type: "button", class: "link", title: l.label,
+    "aria-pressed": String(i === 0) }, `Ep. ${l.epoch}`));
+  const pick = (i) => {
+    epochShown = i;
+    explore.showEpoch(i);
+    buttons.forEach((b, j) => b.setAttribute("aria-pressed", String(j === i)));
+  };
+  buttons.forEach((b, i) => b.addEventListener("click", () => pick(i)));
+  const blink = el("button", { type: "button", class: "link", "aria-pressed": "false",
+    title: "Flip through the epochs in the map" }, "▶ Blink epochs");
+  blink.addEventListener("click", () => {
+    const on = blink.getAttribute("aria-pressed") !== "true";
+    blink.setAttribute("aria-pressed", String(on));
+    blink.textContent = on ? "❚❚ Stop" : "▶ Blink epochs";
+    clearInterval(epochTimer);
+    if (on) epochTimer = setInterval(() => pick((epochShown + 1) % layers.length), 700);
+  });
+  box.append(el("span", { class: "muted small" }, info.synthetic ? "Epochs (synthetic):" : "SPHEREx epochs here:"),
+    ...buttons, blink);
+  box.hidden = false;
+  pick(0);
+}
+
+function updateExplorePos(_view, cursor) {
   const v = explore.view();
   if (!v) return;
-  $("#explore-pos").textContent = `RA ${v.ra.toFixed(4)}° Dec ${v.dec >= 0 ? "+" : ""}${v.dec.toFixed(4)}° · view ${v.fovArcmin >= 120 ? (v.fovArcmin / 60).toFixed(1) + "°" : Math.round(v.fovArcmin) + "′"}`;
+  const f = (x) => `${x >= 0 ? "+" : ""}${x.toFixed(4)}°`;
+  const where = cursor ? `cursor RA ${cursor[0].toFixed(4)}° Dec ${f(cursor[1])}` : `RA ${v.ra.toFixed(4)}° Dec ${f(v.dec)}`;
+  $("#explore-pos").textContent = `${where} · view ${v.fovArcmin >= 120 ? (v.fovArcmin / 60).toFixed(1) + "°" : Math.round(v.fovArcmin) + "′"}`;
+}
+
+function setupBand(layer) {
+  const box = $("#explore-band-box");
+  const waves = explore.bandWavelengths();
+  box.hidden = !(layer?.depth > 1);
+  if (box.hidden) return;
+  const input = $("#explore-band");
+  input.max = String(layer.depth - 1);
+  input.value = String(layer.slice);
+  const show = () => {
+    const w = waves[Number(input.value)];
+    $("#explore-band-out").textContent = Number.isFinite(w) ? `${w.toFixed(3)} µm` : `#${input.value}`;
+  };
+  input.oninput = () => { explore.setBand(Number(input.value)); show(); };
+  show();
 }
 
 async function startExplore() {
   const sel = $("#explore-survey");
   explore.SURVEYS.forEach((s) => sel.append(el("option", { value: s.id }, s.label)));
-  sel.addEventListener("change", () => explore.setSurvey(sel.value));
-  $("#explore-gaia").addEventListener("change", (e) => explore.toggleCatalog("gaia", e.target.checked));
-  $("#explore-simbad").addEventListener("change", (e) => explore.toggleCatalog("simbad", e.target.checked));
-  $("#explore-toggle").addEventListener("click", (e) => {
-    const box = $("#explore");
-    box.classList.toggle("collapsed");
-    const open = !box.classList.contains("collapsed");
-    e.target.textContent = open ? "Hide map" : "Show map";
-    e.target.setAttribute("aria-expanded", String(open));
+  sel.value = explore.DEFAULT_SURVEY;
+  sel.addEventListener("change", async () => {
+    try { setupBand(await explore.setSurvey(sel.value)); }
+    catch (err) { showMessage(err.message, "warn"); }
   });
+  $("#labels-toggle").addEventListener("change", (e) => setLabels(e.target.checked));
   $("#explore-blink").addEventListener("click", () => {
     const v = explore.view();
     if (!v) return;
@@ -444,16 +504,54 @@ async function startExplore() {
   });
   const f = readForm();
   try {
-    const a = await explore.initExplore($("#aladin"), {
+    const sky = await explore.initExplore($("#sky"), {
       ra: Number(f.ra) || undefined, dec: Number(f.dec) || undefined, fovDeg: 2,
     });
-    a.on("positionChanged", updateExplorePos);
-    a.on("zoomChanged", updateExplorePos);
+    sky.on("change", updateExplorePos);
+    setupBand(sky.base);
     if (app.shownTarget) syncExplore(app.shownTarget);   // a field loaded before the map was ready
     updateExplorePos();
   } catch (err) {
     showMessage(`Sky map unavailable: ${err.message}`, "warn");
-    $("#explore").hidden = true;
+  }
+}
+
+// ---------- T37: catalogue labels only on request ----------
+
+async function setLabels(on) {
+  app.labelsOn = on;
+  const t = app.shownTarget;
+  const note = $("#labels-note");
+  note.textContent = "";
+  if (!t || !app.shownTargetUrl) return;
+  if (!on) {
+    showTarget({ ...t, labels: [] }, app.shownTargetUrl);
+    return;
+  }
+  if (t.labels_requested || app.dataRoot) {
+    showTarget(t, app.shownTargetUrl);
+    note.textContent = `${t.labels?.length ?? 0}`;
+    return;
+  }
+  const id = t.id;
+  note.textContent = "asking SIMBAD + Gaia…";
+  try {
+    for (let i = 0; i < 120; i++) {
+      const res = await fetch(`${app.api}/api/targets/${encodeURIComponent(id)}/labels`);
+      const body = await res.json();
+      if (app.shownTarget?.id !== id || !app.labelsOn) return;
+      if (body.status === "ready") break;
+      if (body.status !== "building") throw new Error(body.message ?? `HTTP ${res.status}`);
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+    const fresh = await fetchJson(app.shownTargetUrl);
+    if (app.shownTarget?.id !== id || !app.labelsOn) return;
+    app.shownTarget = fresh;
+    showTarget(fresh, app.shownTargetUrl);
+    note.textContent = `${fresh.labels?.length ?? 0}`;
+  } catch (err) {
+    note.textContent = "";
+    showMessage(`Labels unavailable: ${err.message}`, "warn");
   }
 }
 
@@ -468,7 +566,10 @@ async function main() {
     return;
   }
   await loadPresets();
-  startExplore();   // not awaited: the map loads from CDS in the background
+  // ?explore=0 skips the sky map (embeds, slow connections, and the browser test, which must not
+  // depend on external tile servers being up).
+  if (p.get("explore") === "0") $("#explore").hidden = true;
+  else startExplore();   // not awaited: the map loads in the background
   const requested = loadFromUrl();
   if (!requested) {
     fillDefaults();

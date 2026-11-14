@@ -10,6 +10,7 @@
 import { $, el } from "./util.js";
 import "./trail.js"; // T23 trail view, same viewer events
 import "./inspector.js"; // T23 object inspector, opened by clicking an object
+import "./traces.js"; // T35 traces on the explore map
 
 const SVG = "http://www.w3.org/2000/svg";
 document.head.append(el("link", { rel: "stylesheet", href: new URL("./paths.css", import.meta.url).href }));
@@ -17,7 +18,8 @@ const SLOW_PX = 3;          // paths shorter than this get an exaggerated direct
 const STILL_PX = 0.3;       // below this an object counts as not moving: no path, marker only
 const ARROW_PX = 12;        // length of the exaggerated arrow in image pixels
 
-const opts = { names: true, catalogue: false, movers: true, paths: true };
+const opts = { names: true, catalogue: false, movers: true, paths: true, allNames: false };
+const NAME_CAP = 8; // T34: at most this many names on the image unless "all names" is on
 const st = { target: null, frames: [], order: new Map(), objects: [], frameId: null, unit: 1 };
 
 const svg = (tag, attrs = {}, ...kids) => {
@@ -32,9 +34,15 @@ const svg = (tag, attrs = {}, ...kids) => {
 function collect(t) {
   const out = [];
   for (const l of t.labels ?? []) {
+    // importance (CONTRACTS v0.7): 0 field object, 1 notable motion, 2 named/notable, 3 catalogue no., 4 Gaia.
+    // Older targets have none: derive it the same way, roughly.
+    const notable = l.motion?.class && l.motion.class !== "still";
+    const imp = Number.isFinite(l.importance) ? l.importance
+      : l.source === "gaia_dr3" ? 4 : notable ? 1 : l.named ? 2 : 3;
     out.push({
-      group: l.named ? "names" : "catalogue", name: l.name, info: l.kind, source: l.source, mag: l.mag,
-      otype: l.otype, pm: l.pm_mas_yr, motion: l.motion, positions: l.positions ?? [], synthetic: false,
+      group: imp === 4 ? "catalogue" : "names", importance: imp, name: l.name, info: l.kind, source: l.source,
+      mag: l.mag, otype: l.otype, pm: l.pm_mas_yr, motion: l.motion, aliases: l.aliases ?? [],
+      positions: l.positions ?? [], synthetic: false,
     });
   }
   for (const k of t.known_objects ?? []) {
@@ -125,13 +133,16 @@ function draw() {
       names.push(svg("text", { x: x2 + dx * px(10), y: y2 + dy * px(10) + px(4), class: "path-note", "font-size": px(11) },
         `motion ×${k}, not to scale`));
     }
-    const ring = o.group === "catalogue" ? 4 : 9;
-    marks.push(svg("circle", { cx: cur.x, cy: cur.y, r: px(ring), class: `path-mark is-${o.group}` }));
-    hits.push(svg("circle", { cx: cur.x, cy: cur.y, r: px(Math.max(ring + 3, 8)), class: "path-hit", "data-obj": st.objects.indexOf(o) }));
-    if (o.group !== "catalogue") {
+    const field = o.importance === 0, minor = o.importance === 3;
+    const ring = o.group === "catalogue" ? 4 : field ? 13 : minor ? 5 : 9;
+    marks.push(svg("circle", { cx: cur.x, cy: cur.y, r: px(ring), class: `path-mark is-${o.group}${field ? " is-field" : ""}${minor ? " is-minor" : ""}` }));
+    hits.push(svg("circle", { cx: cur.x, cy: cur.y, r: px(Math.max(ring + 3, 8)), class: "path-hit", tabindex: 0,
+      role: "button", "aria-label": `${o.name}, ${o.info ?? ""}`, "data-obj": st.objects.indexOf(o) }));
+    // T34: names for movers always; for labels only importance <= 2 (or all with "all names")
+    if (o.group === "movers" || o.importance <= 2 || (opts.allNames && o.group !== "catalogue")) {
       const cls = o.motion?.class && o.motion.class !== "still" ? ` · ${o.motion.class}` : "";
-      const moving = o.group === "movers" || (o.motion && o.motion.class !== "still");
-      wanted.push({ o, cur, ring, text: o.name + cls + (o.synthetic ? " · synthetic" : ""), prio: moving ? 0 : 1 });
+      const prio = o.group === "movers" ? -1 : o.importance;
+      wanted.push({ o, cur, ring, text: o.name + cls + (o.synthetic ? " · synthetic" : ""), prio });
     }
   }
   names.push(...placeNames(wanted, px));
@@ -148,7 +159,7 @@ function placeNames(wanted, px) {
   const W = st.target.image?.width ?? 1, H = st.target.image?.height ?? 1;
   const fs = px(12), charW = fs * 0.62, placed = [], out = [];
   let hidden = 0;
-  wanted.sort((a, b) => a.prio - b.prio);
+  wanted.sort((a, b) => a.prio - b.prio || (a.o.mag ?? 99) - (b.o.mag ?? 99));
   for (const w of wanted) {
     const tw = w.text.length * charW, th = fs * 1.1, gap = px(w.ring + 5);
     const { x, y } = w.cur;
@@ -160,7 +171,7 @@ function placeNames(wanted, px) {
     ];
     const fits = (b) => b[0] >= -0.5 && b[1] >= -0.5 && b[0] + b[2] <= W && b[1] + b[3] <= H &&
       !placed.some((p) => b[0] < p[0] + p[2] && p[0] < b[0] + b[2] && b[1] < p[1] + p[3] && p[1] < b[1] + b[3]);
-    const spot = tries.find((t) => fits(t.box));
+    const spot = !opts.allNames && out.length >= NAME_CAP ? null : tries.find((t) => fits(t.box));
     if (!spot) { hidden++; continue; }
     placed.push(spot.box);
     out.push(svg("text", { x: spot.x, y: spot.y, "text-anchor": spot.anchor, class: `path-name is-${w.o.group}`, "font-size": fs }, w.text));
@@ -200,6 +211,8 @@ function fillTip(o) {
   const scale = st.target.image?.pixel_scale_arcsec ?? 6.15;
   const rows = [["Type", o.info + (o.otype && o.otype !== "*" ? ` (${o.otype})` : "")]];
   rows.push(["Source", o.source === "simbad" ? "SIMBAD" : o.source === "gaia_dr3" ? "Gaia DR3" : (o.source ?? "–")]);
+  if (o.importance === 0) rows.push(["", "the object at the position you asked for"]);
+  if (o.aliases?.length) rows.push(["Also", o.aliases.slice(0, 4).join(", ") + (o.aliases.length > 4 ? ` +${o.aliases.length - 4}` : "")]);
   if (o.mag != null) rows.push(["Brightness", `G = ${o.mag.toFixed(1)} mag`]);
   if (o.pm != null) {
     const pa = o.extent > 0 ? paDeg(last.x - first.x, last.y - first.y) : null;
@@ -263,7 +276,18 @@ document.addEventListener("click", (e) => {
     document.dispatchEvent(new CustomEvent("paths:select", { detail: { obj: o } }));
   } else if (tip.pinned && !e.target.closest?.("#paths-tip")) hideTip(true);
 });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideTip(true); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") hideTip(true);
+  if ((e.key === "Enter" || e.key === " ") && e.target.classList?.contains("path-hit")) {
+    e.preventDefault(); e.stopPropagation();
+    hideTip(true);
+    document.dispatchEvent(new CustomEvent("paths:select", { detail: { obj: hitObject(e) } }));
+  }
+}, true);
+document.addEventListener("focusin", (e) => {
+  if (e.target.classList?.contains("path-hit") && !tip.pinned) { tip.obj = hitObject(e); if (tip.obj) fillTip(tip.obj); }
+});
+document.addEventListener("focusout", (e) => { if (e.target.classList?.contains("path-hit")) hideTip(); });
 
 // ---------- controls + legend ----------
 
@@ -275,7 +299,7 @@ function controls() {
     ` ${label}`);
   box = el("div", { id: "paths-controls", class: "paths-controls" },
     el("div", { class: "paths-row" },
-      cb("paths", "Paths"), cb("names", "Names"), cb("movers", "Known objects & detections"), cb("catalogue", "Catalogue stars")),
+      cb("paths", "Paths"), cb("names", "Names"), cb("allNames", "All names"), cb("movers", "Known objects & detections"), cb("catalogue", "Catalogue stars")),
     el("div", { class: "paths-legend" },
       el("span", { id: "paths-t0", class: "muted small" }), el("span", { class: "paths-ramp", "aria-hidden": "true" }),
       el("span", { id: "paths-t1", class: "muted small" }), el("span", { id: "paths-count", class: "muted small" })));
@@ -290,7 +314,7 @@ function updateLegend(visible) {
   $("#paths-t1").textContent = st.frames[st.frames.length - 1]?.time_utc?.slice(0, 10) ?? "";
   const moving = visible.filter((o) => o.extent >= STILL_PX).length;
   $("#paths-count").textContent = `· ${visible.length} shown, ${moving} moving` +
-    (st.hiddenNames ? ` · ${st.hiddenNames} name${st.hiddenNames === 1 ? "" : "s"} hidden to avoid overlap (hover the ring)` : "");
+    (st.hiddenNames ? ` · ${st.hiddenNames} more name${st.hiddenNames === 1 ? "" : "s"} on hover` : "");
   for (const g of ["names", "catalogue", "movers"]) {
     const n = st.objects.filter((o) => o.group === g).length;
     const input = $(`#paths-${g}`);

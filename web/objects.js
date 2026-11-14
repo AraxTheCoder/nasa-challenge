@@ -34,11 +34,12 @@ function objectsOf(t) {
  * Match the service name only, as whole words: the IRSA entry's query says "per epoch+detector".
  */
 const detectionRan = (t) =>
-  (t.detections?.length ?? 0) > 0 ||
-  (t.provenance ?? []).some((p) => /\bdetect(ion|\.run)?\b|\bsb[-_ ]?ident|\bjpl\b/i.test(p.service ?? ""));
+  (t.detections?.length ?? 0) > 0 || (t.provenance ?? []).some((p) => /\bdetect(ion|\.run)?\b/i.test(p.service ?? ""));
+// (The JPL known-object lookup, T07, is not mover detection: known objects can exist without it.)
 
-function chip(status) {
-  const text = { unknown: "unknown", known: "known", missed: "known · not detected", artifact: "artifact" }[status] ?? status;
+function chip(status, ran = true) {
+  const missed = ran ? "known · not detected" : "catalogued";
+  const text = { unknown: "unknown", known: "known", missed, artifact: "artifact" }[status] ?? status;
   return el("span", { class: `obj-chip obj-${status}` }, text);
 }
 
@@ -69,8 +70,11 @@ function render() {
 
   // Headline next to the target name: unknown movers are the point of the tool.
   summary.replaceChildren();
-  if (!detectionRan(t) && all.length === 0) {
+  const ran = detectionRan(t);
+  const catalogued = all.filter((o) => o.status === "missed").length;
+  if (!ran) {
     summary.append("Mover detection has not run on this field yet");
+    if (catalogued) summary.append(` · ${catalogued} known solar-system object${catalogued === 1 ? "" : "s"} in the field`);
   } else if (movers === 0) {
     summary.append("No moving objects found");
   } else {
@@ -91,7 +95,7 @@ function render() {
     const row = el("li", {},
       el("button", { type: "button", class: `obj-row${st.focus === o.key ? " is-focus" : ""}`, "data-key": o.key,
         "aria-pressed": String(st.focus === o.key), onclick: () => focusObject(o) },
-        el("span", { class: "obj-line" }, chip(o.status), el("span", { class: "obj-name" }, o.name),
+        el("span", { class: "obj-line" }, chip(o.status, ran), el("span", { class: "obj-name" }, o.name),
           o.synthetic ? el("span", { class: "badge badge-synthetic badge-small" }, "synthetic") : null),
         el("span", { class: "obj-sub muted small" }, sub)));
     return row;

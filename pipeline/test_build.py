@@ -117,3 +117,27 @@ def test_exposure_list_cached(monkeypatch, tmp_path):
     assert a == b == [e] and prov["retrieved_utc"] == "t" and len(calls) == 1
     build.cached_exposures(1.0, 2.0, refresh=True, raw_root=tmp_path)
     assert len(calls) == 2
+
+
+def test_fetch_prefers_s3_and_falls_back(monkeypatch, tmp_path):
+    from pipeline import build, s3
+
+    def fake_s3(url, ra, dec, size, dest):
+        dest.write_bytes(b"SIMPLE  = T s3")
+        return dest
+    monkeypatch.setattr(s3, "fetch_cutout", fake_s3)
+    monkeypatch.setattr(build, "_get_with_retry", lambda url: (_ for _ in ()).throw(AssertionError("IRSA used")))
+    p = build.fetch("https://irsa.ipac.caltech.edu/ibe/data/spherex/dr1/a.fits", 1.0, 2.0, 0.3, raw_root=tmp_path)
+    assert p.read_bytes().endswith(b"s3")
+
+    monkeypatch.setattr(s3, "fetch_cutout", lambda *a: (_ for _ in ()).throw(RuntimeError("404")))
+    monkeypatch.setattr(build, "_get_with_retry", lambda url: b"SIMPLE  = T irsa")
+    p = build.fetch("https://irsa.ipac.caltech.edu/ibe/data/spherex/dr1/b.fits", 1.0, 2.0, 0.3, raw_root=tmp_path)
+    assert p.read_bytes().endswith(b"irsa")
+
+
+def test_s3_url():
+    from pipeline.s3 import s3_url
+    assert s3_url("https://irsa.ipac.caltech.edu/ibe/data/spherex/dr1/level2/W/v/1/f.fits") == \
+        "https://nasa-irsa-spherex.s3.amazonaws.com/dr1/level2/W/v/1/f.fits"
+    assert s3_url("https://example.org/x.fits") is None

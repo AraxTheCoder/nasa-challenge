@@ -58,23 +58,25 @@
   </section>
 
   <!-- T30 Explore mode: pan/zoom the whole sky (Aladin Lite + CDS SPHEREx HiPS), then blink a spot. -->
-  <section id="explore" class="explore" aria-label="Explore the sky">
+  <section id="explore" class="explore" aria-label="Sky map">
     <div class="explore-bar">
-      <strong>Explore the sky</strong>
       <label>Map
         <select id="explore-survey"></select></label>
-      <label title="Gaia DR3 stars (ESA), as a catalogue layer"><input id="explore-gaia" type="checkbox"> Gaia DR3</label>
-      <label title="Named objects from SIMBAD (CDS)"><input id="explore-simbad" type="checkbox"> SIMBAD</label>
+      <label id="explore-band-box" hidden title="SPHEREx has 102 spectral channels; pick one">Band
+        <input id="explore-band" type="range" min="0" max="101" step="1" value="0">
+        <output id="explore-band-out" class="small"></output></label>
       <span id="explore-epochs" class="explore-epochs" hidden></span>
+      <label title="Names of catalogued stars and objects in the field (SIMBAD, Gaia DR3). Asked only when switched on.">
+        <input id="labels-toggle" type="checkbox"> Labels <span id="labels-note" class="muted small"></span></label>
       <span class="spacer"></span>
       <span id="explore-pos" class="muted small"></span>
       <button id="explore-blink" type="button" class="primary"
               title="Build the per-epoch blink for the centre of this view (field of view clamped to 5–60′)">Blink this spot</button>
-      <button id="explore-toggle" type="button" class="link" aria-expanded="true">Hide map</button>
     </div>
-    <p class="muted small explore-note">SPHEREx maps here combine all epochs (CDS HiPS, QR2), so they
-      show where things are, not how they move. Use <strong>Blink this spot</strong> to compare epochs.</p>
-    <div id="aladin" class="aladin"></div>
+    <div id="sky" class="sky-stage" aria-label="Sky map: drag to move, scroll or pinch to zoom, double-click to zoom in"></div>
+    <p class="muted small explore-note">Drag to move · scroll or pinch to zoom · double-click to zoom in ·
+      arrow keys and +/− when the map has focus. The all-sky maps combine every epoch; the field's
+      epochs appear inside the red box after <strong>Show</strong> or <strong>Blink this spot</strong>.</p>
   </section>
 
   <main class="layout">

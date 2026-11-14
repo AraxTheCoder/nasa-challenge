@@ -1,4 +1,14 @@
-# Contracts (v0.5)
+# Contracts (v0.8)
+
+v0.8 makes catalogue labels opt-in: builds write `labels: []`; `GET /api/targets/<id>/labels` adds them
+(see "Labels on request"). See TEAM.md Decisions.
+
+
+v0.7 adds `importance` and `aliases` to each label (see "Label"): which names the viewer shows
+first, and duplicates merged into one label. Additive. See TEAM.md Decisions, 2026-11-14.
+
+v0.6 adds per-epoch HiPS tiles to the Live API (see "Per-epoch HiPS"), additive. See TEAM.md Decisions.
+
 
 v0.5 adds an optional `motion` summary to each label (see "Label"), from `pipeline.motion`.
 Additive; `schema_version` stays `"0.2"`. See TEAM.md Decisions, 2026-11-14.
@@ -141,6 +151,13 @@ view (C) should prefer pairs over arbitrary frame combinations.
 - A label marks a **catalogued** object, not a detection. Detections stay in `detections` (B).
 - The same object can appear twice (SIMBAD and Gaia). The UI may hide a Gaia label within 2 px
   of a named SIMBAD label.
+- `importance` (v0.7, optional): 0 = the field's object (the SIMBAD object nearest the requested
+  centre, within 15″), 1 = notable motion (`motion.class` not `still`), 2 = a real name or a notable
+  type (brown dwarf, variable, quasar, …), 3 = catalogue-number SIMBAD object, 4 = Gaia-only star.
+  The viewer always names the most important few (≤ 8) and shows the rest on hover (T34).
+- `aliases` (v0.7, optional): other labels for the same object closer than 3″ (~0.5 px), merged
+  into this one: SIMBAD components (RW Aur A, RW Aur B) and the object's Gaia twin. The kept label
+  is the SIMBAD one with the most readable name and takes the Gaia `mag` if it had none.
 - `motion` (v0.5, optional, may be `null` with < 2 positions): summary over the whole series,
   written by `pipeline.motion.summarize(positions, frames, pixel_scale_arcsec)`:
   `{shift_arcsec, shift_px, reach_arcsec, days, rate_arcsec_per_yr, max_rate_within_epoch_arcsec_per_hr, pa_deg,
@@ -268,6 +285,34 @@ them against `target_url`.
   not committed. That is still live data, only cached.
 - Until `pipeline.build` exists, the server can run with `--fixture` and answers every request
   with `fixtures/targets/demo-synthetic`, which is `"synthetic": true` and must be shown as such.
+
+### Labels on request (v0.8, T37)
+
+Builds no longer ask SIMBAD/Gaia (that took up to 30 s in deep fields). The viewer's Labels switch
+asks for them:
+
+```
+GET /api/targets/<id>/labels   → 202 {"status": "building", "message"} while running,
+                                 200 {"status": "ready", "n"} once target.json has them
+```
+
+When done, `target.json` has `labels` filled (same format as before, T19) and `"labels_requested": true`.
+
+### Per-epoch HiPS (v0.6, T32)
+
+For Aladin Lite: each epoch of a built target as a HiPS layer (frames of that epoch averaged,
+grey + alpha, alpha 0 = no data), rendered on demand. Only tiles that touch the field exist (404
+elsewhere).
+
+```
+GET /api/hips/<id>                         → {"id", "synthetic", "layers": [{"epoch", "id": "e<n>", "label", "url", "n_frames"}]}
+GET /api/hips/<id>/e<n>/properties         → HiPS properties (order 7, 512 px PNG tiles, equatorial)
+GET /api/hips/<id>/e<n>/Norder<k>/Dir<d>/Npix<p>.png
+```
+
+`url` is relative to the API base. Tile pixel (row from top, col) ↔ HEALPix NESTED index at
+nside 2^(k+9): `p * 512² + interleave(row → even bits, col → odd bits)` (checked against IRSA's
+2MASS HiPS).
 
 ### Frontend URL
 
