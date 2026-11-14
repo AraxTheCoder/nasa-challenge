@@ -10,17 +10,26 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `viewer.js` | frame viewer: stacks the frames of one `target.json`, A/B blink, frame table |
 | `util.js` | DOM and formatting helpers |
 | `presets.json` | the five official test fields (SIMBAD positions moved to epoch 2026.0, with query + timestamp) |
+| `dev.py` | one-command launcher: Live API + viewer, opens the browser (`python web/dev.py --help`) |
 | `tests/browser_test.py` | end-to-end browser test against `python -m server --fixture` |
 
 ## Run locally
 
-Two processes, from the repo root:
+Easiest, from the repo root with the venv active (setup steps: top-level `README.md`):
 
 ```
-pip install -r server/requirements.txt      # once
-python -m server --fixture                  # Live API on :8000 (synthetic fixture until pipeline.build exists)
-python3 -m http.server 8080                 # serves the viewer; NOT on 8000, that's the API
+python web/dev.py              # Live API on :8000 + viewer on :8080, opens the browser
 ```
+
+Or the two parts by hand:
+
+```
+python -m server --fixture                       # Live API on :8000
+python -m http.server 8080 --bind 127.0.0.1      # viewer; NOT on 8000, that's the API
+```
+
+Keep `--bind 127.0.0.1`: without it `http.server` shares the whole repo folder (including `.git` and
+any local keys) with everyone on your network. `dev.py` only ever serves `web/` and `fixtures/`.
 
 Open <http://localhost:8080/web/>, type RA/Dec or pick a test field. Links work too:
 <http://localhost:8080/web/?ra=08h55m10.831s&dec=-7d14m42.53s&size=15>
@@ -28,7 +37,8 @@ Open <http://localhost:8080/web/>, type RA/Dec or pick a test field. Links work 
 URL parameters:
 
 - `?ra=&dec=&size=` request that field on load. RA/Dec decimal degrees or sexagesimal, size 5–60′.
-- `?api=<url>` Live API address (default `http://localhost:8000`, constant `DEFAULT_API` in `api.js`).
+- `?api=<url>` Live API address. Default: port 8000 on the host that served the page (`DEFAULT_API`
+  in `api.js`), so it is `localhost` locally and the host's machine for teammates on the LAN.
 - `?data=<folder>` offline mode: read a static targets folder with `index.json`, no server needed,
   e.g. `?data=../fixtures/targets/`. Add `&target=<id>` to pick a target.
 
