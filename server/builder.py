@@ -151,6 +151,8 @@ class Builder:
         kwargs = {}
         if "refresh" in inspect.signature(build_target).parameters:
             kwargs["refresh"] = job.refresh
+        if "final_root" in inspect.signature(build_target).parameters:
+            kwargs["final_root"] = self.cache_root     # late labels land in the cache folder
         if "progress" in inspect.signature(build_target).parameters:
             kwargs["progress"] = lambda step, done=None, total=None, message="": \
                 self._set(job, step, message or step, done, total)
