@@ -411,8 +411,12 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     const all = layer === st.base || order <= 3 ? requestAllsky(layer) : null;
     if (order <= 3 && all?.state === "ok") drawAllsky(layer, all);
     const n = order <= 4 ? 8 : 4;
-    const isBase = layer === st.base;
-    const stats = isBase ? { order, wanted: wantedOrder(), maxOrder: layer.maxOrder, visible: 0, sharp: 0,
+    // Debug stats describe the layer on top: the shown overlay (a survey pass, a field epoch) is drawn after
+    // the base and overwrites the base's; the base is named as capped when it stops short for the passes.
+    const isTop = layer === st.base || layer === st.overlays[st.shown];
+    const name = layer !== st.base ? layer.label
+      : st.baseCap != null && layer.maxOrder > st.baseCap ? `base map (capped at ${st.baseCap}: overlays load first)` : "base map";
+    const stats = isTop ? { name, order, wanted: wantedOrder(), maxOrder: layer.maxOrder, visible: 0, sharp: 0,
       blurry: 0, empty: 0, outlines: [] } : null;
     const shownTiles = [];
     for (const pix of tilesFor(layer, order)) {
@@ -552,14 +556,14 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     const atMax = s.wanted > s.maxOrder;
     const allSharp = s.visible > 0 && s.sharp + s.empty === s.visible;
     const lines = [
-      `map order ${s.order} of max ${s.maxOrder}  (screen wants ${s.wanted})`,
+      `${s.name}: order ${s.order} of max ${s.maxOrder}  (screen wants ${s.wanted})`,
       `texel ${texel.toFixed(1)}"  screen px ${screen.toFixed(2)}"`,
       atMax ? "MAX ZOOM: the map has no finer tiles here" : "more detail available when zooming in",
       allSharp ? "SHARP: all visible tiles at this order loaded" : `loading: ${s.sharp}/${s.visible} sharp, ${s.blurry} blurry, ${s.empty} empty`,
       `in flight ${st.loads} (${[...st.inflight].filter((j) => j.slow).length} live, ${[...st.inflight].filter((j) => j.t.prio >= PRELOAD).length} preload), `
         + `queued ${st.queue.filter((j) => j.t.prio < PRELOAD).length} visible + ${st.queue.filter((j) => j.t.prio >= PRELOAD).length} preload, errors ${st.errors}`,
     ];
-    const w = 330, h = 14 * lines.length + 10;
+    const w = Math.max(330, ...lines.map((l) => ctx.measureText(l).width + 14)), h = 14 * lines.length + 10;
     ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(8, 8, w, h);
     lines.forEach((l, i) => {

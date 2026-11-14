@@ -733,3 +733,5 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   `/api/pass-dates` gains `visits`, CONTRACTS v0.19); stale highlight on the pass labels fixed.
 - 2026-11-14 [Joerg] Board: removed a blank line between T47 and T48 that split the table (GitHub showed every row after T47 as plain text).
 - 2026-11-14 [Joerg] Claimed T88: T86 results on the map (toggle in the map bar, rings, click card). [to Jonathan] done from `web/outliers.js` through `explore.addDrawHook` / pointer events on `#sky`; no edit to explore.js. `/app/` would need its own version if you want it there.
+- 2026-11-14 Jonathan (Claude): T55: the map's Debug overlay describes the layer on top (the blinking survey pass or
+  field epoch), not the capped base map under it ("map order 6 · MAX ZOOM" while the passes drew order 7).
