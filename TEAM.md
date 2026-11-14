@@ -37,7 +37,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
-| T01 | A: IRSA query: list all SPHEREx exposures covering an RA/Dec (SIA/TAP), with time, detector, access URL | | open | | Record the query + timestamp for provenance |
+| T01 | A: IRSA query: list all SPHEREx exposures covering an RA/Dec (SIA/TAP), with time, detector, access URL | Joerg | doing | `joerg/T01-irsa-query` | Record the query + timestamp for provenance |
 | T02 | A: Download cutouts for one target into `data/`, with a cache so re-runs don't re-download | | open | | Needs T01 |
 | T03 | A: Align cutouts to one common WCS grid (north up) and get the wavelength at the target position per frame | | open | | Needs T02. Wavelength varies across a SPHEREx image |
 | T04 | A: Render frames to PNG/WebP and write `target.json` per CONTRACTS, validated against the schema | | open | | Needs T03. First real target = end-to-end milestone |
