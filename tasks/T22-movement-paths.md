@@ -27,7 +27,12 @@ clearly labelled exaggerated motion arrow so the motion is still visible.
 - Slow movers: a path under 3 px gets a dashed arrow along its motion, 12 px long, labelled
   "motion ×k, not to scale". Barnard's Star moves 1.7 px in our year of data, so it gets ×7.
 - A detection matched to a known object replaces that object, so a body isn't named twice.
-- Only checked so far: JS syntax (`node --check`) and a code read. Not yet seen rendered.
+- Hover a ring or name for details (type, catalogue, G mag, proper motion with direction, how far
+  it moves across this series, RA/Dec + pixel in this frame); click pins it, with a SIMBAD lookup
+  link (Harvard mirror, the CDS host was down). Esc or Close unpins.
+- Checked: JS syntax (`node --check`), code read, and the data side (the API serves the baked real
+  Barnard's Star field with 271 labels). Joerg's agent can't run a browser, so the rendering itself
+  is checked by eye only.
 
 ## Questions / needs from others
 - [to Mati] T22 adds two dispatch lines to `viewer.js` (events `viewer:target`, `viewer:frame`) and

@@ -163,6 +163,11 @@ Things waiting on a human.
 - 2026-11-14 [Joerg → Mati] `web/dev.py` line 145 still says `pip install -r server/requirements.txt`.
   That still works (direct deps are pinned), but `requirements.lock` is now the documented install.
   Your file, so I left it.
+- 2026-11-14 [Joerg → Jonathan] For T04 / the server: please call `pipeline.labels.add_labels(target)`
+  before writing `target.json` (in `build_target` or `server/builder.py`, your call), so live-built
+  fields get labels. Meanwhile `pipeline/reference/bake_target.py` bakes REAL fields straight into
+  `data/targets/<live-api-id>/` (cache hit for the viewer's quick picks), clearly marked in
+  provenance as a reference-code stopgap. It is overwritten as soon as your build runs with refresh.
 
 ## Log
 

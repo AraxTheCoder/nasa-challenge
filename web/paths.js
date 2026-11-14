@@ -31,18 +31,18 @@ function collect(t) {
   const out = [];
   for (const l of t.labels ?? []) {
     out.push({
-      group: l.named ? "names" : "catalogue", name: l.name, info: l.kind,
-      pm: l.pm_mas_yr, positions: l.positions ?? [], synthetic: false,
+      group: l.named ? "names" : "catalogue", name: l.name, info: l.kind, source: l.source, mag: l.mag,
+      otype: l.otype, pm: l.pm_mas_yr, positions: l.positions ?? [], synthetic: false,
     });
   }
   for (const k of t.known_objects ?? []) {
-    out.push({ group: "movers", name: k.name, info: "known small body", positions: k.positions ?? [], synthetic: k.synthetic !== false });
+    out.push({ group: "movers", name: k.name, info: "known small body", source: k.source, positions: k.positions ?? [], synthetic: k.synthetic !== false });
   }
   for (const d of t.detections ?? []) {
     if (d.status === "artifact") continue;
     out.push({
       group: "movers", name: d.matched_object ?? `${d.id} (${d.status})`, info: `detection, ${d.status}`,
-      rate: d.motion?.rate_arcsec_per_hr, positions: d.track ?? [], synthetic: d.synthetic !== false,
+      rate: d.motion?.rate_arcsec_per_hr, score: d.score, source: "our detection", positions: d.track ?? [], synthetic: d.synthetic !== false,
     });
   }
   // a detection matched to a known object replaces it, so the same body isn't drawn twice
@@ -91,7 +91,7 @@ function draw() {
   const px = (n) => n / u;         // n screen px in image px
   const visible = st.objects.filter((o) => opts[o.group]);
   // paths first, markers and names on top
-  const paths = [], marks = [], names = [];
+  const paths = [], marks = [], names = [], hits = [];
   for (const o of visible) {
     const moving = o.extent >= STILL_PX;
     if (opts.paths && moving && o.pts.length > 1) {
@@ -125,18 +125,111 @@ function draw() {
     }
     const ring = o.group === "catalogue" ? 4 : 9;
     marks.push(svg("circle", { cx: cur.x, cy: cur.y, r: px(ring), class: `path-mark is-${o.group}` }));
+    hits.push(svg("circle", { cx: cur.x, cy: cur.y, r: px(Math.max(ring + 3, 8)), class: "path-hit", "data-obj": st.objects.indexOf(o) }));
     if (o.group !== "catalogue") {
       const right = cur.x < (st.target.image?.width ?? 1) * 0.7;
       const text = o.name + (o.synthetic ? " · synthetic" : "");
       names.push(svg("text", {
         x: cur.x + (right ? 1 : -1) * px(ring + 5), y: cur.y + px(4), "text-anchor": right ? "start" : "end",
         class: `path-name is-${o.group}`, "font-size": px(12),
-      }, svg("title", {}, `${o.name}: ${o.info}${o.pm ? `, ${(o.pm / 1000).toFixed(2)}″/yr` : ""}${o.rate ? `, ${o.rate.toFixed(1)}″/h` : ""}`), text));
+      }, text));
     }
   }
-  g.append(...paths, ...marks, ...names);
+  g.append(...paths, ...marks, ...names, ...hits);
+  if (tip.obj && !visible.includes(tip.obj)) hideTip(true);
+  else if (tip.obj) fillTip(tip.obj);
   updateLegend(visible);
 }
+
+// ---------- hover / click info ----------
+
+const tip = { obj: null, pinned: false };
+
+function tipEl() {
+  let t = $("#paths-tip");
+  if (!t) {
+    t = el("div", { id: "paths-tip", class: "paths-tip", role: "tooltip", hidden: true });
+    $("#stage").append(t);
+  }
+  return t;
+}
+
+const sexa = (deg, hours) => {
+  let v = hours ? deg / 15 : Math.abs(deg);
+  const h = Math.floor(v), m = Math.floor((v - h) * 60), s = ((v - h) * 60 - m) * 60;
+  const sign = hours ? "" : deg < 0 ? "−" : "+";
+  return hours ? `${h}h${String(m).padStart(2, "0")}m${s.toFixed(1).padStart(4, "0")}s`
+               : `${sign}${h}°${String(m).padStart(2, "0")}′${s.toFixed(0).padStart(2, "0")}″`;
+};
+// direction of motion in the image, as position angle east of north (x right = west, y down = south)
+const paDeg = (dx, dy) => ((Math.atan2(-dx, -dy) * 180) / Math.PI + 360) % 360;
+const compass = (pa) => ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(pa / 45) % 8];
+
+function fillTip(o) {
+  const t = tipEl();
+  const cur = o.byFrame.get(st.frameId) ?? o.pts[0];
+  const first = o.pts[0], last = o.pts[o.pts.length - 1];
+  const scale = st.target.image?.pixel_scale_arcsec ?? 6.15;
+  const rows = [["Type", o.info + (o.otype && o.otype !== "*" ? ` (${o.otype})` : "")]];
+  rows.push(["Source", o.source === "simbad" ? "SIMBAD" : o.source === "gaia_dr3" ? "Gaia DR3" : (o.source ?? "–")]);
+  if (o.mag != null) rows.push(["Brightness", `G = ${o.mag.toFixed(1)} mag`]);
+  if (o.pm != null) {
+    const pa = o.extent > 0 ? paDeg(last.x - first.x, last.y - first.y) : null;
+    rows.push(["Proper motion", `${(o.pm / 1000).toFixed(o.pm >= 1000 ? 2 : 3)}″/yr` + (pa != null && o.pm > 20 ? ` toward ${compass(pa)} (${pa.toFixed(0)}°)` : "")]);
+  }
+  if (o.rate != null) rows.push(["Rate", `${o.rate.toFixed(1)}″/h`]);
+  if (o.score != null) rows.push(["Score", o.score.toFixed(2)]);
+  if (o.pts.length > 1) {
+    const d0 = st.frames[st.order.get(first.frame_id)]?.time_utc?.slice(0, 10), d1 = st.frames[st.order.get(last.frame_id)]?.time_utc?.slice(0, 10);
+    rows.push(["Over this series", o.extent < STILL_PX ? `doesn't move visibly (${(o.extent * scale).toFixed(1)}″)`
+      : `moves ${o.extent.toFixed(1)} px = ${(o.extent * scale).toFixed(1)}″, ${d0} → ${d1}`]);
+  }
+  rows.push(["Here", `RA ${sexa(cur.ra_deg, true)}  Dec ${sexa(cur.dec_deg, false)}`]);
+  rows.push(["", `${cur.ra_deg.toFixed(5)}°, ${cur.dec_deg.toFixed(5)}° · pixel ${cur.x.toFixed(1)}, ${cur.y.toFixed(1)}`]);
+  if (o.synthetic) rows.push(["Note", "synthetic, not a real object"]);
+  const link = !o.synthetic && Number.isFinite(cur.ra_deg)
+    ? el("a", { href: `https://simbad.cfa.harvard.edu/simbad/sim-coo?Coord=${cur.ra_deg.toFixed(5)}%20${cur.dec_deg >= 0 ? "%2B" : ""}${cur.dec_deg.toFixed(5)}&Radius=10&Radius.unit=arcsec`, target: "_blank", rel: "noopener" }, "Look up in SIMBAD ↗")
+    : null;
+  t.replaceChildren(
+    el("strong", {}, o.name),
+    el("dl", {}, ...rows.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)])),
+    tip.pinned ? el("div", { class: "paths-tip-foot" }, link, el("button", { type: "button", class: "link", onclick: () => hideTip(true) }, "Close")) : el("div", { class: "paths-tip-foot muted" }, "click to pin"),
+  );
+  // place next to the object, flipped to stay inside the stage
+  const stage = $("#stage").getBoundingClientRect();
+  const x = (cur.x + 0.5) * st.unit, y = (cur.y + 0.5) * st.unit;
+  t.hidden = false;
+  const w = t.offsetWidth, h = t.offsetHeight;
+  t.style.left = `${Math.max(4, Math.min(stage.width - w - 4, x + 14 + w > stage.width ? x - w - 14 : x + 14))}px`;
+  t.style.top = `${Math.max(4, Math.min(stage.height - h - 4, y - h / 2))}px`;
+}
+
+function hideTip(force = false) {
+  if (tip.pinned && !force) return;
+  tip.obj = null; tip.pinned = false;
+  tipEl().hidden = true;
+}
+
+function hitObject(e) {
+  const i = e.target?.dataset?.obj;
+  return i == null ? null : st.objects[Number(i)];
+}
+
+document.addEventListener("pointerover", (e) => {
+  if (!e.target.classList?.contains("path-hit") || tip.pinned) return;
+  tip.obj = hitObject(e); if (tip.obj) fillTip(tip.obj);
+});
+document.addEventListener("pointerout", (e) => {
+  if (e.target.classList?.contains("path-hit")) hideTip();
+});
+document.addEventListener("click", (e) => {
+  if (e.target.classList?.contains("path-hit")) {
+    const o = hitObject(e);
+    tip.pinned = !(tip.pinned && tip.obj === o); tip.obj = o;
+    if (tip.pinned) fillTip(o); else hideTip(true);
+  } else if (tip.pinned && !e.target.closest?.("#paths-tip")) hideTip(true);
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideTip(true); });
 
 // ---------- controls + legend ----------
 
@@ -183,6 +276,7 @@ document.addEventListener("viewer:target", (e) => {
   const t = e.detail?.target ?? null;
   st.target = t;
   st.frameId = null;
+  hideTip(true);
   if (!t) { $("#paths-controls")?.setAttribute("hidden", ""); return; }
   st.frames = [...t.frames].sort((a, b) => a.mjd - b.mjd);
   st.order = new Map(st.frames.map((f, i) => [f.id, i]));
