@@ -54,6 +54,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T15 | C: Submission text, data credits and AI-use disclosure | | open | | Needs official text in `docs/CHALLENGE.md` |
 | T16 | C: Demo video and slides | | open | | After feature freeze |
 | T17 | A: Compute wavelength-matched `pairs` across epochs (+ `bandwidth_um`) in `target.json` (contracts v0.2) | Joerg | open | | Part of T03/T04 output. Rule in CONTRACTS "Pair" |
+| T18 | C: Live API service: `GET /api/target?ra=&dec=&size=` builds (pipeline + detect) or serves from cache, progress while building, CORS (contracts v0.3) | Jonathan | doing | `jonathan/T18-live-api` | New folder `server/`. Uses `build_target` once T02–T04 exist; until then serves the fixture labelled synthetic |
 
 ## Decisions
 
