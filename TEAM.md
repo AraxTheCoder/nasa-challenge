@@ -127,7 +127,7 @@ Dated, one line each, with why.
   field. Cutouts today: 166 MB per 15' field, 434 s cold (IRSA throttles to ~0.4 MB/s), so one
   full view live would take hours: ~10^4x too slow. Pan/zoom must come from pre-tiled HiPS
   (12-30 tiles of 512 px, ~150 KB each per view, ~5 MB/s while panning); live cutouts only for
-  the per-epoch detail. Plan: T29-T31.
+  the per-epoch detail. Plan: T30-T32.
 
 ## Ideas
 
