@@ -87,7 +87,10 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T48 | C: Cached Allsky fallback at deep zoom so pending/failed live tiles never erase available overview imagery | Joerg | done | `joerg/T48-map-overview-fallback` | [tasks/T48](tasks/T48-map-overview-fallback.md). User approved implementation + push; investigate repeated tile errors |
 | T49 | A/C: Light curves + spectra on the fly at any position: aperture photometry on the cached SPHEREx FITS (pipeline + `/api/targets/<id>/photometry` + viewer charts); for the variable test stars RW Aur / R Dra | Mati | done | `mati/T49-photometry` | [tasks/T49](tasks/T49-photometry.md). `/api/targets/<id>/photometry`; panel under the timeline; CONTRACTS v0.10 |
 | T50 | All: `web/dev.py --host ADDR`: serve viewer + Live API on one address only (e.g. WireGuard 10.0.0.2) instead of all interfaces (`--lan`) | Joerg | done | `joerg/T50-dev-host` | [tasks/T50](tasks/T50-dev-host.md). Joerg's new host serves the team over WireGuard 10.0.0.0/24 |
-| T51 | B: `detect/run.py` so builds get known asteroids/comets now: JPL lookup (T07) + classify (T08) after every build; mover detection (T06) plugs into the same function later | Joerg | doing | `joerg/T51-detect-run` | [tasks/T51](tasks/T51-detect-run.md). Builds call `detect.run.detect()` but the module never existed, so every field had 0 objects. Jonathan: T06 adds tracks here |
+| T51 | B: `detect/run.py` so builds get known asteroids/comets now: JPL lookup (T07) + classify (T08) after every build; mover detection (T06) plugs into the same function later | Joerg | done | `joerg/T51-detect-run` | [tasks/T51](tasks/T51-detect-run.md). Builds call `detect.run.detect()` but the module never existed, so every field had 0 objects. Jonathan: T06 adds tracks here |
+| T52 | A: More labels (idea I4 + more): VSX variable stars (type, period, range), CatWISE2020 brown dwarfs / high proper motion (moved to frame time), planets + bright moons (seen from SPHEREx) | Joerg | doing | `joerg/T52-more-labels` | [tasks/T52](tasks/T52-more-labels.md). New label `source` values + optional `note` (CONTRACTS v0.11) |
+| T53 | B: Comets in the local orbit catalogue (MPC CometEls.txt), like the asteroids in T51 | Joerg | doing | `joerg/T52-more-labels` | [tasks/T53](tasks/T53-local-comets.md). SkyBoT fallback had comets, the local path not yet |
+| T54 | A/C: Known objects + labels start while the images download (they need only frame times + field geometry), so a new field is complete when its frames are | Joerg | doing | `joerg/T52-more-labels` | [tasks/T54](tasks/T54-early-objects-labels.md). New field: frames 11 s, objects +2.5 s, labels +2-3 s today |
 | T52 | All: Docs match the code (idea I2): README status/run/how-it-works, CONTRACTS without pre-baked `web/targets/` + `pipeline.publish`, undocumented API routes, a schema-0.2 fixture with pairs/labels/varied detections | Mati | doing | `mati/T52-docs-current` | [tasks/T52](tasks/T52-docs-current.md) |
 
 ## Decisions
@@ -206,7 +209,7 @@ Ideas are numbered (I1, I2, …) to refer to them; numbers stay fixed, a new ide
   "vsx"` / `"catwise2020"`), moved to frame time like Gaia. A, `pipeline/labels.py` (T19/T23/T37 area).
   ~1.5 h. Suggested owner: Joerg. Contract: new `source` values only (additive).
   Also covers gap-scan item 7 (CatWISE2020 labels on the frames).
-  (proposal (b) from the cross-check of a GPT write-up on SPHEREx science, 2026-11-14; owner question under Questions) — status: new
+  (proposal (b) from the cross-check of a GPT write-up on SPHEREx science, 2026-11-14; owner question under Questions) — status: on the Board as T52 (Joerg)
 - I5 [Mati] **Contamination flags** (consideration: "display metadata, like contamination flags"): only the
   hardware mask reaches the viewer (as no-data). Export a small per-frame flags image (or bit counts)
   with the frame; viewer: flags overlay toggle + flag names at the inspected pixel (OUTLIER may be a

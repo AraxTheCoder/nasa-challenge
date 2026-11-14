@@ -35,7 +35,10 @@ MAX_FILL = 3                  # more images, only while the tile still has holes
 FILL_UNTIL = 0.995            # stop once this fraction of the tile has data
 FOOTPRINT_DEG = 1.6            # image centre within this of the tile centre (detector half-width 1.74)
 TILE = 512
-LO_SIGMA, HI_SIGMA, SOFT = -1.0, 150.0, 1.5
+# Stretch in noise units, same curve as the blink frames (pipeline.build.render_png: asinh(10 s)):
+# s = (v - LO) / (HI - LO). LO/HI fitted so live tiles match the per-epoch field tiles (grey-level
+# percentiles 50-99 within a few levels on Barnard's Star, 2026-11-14); fixed, so no tile seams.
+LO_SIGMA, HI_SIGMA = -0.75, 160.0
 
 _index = None
 _index_lock = threading.Lock()
@@ -246,8 +249,8 @@ def render(slice_: int, order: int, npix: int) -> bytes | None:
     if v is None:
         return None
     ok = np.isfinite(v)
-    lo, hi = math.asinh(LO_SIGMA / SOFT), math.asinh(HI_SIGMA / SOFT)
-    g = (np.arcsinh(np.where(ok, v, 0) / SOFT) - lo) / (hi - lo)
+    s = np.clip((np.where(ok, v, 0) - LO_SIGMA) / (HI_SIGMA - LO_SIGMA), 0, 1)
+    g = np.arcsinh(10 * s) / np.arcsinh(10)
     grey = (np.clip(g, 0, 1) * 255).astype(np.uint8)
     alpha = np.where(ok, 255, 0).astype(np.uint8)
     buf = io.BytesIO()
