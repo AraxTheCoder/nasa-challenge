@@ -17,6 +17,7 @@ import argparse
 import importlib.util
 import os
 import platform
+import signal
 import posixpath
 import shutil
 import socket
@@ -163,6 +164,14 @@ def main() -> int:
     if fixture:
         cmd.append("--fixture")
     api = subprocess.Popen(cmd, cwd=REPO)
+
+    # Closing the terminal or a `kill` sends SIGTERM/SIGHUP, not Ctrl+C: treat them the same so the
+    # cleanup below always stops the API too (otherwise it keeps the port and the next start fails).
+    def stop(_signum, _frame):
+        raise KeyboardInterrupt
+    for name in ("SIGTERM", "SIGHUP", "SIGBREAK"):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), stop)
 
     web = ThreadingHTTPServer((host, args.web_port), partial(ViewerHandler, directory=str(REPO)))
     threading.Thread(target=web.serve_forever, daemon=True).start()
