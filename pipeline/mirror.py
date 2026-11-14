@@ -21,6 +21,7 @@ import io
 import json
 import re
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -240,6 +241,38 @@ _INDEX: Index | None = None
 
 def available(root: Path = MIRROR) -> bool:
     return (root / "index.npz").exists()
+
+
+class IndexNotReady(RuntimeError):
+    """The local index (data/mirror/index.npz, gitignored) is missing and is being built."""
+
+
+_building: dict = {"thread": None, "error": None}
+_building_lock = threading.Lock()
+
+
+def ensure_background(root: Path = MIRROR) -> str:
+    """Make sure the local index exists: start harvest + build once in a background thread if it
+    doesn't (~3 min, IRSA TAP). Returns "ready", "building" or "failed: <reason>"."""
+    if available(root):
+        return "ready"
+    with _building_lock:
+        th = _building["thread"]
+        if th is None or (not th.is_alive() and _building["error"] is None and not available(root)):
+            def run():
+                try:
+                    print("pipeline.mirror: data/mirror/index.npz missing, building it (~3 min)...", flush=True)
+                    harvest(root)
+                    build(root)
+                except Exception as e:  # noqa: BLE001 - reported via the status
+                    _building["error"] = f"{type(e).__name__}: {e}"
+                    print(f"pipeline.mirror: building the index failed: {e}", flush=True)
+            _building["error"] = None
+            _building["thread"] = threading.Thread(target=run, daemon=True, name="mirror-build")
+            _building["thread"].start()
+    if available(root):
+        return "ready"
+    return f"failed: {_building['error']}" if _building["error"] else "building"
 
 
 def find_exposures_local(ra_deg: float, dec_deg: float, index: Index | None = None):

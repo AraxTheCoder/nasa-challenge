@@ -299,6 +299,13 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     try {
       const res = await fetch(job.url ?? job.layer.tileUrl(job.order, job.pix), { signal: job.ctrl.signal });
       if (res.status === 404) { t.state = "missing"; return; }
+      if (res.status === 503) {                 // server not ready yet (e.g. index being built)
+        const wait = Math.min(60, Number(res.headers.get("Retry-After")) || 20);
+        t.state = "retry";
+        setTimeout(() => { if (t.state === "retry") { t.state = "queued"; st.queue.push(job); pump(); markDirty(); } },
+          wait * 1000);
+        return;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const bmp = await createImageBitmap(await res.blob());
       const tex = gl.createTexture();

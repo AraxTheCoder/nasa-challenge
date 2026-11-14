@@ -543,3 +543,7 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   before 20-60 s. Also applied Joerg's queue diagnosis: no live prefetch, slot wait stops when the
   browser hangs up, single-flight S3 chunks. The mirror now learns every week folder's processing
   version (tiles waited ~10 s per TAP lookup before). Stop the VM when not needed (costs credits).
+- 2026-11-14 [Jonathan + Claude → Joerg] Fixed: `data/mirror/index.npz` (gitignored) missing on a fresh
+  checkout made local live tiles fail with 502. Now the index is built by itself in the background on
+  first use (~3 min); meanwhile the team tile VM stands in (it is now the default `--tiles-remote`;
+  `--tiles-remote none` to disable), else the API answers 503 + Retry-After and the map retries.
