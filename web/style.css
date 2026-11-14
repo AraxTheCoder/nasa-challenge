@@ -290,3 +290,6 @@ button.link:hover { text-decoration: underline; }
 .diff-black { background: #000; }
 .diff-grey { background: #808080; }
 .diff-nodata { background: rgb(64, 84, 140); }
+
+/* ---------- T45: play the series ---------- */
+#film-mode { max-width: 15rem; }

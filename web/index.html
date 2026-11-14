@@ -122,6 +122,12 @@
           <button id="btn-b" type="button" class="slot slot-b" title="Show frame B">B</button>
           <button id="btn-diff" type="button" class="diff-btn" aria-pressed="false"
                   title="Show A − B: steady stars cancel, movers show as a white/black pair (D)">A − B</button>
+          <button id="btn-film" type="button" class="play" aria-pressed="false"
+                  title="Play the frames one after another, like a short film (P)">▶ Play all</button>
+          <select id="film-mode" aria-label="What Play all shows" title="All frames inside the wavelength filter, or one frame per epoch at the wavelength closest to A">
+            <option value="all">all frames</option>
+            <option value="epoch">1 per epoch, A's λ</option>
+          </select>
           <label class="speed">Interval
             <input id="speed" type="range" min="100" max="2000" step="50" value="500">
             <output id="speed-out" for="speed">500 ms</output>
@@ -153,7 +159,7 @@
         </p>
 
         <p class="hint muted">
-          <kbd>Space</kbd> blink on/off · <kbd>X</kbd> flip A/B · <kbd>M</kbd> match B to A's wavelength · <kbd>D</kbd> A − B difference ·
+          <kbd>Space</kbd> blink on/off · <kbd>P</kbd> play all frames · <kbd>X</kbd> flip A/B · <kbd>M</kbd> match B to A's wavelength · <kbd>D</kbd> A − B difference ·
           <kbd>←</kbd>/<kbd>→</kbd> step through frames · <span class="nodata-swatch" aria-hidden="true"></span> hatched = no data
         </p>
       </div>

@@ -354,6 +354,49 @@ try:
         g.click("#btn-play")
         check(not gerr, f"T43: no page errors {gerr}")
 
+        # 8b3. play the series like a video (T45) on the multi-epoch target
+        v = b.new_page(viewport={"width": 1280, "height": 900})
+        verr = []
+        v.on("pageerror", lambda x: verr.append(str(x)))
+        v.goto(WEB + "?explore=0&data=../data/test-targets/")
+        wait_loaded(v)
+        v.evaluate("() => { const s = document.querySelector('#speed'); s.value = 100; s.dispatchEvent(new Event('input')); }")
+        def seen(page, ms=1600):
+            out = []
+            for _ in range(ms // 40):
+                fid = page.text_content("#stage-label").replace("A · ", "").replace("B · ", "").split(" · ")[0]
+                if not out or out[-1] != fid:
+                    out.append(fid)
+                page.wait_for_timeout(40)
+            return out
+        v.click("#stage"); v.keyboard.press("p")
+        check(v.get_attribute("#btn-film", "aria-pressed") == "true" and "Pause" in v.text_content("#btn-film"), "P starts Play all")
+        seq = seen(v)
+        order = [f"f00{i}" for i in range(9)]
+        steps_ok = all(order.index(y) == (order.index(x) + 1) % 9 for x, y in zip(seq, seq[1:]))
+        check(len(set(seq)) >= 6 and steps_ok, f"plays all frames in time order and loops ({seq})")
+        v.select_option("#film-mode", "epoch")
+        v.wait_for_timeout(300)
+        seq = seen(v, 1200)
+        check(set(seq) == {"f001", "f004", "f007"}, f"one per epoch at A's wavelength: f001, f004, f007 ({sorted(set(seq))})")
+        v.select_option("#film-mode", "all")
+        v.fill("#lam-max", "1.5"); v.locator("#lam-max").blur()
+        v.wait_for_timeout(300)
+        seq = seen(v, 1200)
+        check(set(seq) <= {"f000", "f001", "f004", "f005", "f007"} and len(set(seq)) >= 4, f"film follows the wavelength filter ({sorted(set(seq))})")
+        v.click("#lam-reset")
+        v.click("#btn-play")
+        check(v.get_attribute("#btn-film", "aria-pressed") == "false" and v.get_attribute("#btn-play", "aria-pressed") == "true",
+              "starting the blink stops the film")
+        v.click("#btn-play")
+        v.click("#btn-diff"); v.wait_for_selector("#diff-canvas:not([hidden])")
+        v.click("#stage"); v.keyboard.press("p")
+        check(v.get_attribute("#btn-diff", "aria-pressed") == "false" and v.get_attribute("#btn-film", "aria-pressed") == "true",
+              "starting the film ends the difference view")
+        v.keyboard.press("ArrowRight")
+        check(v.get_attribute("#btn-film", "aria-pressed") == "false", "stepping by hand stops the film")
+        check(not verr, f"T45: no page errors {verr}")
+
         # 8c. objects panel (T13) on the multi-epoch target
         q = b.new_page(viewport={"width": 1280, "height": 900})
         qerr = []
