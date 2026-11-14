@@ -30,6 +30,8 @@ switched off for now so it doesn't get in the way while testing; easy to switch 
 ## Handoff
 - **Switch on for the demo (T16):** `FORM_TIP_ENABLED = true` at the top of `web/app.js`.
   Preview without changing code: add `?tip=1` to the page URL (`?tip=0` forces it off).
+- A small **?** button next to the test-field dropdown opens/closes the bubble any time, even when
+  automatic showing is off or "Got it" was clicked. That is also the reset for testers.
 - Code: `showTip()` / `placeTip()` / `hideTip()` in `web/app.js`, markup `#form-tip` in `index.html`,
   styles `.form-tip*` in `style.css`.
 
