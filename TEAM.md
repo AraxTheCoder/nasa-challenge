@@ -124,6 +124,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T86 | B: Spectral outliers: sources whose spectral shape is out of distribution for their field (field's own model of an ordinary star, calibrated scatter, only consistent deviations), ranked with a plain-words reason; second opinion from the catalogue prediction (idea I23) | Joerg | done | `joerg/T85-field-spectra` | [tasks/T86](tasks/T86-spectral-outliers.md). Needs T85 |
 | T87 | B: What it is, from the bands: temperature, IR excess, ices (3.0 / 4.27 / 4.67 µm), CH4 3.3 and H2O 1.4 / 1.9 µm (brown dwarfs), CO 2.3 µm, PAH 3.3, Pa-α / Br-α, galaxy 1.6 µm bump; per source a class or hint | Joerg | open | | [tasks/T87](tasks/T87-band-features.md). Needs T85; after T86 |
 | T88 | C: Unusual spectra on the map: "Unusual spectra" toggle in the map bar (measures the field if needed), rings + rank on the outliers, click → card with the reason, spectrum and charts; linked to the T86 panel | Joerg | done | `joerg/T88-outliers-map` | [tasks/T88](tasks/T88-outliers-map.md). Uses explore.js's public draw hook only, no change to the map code |
+| T89 | C/A: Band switching that works on the map (passes per detector, instant within a detector; field epochs per band, builds only the shown detector) + a false-colour layer of all bands (passes and field epochs) | Jonathan | doing | `main` | [tasks/T89](tasks/T89-bands-false-colour.md). `app/` + tilegen/server; per-detector builds touch the build filter |
 
 ## Decisions
 
