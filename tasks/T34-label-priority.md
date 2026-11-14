@@ -1,7 +1,7 @@
 # T34: Label priority: only the most important names always visible, the rest on hover
 
-- **Owner:** (open)  ·  **Status:** open
-- **Branch:** –
+- **Owner:** Joerg  ·  **Status:** doing
+- **Branch:** `joerg/T34-label-priority`
 - **Depends on / feeds:** T22/T23 (`web/paths.js` names and hover), T19 (`labels`), T13 (objects panel)
 - **Requested by:** Mati, 2026-11-14, after seeing the real Barnard's Star field (271 labels): "labels
   are too crowded".
@@ -21,6 +21,10 @@ stricter rule: importance first, space second.
 - [ ] Browser test checks: count of visible names ≤ cap on the real-like test target; hover reveals a hidden name
 
 ## Findings
+- 2026-11-14 [Joerg] Checked the five real official fields: WISE 0855 itself is labelled but with
+  `named: false` (its SIMBAD name `WISEA J085510.74-071442.5` looks like a catalogue number), so it is
+  hidden by default: the main reason this task matters. Also: RW Aur, RW Aur A and RW Aur B sit on one
+  spot; Barnard's Star is there twice (SIMBAD + its Gaia entry); some kinds show raw codes (`LM*`, `LSB`).
 
 ## Questions / needs from others
 
