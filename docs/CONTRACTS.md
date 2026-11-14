@@ -1,4 +1,8 @@
-# Contracts (v0.23)
+# Contracts (v0.24)
+
+v0.24 (T91): `GET /api/targets/<id>/motion?name=<label>[&start=0]`: a catalogued star's proper motion (and,
+with 3+ consistent epochs, its parallax / distance) measured from SPHEREx alone, next to the catalogue value.
+New endpoint and cache (`data/motion/`) only. See "Measured motion".
 
 v0.23: the discovery index (v0.13, T76: `GET /api/discoveries`, its file format and the hand-made sample) is
 removed (Decision 2026-11-14, Mati: the tool visualizes, citizen scientists find things).
@@ -460,6 +464,34 @@ Only when the server runs with `--public` (or `SPHEREX_PUBLIC=1`); otherwise non
   (`SPHEREX_ADMIN_TOKEN`) as `?token=` or header `X-Admin-Token`.
 - The field / cutout / spectra caches are kept under `--cache-gb` (default 20) by evicting the least recently
   used; a field that is being built is never evicted.
+
+### Measured motion (v0.24, T91)
+
+```
+GET /api/targets/<id>/motion?name=<label name, alias or id>          cached, else starts measuring (~15 s)
+GET /api/targets/<id>/motion?name=…&start=0                          cached, else {"status": "not_started"}
+```
+
+202 `{"status": "building", "done", "total"}` while measuring (poll with `start=0`), then 200:
+
+```json
+{ "target_id": "...", "id": "l000", "name": "* eps Ind B", "status": "ready", "version": 1,
+  "pm_east_arcsec_yr": 3.81, "pm_north_arcsec_yr": -2.58, "err_east": 0.2, "err_north": 0.2,
+  "pm_total_arcsec_yr": 4.6, "pm_total_err": 0.26, "pa_deg": 124.0,
+  "catalogue": { "pm_total_arcsec_yr": 4.68, "pa_deg": 122.0, "source": "simbad" },
+  "difference_arcsec_yr": 0.1, "difference_sigma": 0.4, "verdict": "agrees with the catalogue", "summary": "...",
+  "parallax": { "parallax_arcsec": 0.286, "parallax_err": 0.022, "chi2_dof": 1.94, "reliable": true,
+                "distance_pc": 3.49, "note": "measured" },
+  "epochs": [ { "epoch": 1, "mjd": 60805.7, "east": -2.01, "north": 1.06, "err_east": 0.03, "err_north": 0.04, "n": 91 } ],
+  "span_years": 1.39, "n_exposures": 357, "n_measured": 351, "n_references": 22, "method": "..." }
+```
+
+- `status` `not_found`: the star itself could not be found in single exposures (the fit locked onto a neighbour
+  ≥ 3″ away in every epoch, e.g. WISE 0855); `not_enough`: measured in fewer than two epochs. Both with `message`.
+- `parallax` is fitted with 3+ epochs; `distance_pc` only when `reliable` (χ²/dof ≤ 3 and > 3σ), else `note` says why.
+- `epochs[].east/north`: arcsec from the label's reference position, pointing-corrected with Gaia reference stars.
+- Unknown label: 404 `{"status": "error"}`. Synthetic target: 200 `{"status": "no_data"}`. Public servers (T58):
+  a new measurement costs one job.
 
 ### Target id and cache
 
