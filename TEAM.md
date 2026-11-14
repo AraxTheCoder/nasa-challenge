@@ -585,3 +585,6 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   IR spectrum, ~150 mJy at 1 µm → ~1 Jy at 4–5 µm); Barnard's Star and R Dra saturated in every frame (UI says
   so). Calibration vs Gaia within ~20 %. 89 Python tests + browser test green. Gotcha: the API machine needs the
   cached cutouts (`data/raw/`), i.e. photometry works where the field was built.
+- 2026-11-14 [Mati + Claude] T46 follow-up: CI now also runs `web/tests/*.mjs` (Node 22): healpix_check,
+  overview_check, projection_check all pass (they weren't in CI before). New Node tests in web/tests/ are
+  picked up automatically. No Node here? Playwright ships one: `.venv/lib/python3.12/site-packages/playwright/driver/node`.
