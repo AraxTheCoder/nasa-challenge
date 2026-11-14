@@ -45,6 +45,7 @@ official test fields. Each time you come back: `cd nasa-challenge`, activate the
 | `--api-port N`, `--web-port N` | other ports if 8000 / 8080 are taken |
 | `--lan` | others on your network can open the printed URL too |
 | `--no-browser` | just print the URL |
+| `--warm` | also pre-build the five official test fields (first time: tens of minutes; `web/warm.py`) |
 
 Activating is only a shortcut. Without it, call the venv's Python directly:
 `.venv/bin/python web/dev.py` (Windows: `.venv\Scripts\python web\dev.py`).
