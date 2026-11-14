@@ -20,7 +20,7 @@ Wants=network-online.target
 [Service]
 User=spherex
 WorkingDirectory=/opt/spherex/app
-ExecStart=/opt/spherex/venv/bin/python -m tilegen --host 127.0.0.1 --port 8100 --slots 8
+ExecStart=/opt/spherex/venv/bin/python -m tilegen --host 127.0.0.1 --port 8100 --slots 12
 Restart=always
 RestartSec=3
 Environment=PYTHONUNBUFFERED=1

@@ -1,4 +1,8 @@
-# Contracts (v0.13)
+# Contracts (v0.14)
+
+v0.14 (T55, T82): survey passes on the sky map: `spherex-live-p<n>` layers documented, `x_survey_passes`
+in the live properties, and `GET /api/pass-dates` (when each pass imaged a point). New fields / endpoint
+only; nothing existing changes.
 
 v0.13 (T76): the discovery index: `GET /api/discoveries` and its file format
 (`docs/discoveries.schema.json`), written by the survey (T75) to `data/survey/discoveries.json`; until then the
@@ -424,8 +428,20 @@ GET /api/sky/<survey>/Norder3/Allsky[_<slice>].png|jpg
 
 `survey`: `spherex-cube` (IRSA's SPHEREx all-sky cube, one slice per band), `spherex-d1` … `spherex-d6`
 (CDS, one per detector), `spherex-live` (the cube up to order 5, then order 6-7 tiles we render from the
-level-2 images in the AWS bucket, `tilegen/`), `2mass`, `allwise`. 404 = upstream has no such tile;
-503 + `Retry-After` = the local image index is still being built; 502 = upstream or tile generator down.
+level-2 images in the AWS bucket, `tilegen/`), `spherex-live-p<n>` (T82: the same live tiles from survey
+pass n's images only, orders 6-7; pass n = images from 2025-05-01 + (n-1) x 182.625 d), `2mass`, `allwise`.
+404 = upstream has no such tile; 503 + `Retry-After` = the local image index is still being built;
+502 = upstream or tile generator down. `spherex-live/properties` lists the passes the image index has
+images from: `x_survey_passes = 1 2 3` (v0.14).
+
+```
+GET /api/pass-dates?ra=<deg>&dec=<deg>
+→ {"ra", "dec", "passes": [{"pass": 1, "start": "2025-08-18", "end": "2025-09-30", "n_images": 65}, ...]}
+```
+
+v0.14 (T55): when SPHEREx imaged that point in each pass (UTC dates of the level-2 images whose centre is
+within 1.2 deg, all detectors); passes without images there are left out. 503 + `Retry-After` while the
+local image index is being built.
 
 ```
 GET  /api/settings                     → {"tiles": "local" | "remote", "remote_url", "remote_available"}

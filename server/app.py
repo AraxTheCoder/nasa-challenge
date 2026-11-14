@@ -93,6 +93,18 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
     sky_lock = threading.Lock()
     sky_dir = cache_root.parent / "sky_labels"
 
+    @app.get("/api/pass-dates")
+    def pass_dates(ra: float, dec: float):
+        """T55: dates SPHEREx imaged this point in each survey pass (labels for the map's pass blink)."""
+        from pipeline.mirror import IndexNotReady
+        from tilegen.render import pass_dates as compute
+        if not (-90 <= dec <= 90):
+            raise HTTPException(400, "bad ra/dec")
+        try:
+            return {"ra": ra % 360, "dec": dec, "passes": compute(ra, dec)}
+        except IndexNotReady as e:
+            return JSONResponse({"error": str(e)}, status_code=503, headers={"Retry-After": "20"})
+
     @app.get("/api/sky-labels")
     def sky_labels(ra: float, dec: float, radius: float = 0.5):
         """T72: catalogue labels for any patch of the map (SIMBAD, VSX, CatWISE), snapped to a grid

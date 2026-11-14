@@ -42,6 +42,12 @@ Rework the UI without blocking anyone: the redesign lives in `app/` (URL `/app/`
         level 7); a built field switches to epochs. Server: the VM renders pass tiles
         (`/tiles/live-p<n>/`), the Live API asks it in remote mode (old VM → local), passes listed in
         the live properties (`x_survey_passes`)
+  - [x] Step 14 (Jonathan, 2026-11-14): no Blink button, no red outline, no play/pause: at level 7 the map
+        blinks by itself; passes / epochs labelled with when they were taken ("Aug–Sep 2025", from
+        `GET /api/pass-dates` / the epoch's frame dates); "field epochs" builds the view's field once the
+        map rests 2 s. Faster passes: base map stops at order 6 while passes blink (no competing live
+        renders), the Live API renders the other passes of a tile as soon as one is asked, VM 12 slots +
+        36 image / 48 S3 threads (`deploy/install-app.sh` drop-in)
 - [ ] Port relevant `web/` changes made after the copy
 - [ ] When done: decide (TEAM.md Decisions) whether `app/` replaces `web/`
 

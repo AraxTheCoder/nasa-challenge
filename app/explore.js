@@ -182,6 +182,8 @@ export function overlayProgress(i) { return sky?.overlayProgress(i) ?? null; }
 /** Draw overlay i, or none (-1), without the epoch event (passes are not field epochs). */
 export function showOverlay(i) { sky?.showOverlay(i); }
 
-/** Order the base map currently draws (HiPS order of its visible tiles), or null. */
-export function baseOrder() { return sky?.stats()?.order ?? null; }
+/** Order the screen needs for one texel per pixel (may exceed what the map has), or null. */
+export function wantedOrder() { return sky?.stats()?.wanted ?? null; }
+/** Highest order the base map draws (null = its own maximum, 7). */
+export function setBaseCap(k) { sky?.setBaseCap(k); }
 export function onTiles(fn) { sky?.on("tiles", fn); }

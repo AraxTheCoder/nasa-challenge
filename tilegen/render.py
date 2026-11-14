@@ -51,8 +51,29 @@ LO_SIGMA, HI_SIGMA = -0.75, 160.0
 
 _index = None
 _index_lock = threading.Lock()
-_pool = ThreadPoolExecutor(16, thread_name_prefix="live-chunk")      # S3 row-chunk reads
-_images = ThreadPoolExecutor(8, thread_name_prefix="live-image")     # one task per image (uses _pool)
+# Shared by all tiles rendered at once. Reads wait on S3 (latency), not the CPU: the VM raises both
+# (deploy/install-app.sh), else tiles queue here however many render slots there are.
+_pool = ThreadPoolExecutor(int(os.environ.get("TILEGEN_CHUNK_THREADS", "16")), thread_name_prefix="live-chunk")      # S3 row-chunk reads
+_images = ThreadPoolExecutor(int(os.environ.get("TILEGEN_IMAGE_THREADS", "8")), thread_name_prefix="live-image")    # one task per image (uses _pool)
+
+
+def pass_dates(ra: float, dec: float, radius_deg: float = 1.2) -> list[dict]:
+    """T55: when SPHEREx imaged (ra, dec) in each survey pass: [{pass, start, end, n_images}], UTC dates
+    of the images whose centre is within radius_deg (well inside a 3.5 deg detector)."""
+    from astropy.time import Time
+
+    idx = _mirror()
+    d = idx.d
+    cand = idx.covering(ra % 360, dec, radius_deg=radius_deg)
+    if not len(cand):
+        return []
+    mid = (d["t_min"][cand] + d["t_max"][cand]) / 2
+    out = []
+    for n in sorted(set(pass_of(mid).tolist())):
+        m = np.sort(mid[pass_of(mid) == n])
+        lo, hi = Time([m[0], m[-1]], format="mjd").isot
+        out.append({"pass": int(n), "start": lo[:10], "end": hi[:10], "n_images": int(len(m))})
+    return out
 
 
 _passes = None

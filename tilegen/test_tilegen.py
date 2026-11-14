@@ -141,3 +141,37 @@ def test_client_pass_tiles_remote_then_local_on_old_vm(monkeypatch):
     assert g.get(20, 7, 5, pass_=2) == b"local"
     n = len(urls)
     assert g.get(20, 7, 6, pass_=2) == b"local" and len(urls) == n   # not asked again
+
+
+def test_pass_tile_renders_the_other_passes_too(tmp_path, monkeypatch):
+    """T55: asking for one pass tile starts the same tile of the other passes in the background."""
+    import time
+
+    from server.skycache import SkyCache
+
+    monkeypatch.setattr(render, "survey_passes", lambda: [1, 2, 3])
+    asked = []
+
+    class Gen:
+        def get(self, sl, o, n, pass_=None):
+            asked.append(pass_)
+            return b"png"
+    sky = SkyCache(tmp_path, tiles=Gen())
+    assert sky.get("spherex-live-p2", "Norder7/Dir0/Npix5_20.png") == b"png"
+    sky.prefetch_around("spherex-live-p2", "Norder7/Dir0/Npix5_20.png")
+    for _ in range(100):
+        if len(asked) == 3:
+            break
+        time.sleep(0.02)
+    assert sorted(asked) == [1, 2, 3]
+    assert (tmp_path / "spherex-live-p3/Norder7/Dir0/Npix5_20.png").exists()
+
+
+def test_api_pass_dates(tmp_path, monkeypatch):
+    from server.app import create_app as api
+
+    monkeypatch.setattr(render, "pass_dates", lambda ra, dec: [{"pass": 1, "start": "2025-08-18", "end": "2025-09-30", "n_images": 3}])
+    c = TestClient(api(tmp_path / "targets", fixture=True))
+    body = c.get("/api/pass-dates?ra=-90.5&dec=4.7").json()
+    assert body["ra"] == 269.5 and body["passes"][0]["start"] == "2025-08-18"
+    assert c.get("/api/pass-dates?ra=1&dec=95").status_code == 400

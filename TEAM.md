@@ -235,6 +235,8 @@ Dated, one line each, with why.
   210′ is the real bound, one SPHEREx detector image (2040 px × 6.15″ = 3.49°). Larger fields build
   slower. The team VM's /cutout accepts up to 6° cutouts. `web/` keeps its own 60′ form limit.
 - 2026-11-14 [Mati] CONTRACTS v0.13 (T76): discovery index = `data/survey/discoveries.json` (schema `docs/discoveries.schema.json`: candidates with class, score 0–1, plain-words reason, known, lam_um, tile) served by `GET /api/discoveries` (filters class / position / score, `random=1`). Until the survey (T75) writes one, the API serves the hand-made sample `fixtures/discoveries-sample.json` (`synthetic: true`, labelled in the viewer). Why: the viewer side (T76) can be built and tested now, and pass 2 has a fixed target format.
+- 2026-11-14 [Jonathan] CONTRACTS v0.14: `GET /api/pass-dates` + `x_survey_passes` in the live properties + `spherex-live-p<n>` documented. Why: `/app/` labels the blinked survey passes with when they were taken (month/year) instead of P1/P2/P3. New fields only.
+- 2026-11-14 [Jonathan] `/app/` blinks by itself at level 7 (no Blink button, no red outline); default source = survey passes; "field epochs" builds the view's field once the map rests. Why: below level 7 no motion between epochs is visible, and pass tiles on the map's own grid load far faster than a build.
 
 ## Ideas
 
@@ -681,4 +683,11 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   (`/tiles/live-p<n>/`, redeployed); the Live API asks it in "US VM" mode, an old VM falls back to local.
   `web/` unchanged. [to Mati] `server/test_discoveries.py` fails on Windows: `source` is
   `fixtures\discoveries-sample.json` (backslash), the test expects `/`.
+<<<<<<< Updated upstream
 - 2026-11-14 [Joerg] T23 closed (done). Labels have a position in every frame of every epoch (checked: 134/134 labels, 36 frames, epochs 1–3); the open step "try on official test targets" was dropped. T14–T16 (deploy, submission, demo) stay open until the project is close to final.
+=======
+- 2026-11-14 Jonathan (Claude): T55 step 14 (`app/` + tilegen/skycache/deploy): no Blink button, red outline or
+  play button: the map blinks by itself at level 7; labels are month/year ("Aug–Sep 2025") instead of P1 / Ep. 1
+  (new `GET /api/pass-dates`, CONTRACTS v0.14). Faster pass loading: base map capped at order 6 under the passes,
+  the Live API renders a tile's other passes in the background, VM tuned (12 slots, more S3 threads), redeployed.
+>>>>>>> Stashed changes

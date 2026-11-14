@@ -171,7 +171,10 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   function pickOrder(layer) {
     const arcsecPerPx = (st.fov * 3600) / (st.w * st.dpr);
     const k = Math.ceil(Math.log2(TEXEL_ARCSEC_ORDER0 / arcsecPerPx));
-    return Math.max(layer.minOrder, Math.min(layer.maxOrder, k));
+    // T55: while survey passes blink on top, the base map stops one order short (no slow live renders
+    // competing with the passes'; it only shows where a pass has no data)
+    const max = layer === st.base && st.baseCap != null ? Math.min(layer.maxOrder, st.baseCap) : layer.maxOrder;
+    return Math.max(layer.minOrder, Math.min(max, k));
   }
 
   function visibleTiles(order) {
@@ -799,6 +802,8 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       return { total: pixs.length, done, ok };
     },
     showOverlay(i) { st.shown = i; markDirty(); },
+    /** T55: highest order the base map draws (null = its own maximum). */
+    setBaseCap(k) { if (st.baseCap !== k) { st.baseCap = k; markDirty(); } },
     setDebug(on) { st.debug = !!on; markDirty(); },
     /** {order, wanted, maxOrder, visible, sharp, blurry, empty, atMax, allSharp, loads, queued, errors} */
     stats() {

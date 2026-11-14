@@ -48,7 +48,10 @@ class SkyCache:
         self._props: dict[str, dict] = {}
         # Live tiles rendered (or asked of the remote generator) at once. Taken by the API endpoint,
         # which stops waiting when the browser hangs up (it aborts tiles that left the screen).
-        self.live_slots = threading.BoundedSemaphore(6)
+        self.live_slots = threading.BoundedSemaphore(12)
+        # T55: a pass tile asked for -> the same tile of the other passes is rendered right away too
+        # (the browser blinks them together, but only opens a few connections at a time)
+        self._passes = ThreadPoolExecutor(12, thread_name_prefix="sky-passes")
 
     def _http(self):
         if self._session is None:
@@ -173,6 +176,7 @@ class SkyCache:
         if not m:
             return
         if survey.startswith("spherex-live-p"):     # T82: pass layers: nothing below the live orders
+            self.prefetch_passes(survey, path)
             return
         if survey == "spherex-live":
             # Never prefetch into live orders: each is a slow render that would take a slot from a
@@ -197,6 +201,16 @@ class SkyCache:
             sub = f"Norder{k}/Dir{(p // 10000) * 10000}/Npix{p}{sl}.{ext}"
             if not (self.root / survey / sub).exists():
                 self._prefetch.submit(self._quiet_get, survey, sub)
+
+    def prefetch_passes(self, survey: str, path: str) -> None:
+        """T55: the same tile of every other survey pass, in the background (once each)."""
+        from tilegen.render import survey_passes
+
+        me = int(survey.rsplit("-p", 1)[1])
+        for n in survey_passes():
+            other = f"spherex-live-p{n}"
+            if n != me and not (self.root / other / path).exists() and f"{other}/{path}" not in self._inflight:
+                self._passes.submit(self._quiet_get, other, path)
 
     def _quiet_get(self, survey: str, path: str) -> None:
         try:

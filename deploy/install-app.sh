@@ -20,6 +20,17 @@ if [ ! -f data/mirror/index.npz ]; then
 fi
 # Learn the path of every week folder, so tiles never wait for an IRSA TAP lookup (cheap if known)
 (cd app && sudo -u spherex ../venv/bin/python -m pipeline.mirror weeks)
+# T55: tuning kept in the repo (a drop-in over the unit setup-vm.sh wrote): more tiles at once, and
+# enough image / S3 threads for them (reads wait on S3 latency, the 2 vCPUs are not the limit).
+mkdir -p /etc/systemd/system/spherex-tilegen.service.d
+cat > /etc/systemd/system/spherex-tilegen.service.d/tuning.conf <<'CONF'
+[Service]
+ExecStart=
+ExecStart=/opt/spherex/venv/bin/python -m tilegen --host 127.0.0.1 --port 8100 --slots 12
+Environment=TILEGEN_IMAGE_THREADS=36
+Environment=TILEGEN_CHUNK_THREADS=48
+CONF
+systemctl daemon-reload
 systemctl restart spherex-tilegen
 for i in $(seq 1 20); do
   if curl -fsS http://127.0.0.1:8100/health; then echo " <- tilegen up"; exit 0; fi
