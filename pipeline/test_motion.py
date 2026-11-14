@@ -33,3 +33,15 @@ def test_distant_body_jumps_between_epochs():
 
 def test_needs_two_positions():
     assert summarize(track([("a", 10, 5)]), FRAMES, 6.15) is None
+
+
+def test_fast_mover_seen_in_one_burst_two_minutes_apart():
+    fr = [{"id": "a", "mjd": 61000.0, "epoch": 1}, {"id": "b", "mjd": 61000.0 + 2 / 1440, "epoch": 1}]
+    m = summarize(track([("a", 10, 5), ("b", 10, 5 + 10 / 3600)]), fr, 6.15)  # 10" in 2 min
+    assert m["class"] == "fast mover" and m["max_rate_within_epoch_arcsec_per_hr"] > 250
+
+
+def test_noise_between_close_frames_is_not_motion():
+    fr = [{"id": "a", "mjd": 61000.0, "epoch": 1}, {"id": "b", "mjd": 61000.0 + 2 / 1440, "epoch": 1}]
+    m = summarize(track([("a", 10, 5), ("b", 10, 5 + 1 / 3600)]), fr, 6.15)  # 1" jitter
+    assert m["class"] == "still"

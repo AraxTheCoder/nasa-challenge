@@ -21,6 +21,8 @@ import math
 STILL_PX = 0.3
 FAST_ARCSEC_PER_HR = 1.0
 JUMP_ARCSEC = 60.0
+MIN_PAIR_HR = 0.01      # 36 s: pairs inside one ~2 min visit count
+NOISE_ARCSEC = 3.0      # half a pixel: smaller shifts between two frames are noise, not motion
 
 
 def _sep_arcsec(ra1, dec1, ra2, dec2) -> float:
@@ -55,12 +57,21 @@ def summarize(positions: list[dict], frames: list[dict], pixel_scale_arcsec: flo
     reach = max(_sep_arcsec(a["ra_deg"], a["dec_deg"], p["ra_deg"], p["dec_deg"]) for p in pts)
 
     # fastest motion within one epoch (consecutive frames of the same epoch)
+    # fastest motion within one epoch. SPHEREx exposures in a visit are ~2 min apart, so short pairs
+    # count (>= MIN_PAIR_HR), but only if the shift beats position noise (>= NOISE_ARCSEC); also
+    # first-to-last per epoch (T42, from Mati's T08 finding).
     within = 0.0
+    def rate(p, q):
+        hrs = (mjd[q["frame_id"]] - mjd[p["frame_id"]]) * 24
+        sep = _sep_arcsec(p["ra_deg"], p["dec_deg"], q["ra_deg"], q["dec_deg"])
+        return sep / hrs if hrs >= MIN_PAIR_HR and sep >= NOISE_ARCSEC else 0.0
     for p, q in zip(pts, pts[1:]):
         if epoch[p["frame_id"]] == epoch[q["frame_id"]]:
-            hrs = (mjd[q["frame_id"]] - mjd[p["frame_id"]]) * 24
-            if hrs > 0.05:
-                within = max(within, _sep_arcsec(p["ra_deg"], p["dec_deg"], q["ra_deg"], q["dec_deg"]) / hrs)
+            within = max(within, rate(p, q))
+    for ep in {epoch[p["frame_id"]] for p in pts}:
+        e = [p for p in pts if epoch[p["frame_id"]] == ep]
+        if len(e) > 1:
+            within = max(within, rate(e[0], e[-1]))
     # biggest jump between the mean positions of two consecutive epochs
     by_ep: dict = {}
     for p in pts:
