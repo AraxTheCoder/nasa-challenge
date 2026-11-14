@@ -1,4 +1,9 @@
-# Contracts (v0.21)
+# Contracts (v0.22)
+
+v0.22 (T58): limits for a public Live API (`python -m server --public`): 429 + Retry-After (per-IP request
+rate or too many new jobs from one address), 503 `{"status": "busy"}` + Retry-After (server-wide job cap),
+`refresh=1` and `POST /api/settings` only with the admin token. Off by default: nothing changes for the team's
+servers. See "Public limits".
 
 v0.21 (T89): sky layer `spherex-live-rgb` (the whole map in false colour: IRSA cube slices 8/25/42/59/76/93
 to order 5, the live grey tiles at 6-7); `spherex-live` serves IRSA's blank cube slices 50/51 (dichroic channels)
@@ -434,6 +439,24 @@ answers at once. T86 (`pipeline.spectral_outliers`) ranks them. Answer (200):
   model}` with `x` = short − mid and `y` = mid − long colour in magnitudes (+ = redder), `shape` its band
   shape and `model` what an ordinary source of its kind would show (log10, null = no band).
 - Synthetic targets: 200 `{"status": "no_data"}`. Unknown target: 404.
+
+### Public limits (v0.22, T58)
+
+Only when the server runs with `--public` (or `SPHEREX_PUBLIC=1`); otherwise none of this applies.
+
+- Every `/api/...` call except `/api/health` counts against a per-IP rate (`/api/sky/...` and `/api/hips/...`
+  tiles have their own, larger allowance). Beyond it: **429** `{"status": "error", "message": "too many …"}` with
+  `Retry-After` (seconds).
+- Starting expensive work costs one job from the address's job allowance (default 30 per hour, 10 at once):
+  a field build (`/api/target` for a field not cached and not being built), an all-exposure spectrum
+  (`photometry?all=1`, `/api/photometry`) not yet cached, `spectral-outliers?start=1` for a field not measured.
+  Polling a running job or reading a cached result is free. Beyond: **429** as above.
+- At most `--max-jobs` (default 4) such jobs run on the whole server. Beyond: **503**
+  `{"status": "busy", "message": …}` with `Retry-After`.
+- `refresh=1` is ignored and `POST /api/settings` answers **403** unless the request carries the admin token
+  (`SPHEREX_ADMIN_TOKEN`) as `?token=` or header `X-Admin-Token`.
+- The field / cutout / spectra caches are kept under `--cache-gb` (default 20) by evicting the least recently
+  used; a field that is being built is never evicted.
 
 ### Target id and cache
 

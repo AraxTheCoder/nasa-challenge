@@ -95,6 +95,15 @@ class Builder:
             job = Job(tid, 0, 0, 0, status="ready")
         return job
 
+    def active_count(self) -> int:
+        """T58: field builds running now."""
+        with self._lock:
+            return sum(1 for j in self._jobs.values() if j.status == "building")
+
+    def building_ids(self) -> frozenset:
+        with self._lock:
+            return frozenset(t for t, j in self._jobs.items() if j.status == "building")
+
     def request(self, tid: str, ra: float, dec: float, size: int, refresh: bool = False,
                 detector: int | None = None) -> Job:
         with self._lock:
