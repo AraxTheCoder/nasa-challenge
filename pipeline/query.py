@@ -19,7 +19,7 @@ import numpy as np
 TAP_URL = "https://irsa.ipac.caltech.edu/TAP"
 IRSA_ROOT = "https://irsa.ipac.caltech.edu/"
 # dr1: Apr 2025 - May 2026, qr3: May 2026 onwards. *_deep: extra visits near the ecliptic poles.
-DEFAULT_COLLECTIONS = ("spherex_dr1", "spherex_dr1_deep", "spherex_qr3", "spherex_qr3_deep")
+DEFAULT_COLLECTIONS = ("spherex_dr1", "spherex_dr1_deep", "spherex_qr3", "spherex_qr3_deep")  # T64: + new releases, see releases.py
 EPOCH_GAP_DAYS = 30.0  # visits to one spot cluster within weeks; passes are ~6 months apart
 
 # Step 1: spatial search. IRSA only uses its spatial index on a plain, unjoined s_region,
@@ -76,11 +76,15 @@ def assign_epochs(mjds, gap_days: float = EPOCH_GAP_DAYS) -> np.ndarray:
     return epochs
 
 
-def find_exposures(ra_deg: float, dec_deg: float, collections=DEFAULT_COLLECTIONS):
-    """Return (exposures sorted by time, provenance dict)."""
+def find_exposures(ra_deg: float, dec_deg: float, collections=None):
+    """Return (exposures sorted by time, provenance dict). collections: default = every SPHEREx release in
+    use, including releases published after this code was written (T64, pipeline.releases)."""
     import pyvo
     from astropy.time import Time
 
+    if collections is None:
+        from .releases import collections as current
+        collections = current()
     tap = pyvo.dal.TAPService(TAP_URL)
     query = build_query(ra_deg, dec_deg, collections)
     retrieved = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -116,6 +120,8 @@ def find_exposures(ra_deg: float, dec_deg: float, collections=DEFAULT_COLLECTION
         )
         for i, r in enumerate(table)
     ]
+    from .releases import dedupe
+    exposures = dedupe(exposures)   # T64: one per exposure if two releases hold it
     exposures.sort(key=lambda e: (e.mjd_mid, e.detector))
     provenance = {"service": "IRSA TAP " + TAP_URL,
                   "query": query + " ; then FITS paths via: " + " ".join(URI_QUERY_TEMPLATE.split()),

@@ -194,6 +194,26 @@ def cached_exposures(ra: float, dec: float, refresh: bool = False, raw_root: Pat
     return exposures, prov
 
 
+def release_name(collection: str | None) -> str | None:
+    """T64: 'spherex_qr3_deep' -> 'QR3 deep', 'spherex_dr1' -> 'DR1' (DR = data release, QR = quick release)."""
+    if not collection:
+        return None
+    parts = collection.removeprefix("spherex_").split("_")
+    return " ".join([parts[0].upper(), *parts[1:]])
+
+
+def exposure_summary(exposures, prov: dict | None = None) -> dict:
+    """T64: what SPHEREx had at this position when it was checked: how many images, the latest one, which
+    collections. Written into target.json at build time (`source_exposures`); the Live API compares it with
+    a fresh check (`GET /api/targets/<id>/updates`) to say when newer data exist."""
+    latest = max(exposures, key=lambda e: e.mjd_mid) if exposures else None
+    return {"count": len(exposures),
+            "latest_mjd": round(latest.mjd_mid, 6) if latest else None,
+            "latest_utc": latest.time_utc if latest else None,
+            "collections": sorted({e.collection for e in exposures}),
+            "checked_utc": (prov or {}).get("retrieved_utc")}
+
+
 def source_of(path: Path, fits_url: str, ra: float, dec: float) -> str:
     """The URL the cached cutout was read from: S3 (with the detector rows kept) or an IRSA cutout."""
     from astropy.io import fits
@@ -457,6 +477,7 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
             "id": fid, "time_utc": e.time_utc, "mjd": round(e.mjd_mid, 6), "epoch": e.epoch,
             "detector": e.detector, "wavelength_um": round(wave, 4), "bandwidth_um": round(bw, 4),
             "image": f"frames/{fid}.png", "obs_id": e.obs_id, "source_url": u,
+            "collection": e.collection,   # T64: which release (spherex_dr1, spherex_qr3_deep, ...)
         })
     if not frames:
         raise LookupError(f"SPHEREx images found but none usable at RA {ra_deg} Dec {dec_deg}: "
@@ -478,6 +499,7 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
                      f"{len(errors)} failed",
             "retrieved_utc": downloads_started}],
         "frames": frames, "known_objects": [], "detections": [],
+        "source_exposures": exposure_summary(exposures, prov_query),   # T64: for "newer data available"
     }
     if labels:
         report("render", len(frames), len(frames), "adding catalogue labels")

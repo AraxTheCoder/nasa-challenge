@@ -111,6 +111,7 @@ async function openTarget(targetUrl, expectedId, token, signal) {
   syncExplore(target);
   if (app.labelsOn && !target.labels_requested) setLabels(true);
   loadObjects(target);
+  checkUpdates(target);
   warnings.forEach((w) => showMessage(w, "warn"));
 }
 
@@ -448,6 +449,7 @@ function bindPage() {
     showMessage("Stopped waiting. The server keeps building this field; ask again later and it comes from the cache.", "warn");
   });
 
+  $("#target-updates-rebuild").addEventListener("click", () => $("#btn-rebuild").click());
   $("#btn-rebuild").addEventListener("click", () => {
     if (!app.request) return;
     if (!confirm("Rebuild this field from IRSA to pick up new SPHEREx data? This can take a few minutes.")) return;
@@ -679,6 +681,32 @@ async function setLabels(on) {
     note.textContent = "";
     showMessage(`Labels unavailable: ${err.message}`, "warn");
   }
+}
+
+/**
+ * T64: newer SPHEREx data? The Live API compares the images known when the field was built with the image
+ * index now (and the bucket's release folders). Quiet when up to date, apart from a tooltip on the line.
+ */
+async function checkUpdates(target) {
+  const box = $("#target-updates");
+  box.hidden = true;
+  $("#target-updates-rebuild").hidden = true;
+  $("#target-meta").title = "";
+  if (target.synthetic || app.dataRoot || !target.id) return;
+  let body;
+  try {
+    const res = await fetch(`${app.api}/api/targets/${encodeURIComponent(target.id)}/updates`);
+    body = await res.json();
+    if (!res.ok || body.status !== "ready") return;
+  } catch { return; }
+  if (app.shownTarget?.id !== target.id) return;
+  const newer = body.newer_images > 0;
+  const text = [newer ? body.message : null, body.release_note].filter(Boolean).join(" ");
+  $("#target-meta").title = `Newer data: ${body.message} Checked against ${body.checked_label}.`;
+  if (!text) return;
+  $("#target-updates-text").textContent = `${text} (checked against ${body.checked_label})`;
+  $("#target-updates-rebuild").hidden = !newer;
+  box.hidden = false;
 }
 
 /**

@@ -1,4 +1,9 @@
-# Contracts (v0.13)
+# Contracts (v0.14)
+
+v0.14 (T64): data releases. Each frame may carry `collection` (the IRSA collection = SPHEREx release, e.g.
+`spherex_qr3_deep`); target.json may carry `source_exposures` (what SPHEREx had at the centre at build time);
+`GET /api/targets/<id>/updates` says whether newer images or a new release exist (see "Newer data"). Image
+searches cover new releases automatically (`pipeline.releases`). Additive; `schema_version` stays `"0.2"`.
 
 v0.13 (T76): the discovery index: `GET /api/discoveries` and its file format
 (`docs/discoveries.schema.json`), written by the survey (T75) to `data/survey/discoveries.json`; until then the
@@ -131,6 +136,7 @@ no-data pixels, labels with motion, known objects, known / unknown / artifact de
 | `labels` | A | optional (v0.4): catalogue objects in the field with a position per frame, see below |
 | `labels_requested` | server | optional (v0.8): `true` once `GET …/labels` has run (labels may still be `[]`) |
 | `objects_requested` | server | optional (v0.11): `true` once `GET …/objects` has run (known objects + detections) |
+| `source_exposures` | A | optional (v0.14): `{count, latest_mjd, latest_utc, collections, checked_utc}`: the SPHEREx exposures covering the centre at build time (the frames are a selection of them) |
 
 ### Frame
 
@@ -151,6 +157,9 @@ no-data pixels, labels with motion, known objects, known / unknown / artifact de
   From v0.2, pixels with no data (outside the rotated original frame, or masked) are fully
   transparent (alpha 0), so the viewer can show them as "no data" instead of dark sky.
 - `obs_id`, `source_url`: where the frame came from. `null` for synthetic frames.
+- `collection`: optional (v0.14): the IRSA collection the exposure belongs to = its SPHEREx release
+  (`spherex_dr1`, `spherex_dr1_deep`, `spherex_qr3`, …; DR = data release, QR = quick release). Older builds
+  don't have it; the release folder in `source_url` (`…/qr3/level2/…`) tells the same.
 
 ### Pair (v0.2, optional)
 
@@ -434,6 +443,37 @@ POST /api/settings {"tiles": "remote"} → same body; which generator renders th
 
 `remote` is the team's tile generator on a VM next to the bucket (`deploy/`, T47): seconds instead of
 minutes from Europe. Only the tiles go there; builds, caches and the API stay local.
+
+### Newer data (v0.14, T64)
+
+```
+GET /api/targets/<id>/updates
+```
+
+Compares `source_exposures` (build time) with the exposure list now (local image index, else IRSA TAP cached
+for a day) and the release folders in the public bucket (`pipeline.releases`, one listing, cached for a day).
+Answer (200):
+
+```json
+{ "status": "ready", "id": "...", "basis": "build", "newer_images": 12,
+  "newer_from_utc": "...", "newer_to_utc": "...", "new_passes": 1, "new_collections": ["spherex_qr4"],
+  "releases_built": ["DR1", "QR3"], "releases_now": ["DR1", "QR3", "QR4"],
+  "releases_published": ["DR1", "QR2", "QR3", "QR4"], "new_releases": ["QR4"],
+  "release_note": "SPHEREx has published QR4 since this tool was written; it is searched from now on.",
+  "checked": { "service": "...", "query": "...", "retrieved_utc": "..." },
+  "checked_label": "the local SPHEREx image index (harvested 2026-11-14)",
+  "message": "12 newer SPHEREx images here (…; 1 new survey pass; new release QR4). Rebuild to include them.",
+  "built": { ... source_exposures ... }, "now": { ... same shape, now ... } }
+```
+
+- Newer images = exposures after `source_exposures.latest_mjd`. Fields built before v0.14 (`basis: "frames"`):
+  only exposures more than 30 days after the last frame (a new survey pass) count, because the frames are a
+  selection and later exposures of the last pass may just not have been picked.
+- `new_releases`: release folders in the bucket this code didn't know (2026-11-14: `dr1`, `qr2`, `qr3`); they are
+  searched from then on as `spherex_<rel>` and `spherex_<rel>_deep`. The local image index only has them after
+  a new harvest (`pipeline.mirror`); `release_note` says so.
+- Rebuild = `GET /api/target?…&refresh=1`. Synthetic targets: `{"status": "no_data"}`. Unknown target: 404.
+  Image search failed (IRSA down): 502 with a message.
 
 ### Discoveries (v0.13, T76)
 

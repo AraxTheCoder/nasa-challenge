@@ -6,7 +6,7 @@
 // refreshMarks(), which updates every place that shows them (stage label, buttons, table, timeline,
 // pair picker), so those views cannot disagree.
 
-import { $, el, fmtDuration, fmtNum, fmtTime, isTyping, safeUrl } from "./util.js";
+import { $, el, fmtDuration, fmtNum, fmtTime, isTyping, safeUrl, frameRelease, releaseName, releasesOf } from "./util.js";
 import { markTimeline, renderTimeline } from "./timeline.js";
 import "./paths.js"; // T22: movement paths, listens to the viewer:* events below
 
@@ -184,7 +184,8 @@ function renderTargetHead() {
     `RA ${fmtNum(t.center?.ra_deg, 4)}°, Dec ${fmtNum(t.center?.dec_deg, 4)}°`,
     `${fmtNum(t.size_arcmin, 1)}′ field`,
     `${state.frames.length} frames, ${epochs} epoch${epochs === 1 ? "" : "s"}`,
-  ].join(" · ");
+    releasesOf(state.frames) ? `SPHEREx ${releasesOf(state.frames)}` : null,   // T64
+  ].filter(Boolean).join(" · ");
   $("#synthetic-badge").hidden = !synthetic;
   $("#stage-watermark").hidden = !synthetic;
   $("#frame-count").textContent = `(${state.frames.length})`;
@@ -319,6 +320,7 @@ function renderFrameInfo(f) {
     ["Wavelength", `${fmtNum(f.wavelength_um, 3)} µm (at centre)`],
     ["Detector", f.detector == null ? "–" : `D${f.detector}`],
     ["Obs ID", f.obs_id ?? "–"],
+    ["Release", f.collection ? `${releaseName(f.collection)} (${f.collection})` : frameRelease(f) ?? "–"],   // T64
     ["Source", src ? el("a", { href: src, target: "_blank", rel: "noopener" }, "FITS") : "–"],
     ["A ↔ B", ab],
   ];

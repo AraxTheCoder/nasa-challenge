@@ -235,6 +235,7 @@ Dated, one line each, with why.
   210′ is the real bound, one SPHEREx detector image (2040 px × 6.15″ = 3.49°). Larger fields build
   slower. The team VM's /cutout accepts up to 6° cutouts. `web/` keeps its own 60′ form limit.
 - 2026-11-14 [Mati] CONTRACTS v0.13 (T76): discovery index = `data/survey/discoveries.json` (schema `docs/discoveries.schema.json`: candidates with class, score 0–1, plain-words reason, known, lam_um, tile) served by `GET /api/discoveries` (filters class / position / score, `random=1`). Until the survey (T75) writes one, the API serves the hand-made sample `fixtures/discoveries-sample.json` (`synthetic: true`, labelled in the viewer). Why: the viewer side (T76) can be built and tested now, and pass 2 has a fixed target format.
+- 2026-11-14 [Mati] CONTRACTS v0.14 (T64): frames carry `collection` (SPHEREx release), target.json `source_exposures` (images known at build time), new `GET /api/targets/<id>/updates` (newer images / new release → the viewer offers Rebuild). Image searches no longer use a fixed list of four collections: `pipeline/releases.py` lists the bucket's release folders (cached a day) and adds new ones (`spherex_<rel>`, `_deep`), duplicates across releases dedupe to the newest. Why: the challenge asks for a tool that is easy to update with the latest data releases; with the fixed list a QR4 / DR2 would never have appeared.
 
 ## Ideas
 

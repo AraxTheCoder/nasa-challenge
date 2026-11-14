@@ -27,7 +27,7 @@ Notes for other tracks:
 - **B:** `detect.run.detect_target(target)` runs when the viewer asks `GET /api/targets/<id>/objects`
   (T51), in the background; same for catalogue labels via `GET /api/targets/<id>/labels` (T37).
 - Also served: photometry (`/api/targets/<id>/photometry`, T49), the discovery index (`/api/discoveries`,
-  T76, `server/discoveries.py`), per-epoch HiPS (`/api/hips/…`, T32),
+  T76, `server/discoveries.py`), newer data for a field (`/api/targets/<id>/updates`, T64, `server/updates.py`), per-epoch HiPS (`/api/hips/…`, T32),
   sky-map tiles (`/api/sky/…`, T41/T42), tile settings (`/api/settings`, T47), `/api/health`.
   All in `docs/CONTRACTS.md` → "Live API".
 - **C:** fetch `/api/target`, poll `poll_url` while 202, then load `target_url`; frame image paths
