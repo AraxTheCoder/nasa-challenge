@@ -87,6 +87,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T48 | C: Cached Allsky fallback at deep zoom so pending/failed live tiles never erase available overview imagery | Joerg | done | `joerg/T48-map-overview-fallback` | [tasks/T48](tasks/T48-map-overview-fallback.md). User approved implementation + push; investigate repeated tile errors |
 | T49 | A/C: Light curves + spectra on the fly at any position: aperture photometry on the cached SPHEREx FITS (pipeline + `/api/targets/<id>/photometry` + viewer charts); for the variable test stars RW Aur / R Dra | Mati | done | `mati/T49-photometry` | [tasks/T49](tasks/T49-photometry.md). `/api/targets/<id>/photometry`; panel under the timeline; CONTRACTS v0.10 |
 | T50 | All: `web/dev.py --host ADDR`: serve viewer + Live API on one address only (e.g. WireGuard 10.0.0.2) instead of all interfaces (`--lan`) | Joerg | done | `joerg/T50-dev-host` | [tasks/T50](tasks/T50-dev-host.md). Joerg's new host serves the team over WireGuard 10.0.0.0/24 |
+| T51 | B: `detect/run.py` so builds get known asteroids/comets now: JPL lookup (T07) + classify (T08) after every build; mover detection (T06) plugs into the same function later | Joerg | doing | `joerg/T51-detect-run` | [tasks/T51](tasks/T51-detect-run.md). Builds call `detect.run.detect()` but the module never existed, so every field had 0 objects. Jonathan: T06 adds tracks here |
 
 ## Decisions
 
