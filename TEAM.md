@@ -59,7 +59,6 @@ Mati). When you finish a task, move its row to Done in the same commit.
 | T70 | B/C: Motion classes for real detections: asteroid-like / nearby star / distant body from rate, direction and shape, checked on T06 output (idea I15) | | open | | [tasks/T70](tasks/T70-detection-motion-classes.md). Partly done: classes for labels (T23), status + reason incl. class for detections (T08). |
 | T87 | B: What it is, from the bands: temperature, IR excess, ices (3.0 / 4.27 / 4.67 µm), CH4 3.3 and H2O 1.4 / 1.9 µm (brown dwarfs), CO 2.3 µm, PAH 3.3, Pa-α / Br-α, galaxy 1.6 µm bump; per source a class or hint | Joerg | open | | [tasks/T87](tasks/T87-band-features.md). Needs T85; after T86 |
 | T92 | C: Guided tour of the five official targets: one click per stop opens the field, sets the layer, starts the blink and shows one sentence of what to watch | Joerg | open | | [tasks/T92](tasks/T92-guided-tour.md). After T90 (web/ layout) lands |
-| T93 | C/A: Chemistry maps: continuum-subtracted feature images for the shown field (water / CO₂ / CO ice, PAH, hydrogen lines): the image at the feature minus the continuum from neighbouring wavelengths, as a map layer + in the frame viewer | Mati | doing | `mati/T93-chemistry-maps` | [tasks/T93](tasks/T93-chemistry-maps.md). From the cached FITS cutouts (real fluxes, per-pixel wavelength); visualization only |
 
 ### Parked
 
@@ -144,6 +143,7 @@ Mati). When you finish a task, move its row to Done in the same commit.
 | T88 | C: Unusual spectra on the map: "Unusual spectra" toggle in the map bar (measures the field if needed), rings + rank on the outliers, click → card with the reason, spectrum and charts; linked to the T86 panel | Joerg | done | `joerg/T88-outliers-map` | [tasks/T88](tasks/T88-outliers-map.md). Uses explore.js's public draw hook only, no change to the map code |
 | T91 | A: Measured motion of the official targets: each star's position fitted in every epoch (deep per-epoch stacks of its own exposures), proper motion with error from SPHEREx alone, compared with Gaia / the catalogue ("SPHEREx says 10.3″/yr, Gaia 10.4") | Joerg | done | `joerg/T91-measured-motion` | [tasks/T91](tasks/T91-measured-motion.md). Barnard, Eps Indi B, WISE 0855 |
 | T90 | C: Merge `/app/` (T55 redesign) back into `/web/`: first screen = the app/ map (automatic blink, floating panels), scroll down for every web/ widget (frame viewer, analysis, spectra, outliers…); nothing dropped from either | Jonathan | done | `jonathan/T90-merge-app-web` | [tasks/T90](tasks/T90-merge-app-into-web.md). Touches all of web/ |
+| T93 | C/A: Chemistry maps: continuum-subtracted feature images for the shown field (water / CO₂ / CO ice, PAH, hydrogen lines): the image at the feature minus the continuum from neighbouring wavelengths, as a map layer + in the frame viewer | Mati | done | `mati/T93-chemistry-maps` | [tasks/T93](tasks/T93-chemistry-maps.md). From the cached FITS cutouts (real fluxes, per-pixel wavelength); visualization only |
 
 ## Decisions
 
@@ -281,6 +281,7 @@ Dated, one line each, with why.
 - 2026-11-14 [Mati] Board layout: three tables under "Board": **Active** (open / doing / review / blocked), **Parked** (set aside by a Decision), **Done**. Rows themselves unchanged; each owner moves their row to Done when finishing. Why: 70 of 91 rows were done, the open work was hard to find.
 - 2026-11-14 [Joerg] CONTRACTS v0.24 (T91): `GET /api/targets/<id>/motion?name=` (a star's motion, and distance when reliable, measured from SPHEREx alone). Why: the official targets' motion as a result, not only the catalogue path; new endpoint only.
 - 2026-11-14 [Jonathan] CONTRACTS v0.25 (T89): false colour at orders 6-7 is LRGB (detail from the chosen band, colour from the all-band cube at order 5); colour layers keep their band slices. Why: one render per colour tile instead of six; switching to false colour took ~25 s for 12 pass tiles, now 2.6 s (and a cold colour tile costs about what a grey one does). Trade-off: the colour is coarser (13″) and from all passes together; the detail (what moves) stays sharp and per pass.
+- 2026-11-14 [Mati] CONTRACTS v0.26 (T93): chemistry maps: `GET /api/targets/<id>/chemistry`, `/api/chemistry/features`, map layer `x-<feature>` (server/hips.py: `LAYER_RE` + `chemistry_image`). Why: show the 102 bands as chemistry (feature minus continuum) for citizen scientists to look at; visualization only.
 
 ## Ideas
 
@@ -803,3 +804,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   cube; field epochs in colour from the fast one-detector build (`e<n>c` via `hips.CHROMA`); the band slider stays
   active in false colour and picks the detail band. 12 pass tiles after grey: 25.5 s -> 2.6 s; cold ≈ grey.
   Old colour tiles in data/hips_cache (6-detector composites) deleted. CONTRACTS v0.25.
+- 2026-11-14 Mati (Claude): T93 done: **Chemistry** in the map's view panel: for the shown field, a chemical feature (water / CO₂ / CO / methanol ice, PAH, water bands, Pa-β, Br-γ, Br-α) minus its continuum as a map layer + a plain-words note; from the field's own SPHEREx exposures, a few seconds. Orion: Br-α shows M42 + M43, PAH the cloud filaments. CONTRACTS v0.26. [→ Jonathan] `server/hips.py`: layer key `x-<feature>` (LAYER_RE, `chemistry_image`, tile cache keyed on the map file); `web/app.js`: `map:take` event → `setManual(true)` and `map:manual` fired from `setManual`. **The browser test fails on main since T90** (also without T93): `?explore=0` hides `#explore`, which now holds the RA/Dec form, so step 2's `page.fill` times out after 11 checks; CI is red until that is fixed. Separately, `/api/hips/<id>/e1d1/properties` answers 422 (the `e{ep}` route takes it before the layer route; T89 per-detector epochs).

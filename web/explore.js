@@ -181,7 +181,7 @@ export async function setFieldLayers(epochs, frames, base) {
 export async function showLayer(key) {
   if (!sky || (!fieldBase && !key.startsWith("p")) || (key.startsWith("p") && !apiBase)) return false;
   let i = layerIndex.get(key);
-  if (i === undefined && (key.startsWith("d-") || /^p\d$/.test(key))) {
+  if (i === undefined && (key.startsWith("d-") || key.startsWith("x-") || /^p\d$/.test(key))) {   // x-: T93 chemistry
     layerIndex.set(key, -1);                       // being added
     // T82: p<n> = survey pass n of the live map, anywhere on the sky (not tied to the field)
     const url = key.startsWith("p") ? `${apiBase.replace(/\/$/, "")}/api/sky/spherex-live-${key}` : `${fieldBase}/${key}`;

@@ -1,4 +1,8 @@
-# Contracts (v0.25)
+# Contracts (v0.26)
+
+v0.26 (T93): chemistry maps: `GET /api/targets/<id>/chemistry?feature=<f>[&start=1]`, the map as PNG and as the
+map layer `x-<feature>`, the feature list at `GET /api/chemistry/features` (see "Chemistry maps"). New endpoints
+only; target.json unchanged.
 
 v0.25 (T89): false colour at the live orders is LRGB: detail (luminance) from the grey tile of the requested
 band, colour from the all-band cube (`spherex-live-rgb` at order 5). So `spherex-live-p<n>-rgb` and
@@ -641,6 +645,35 @@ Answer (200):
   a new harvest (`pipeline.mirror`); `release_note` says so.
 - Rebuild = `GET /api/target?…&refresh=1`. Synthetic targets: `{"status": "no_data"}`. Unknown target: 404.
   Image search failed (IRSA down): 502 with a message.
+
+### Chemistry maps (v0.26, T93)
+
+```
+GET /api/chemistry/features                          {"features": [{id, name, um, half_width_um, kind, what}]}
+GET /api/targets/<id>/chemistry?feature=<f>          cached result, else {"status": "not_started"}
+GET /api/targets/<id>/chemistry?feature=<f>&start=1  202 {"status": "building", "done", "total"} while it runs,
+                                                     then 200 as below
+GET /api/targets/<id>/chemistry/<f>.png              the map on the field's grid (grey + alpha)
+GET /api/hips/<id>/x-<f>/...                         the same as a map layer (like A − B, T81)
+```
+
+`pipeline.chemistry`: for each exposure covering the field whose detector reaches the feature, IMAGE − ZODI
+(MJy/sr, flagged pixels out) resampled onto the field grid, every pixel with its own wavelength (WCS-WAVE).
+Per pixel: median of the exposures *on* the feature (|λ − λ0| <= max(half-width, channel/2)) minus the continuum
+(medians just below and above, linearly interpolated to λ0; bright emission features such as PAH and hydrogen
+lines left out of other features' continua). Grey 128 = like the continuum, darker = absorption, brighter =
+emission, ±5 robust noise levels = black / white (asinh). Answer (200):
+
+```json
+{ "status": "ready", "id": "...", "layer": "x-br_alpha", "version": 1, "feature": "br_alpha", "name": "Br-α",
+  "um": 4.052, "half_width_um": 0.0, "kind": "line", "what": "hydrogen emission: ...",
+  "sigma_mjy_sr": 10.3, "coverage": 0.71, "exposures_read": 120, "exposures_used": 43, "failed": 0,
+  "epochs": [1, 2, 3], "median_on": 4, "median_continuum": 20, "both_sides": 1.0, "seconds": 5.2,
+  "image": "chemistry/br_alpha.png", "provenance": [ ... ] }
+```
+
+Cached as `<target>/chemistry/<f>.png` + `.json`. Unknown feature: 400. Unknown target: 404. Synthetic: 200
+`{"status": "no_data"}`; no exposure reaches the feature: `no_data` with a message.
 
 ### Frontend URL
 

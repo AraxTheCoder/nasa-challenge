@@ -149,6 +149,8 @@ try:
         page.screenshot(path=str(out / "t20-building.png"), full_page=True)
         wait_loaded(page)
         check(page.is_hidden("#job"), "progress panel hides when ready")
+        check(page.is_hidden("#chem-box") and page.is_hidden("#chem-note"),
+              "T93: no Chemistry selector for a synthetic field (no SPHEREx exposures to map)")
         check("ra=133.7598" in page.url and "dec=-7.2422" in page.url and "size=15" in page.url, f"URL carries field: {page.url}")
         check("served for request" in page.text_content("#target-name"), "target.json comes from the Live API")
         check(page.is_visible("#synthetic-badge") and page.is_visible("#stage-watermark"), "fixture shown as synthetic")

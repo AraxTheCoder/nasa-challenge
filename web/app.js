@@ -30,6 +30,7 @@ import { initLamPick, lamFromUrl, setLamUrl } from "./lampick.js";
 import { initStack } from "./stackview.js";
 import { nearestBand, parseLam } from "./lambda.js";
 import * as explore from "./explore.js";
+import { initChemistry } from "./chemistry.js";
 import { initHud } from "./hud.js";   // T55: drag the floating panels anywhere
 import { parseDec, parseRa } from "./coords.js";
 import { initCursorPin, isPicking, pinAt, setPicking } from "./cursorpin.js";   // T55: 📍 marker + pick mode
@@ -559,10 +560,11 @@ function bindPage() {
   // T90: the map tools and the frame viewer below drive the map (T81 mapframes.js, T82 pass buttons):
   // while they do, the automatic blink leaves the map alone, until the view moves to another tile.
   const takeOver = (e) => {
-    if (!e.target.closest?.(".layout, #map-tools") || e.target.closest?.("#field-form, #photometry")) return;
+    if (!e.target.closest?.(".layout, #map-tools, #chem-box") || e.target.closest?.("#field-form, #photometry")) return;
     setManual(true);
   };
   document.addEventListener("pointerdown", takeOver, true);
+  document.addEventListener("map:take", () => setManual(true));   // T93: a tool on the map itself (Chemistry)
   document.addEventListener("keydown", (e) => {
     if (e.target.closest?.("input, select, textarea, .sky-stage")) return;
     if ([" ", "p", "P", "x", "X", "m", "M", "d", "D", "ArrowLeft", "ArrowRight"].includes(e.key) && app.shownTarget) setManual(true);
@@ -589,6 +591,7 @@ function setManual(on) {
   app.manualMap = on;
   passes.setPaused(on);
   showBlinkStatus();
+  document.dispatchEvent(new CustomEvent("map:manual", { detail: { on } }));   // T93: chemistry.js steps back
 }
 
 // ---------- sky map (T30/T36) ----------
@@ -1067,6 +1070,7 @@ async function main() {
   // depend on external tile servers being up).
   if (p.get("explore") === "0") { $("#explore").hidden = true; $("#map-tools").hidden = true; }
   else startExplore();   // not awaited: the map loads in the background
+  initChemistry(app.api);   // T93: the Chemistry selector, for real fields on the map
   const requested = loadFromUrl();
   if (!requested) {
     fillDefaults();
