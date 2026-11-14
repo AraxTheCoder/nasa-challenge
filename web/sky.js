@@ -20,7 +20,7 @@ const MAX_FOV = 240;                      // stereographic shows more than a hem
 const BACK_COSC = -0.6;                   // don't draw beyond ~127 deg from the centre
 const MIN_FOV = 1 / 60;                   // 1 arcmin
 const MAX_TEXTURES = 200;           // 1 MB of GPU memory each
-const MAX_PARALLEL_LOADS = 8;
+const MAX_PARALLEL_LOADS = 12;            // our tile cache is local; browsers cap per host anyway
 
 // ---------- HiPS layer ------------------------------------------------------------------------
 
@@ -105,7 +105,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   const { gl } = G;
 
   const st = { ra, dec, fov, w: 1, h: 1, dpr: 1, base: null, overlays: [], shown: -1,
-    dirty: true, loads: 0, queue: [], hooks: [], listeners: { change: [], tiles: [] } };
+    dirty: true, loads: 0, queue: [], hooks: [], frame: 0, listeners: { change: [], tiles: [] } };
 
   // ----- projection (stereographic, north up, east left) -----
   // Screen px per unit of the projection plane: the view's half width covers fov/2.
@@ -162,11 +162,19 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     return [...out];
   }
 
-  function request(layer, order, pix) {
+  // T41: every render says which tiles it wants (t.want = frame) and how close to the centre they
+  // are (prio, px); the queue loads the most central wanted tiles first and drops the stale ones,
+  // so after a pan the browser's few connections go to what is on screen now.
+  function request(layer, order, pix, prio = 1e9) {
     const k = layer.key(order, pix);
     let t = layer.tiles.get(k);
-    if (t) { t.used = performance.now(); return t; }
-    t = { state: "queued", tex: null, used: performance.now() };
+    if (t) {
+      t.used = performance.now();
+      t.want = st.frame;
+      if (t.state === "queued") t.prio = Math.min(t.prio, prio);
+      return t;
+    }
+    t = { state: "queued", tex: null, used: performance.now(), want: st.frame, prio, key: k };
     layer.tiles.set(k, t);
     st.queue.push({ layer, order, pix, t });
     pump();
@@ -177,7 +185,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     const k = `${layer.slice}/allsky`;
     let t = layer.tiles.get(k);
     if (t) { t.used = performance.now() + 1e9; return t; }    // never evicted first
-    t = { state: "queued", tex: null, used: performance.now() + 1e9 };
+    t = { state: "queued", tex: null, used: performance.now() + 1e9, want: Infinity, prio: -1, key: k };
     layer.tiles.set(k, t);
     st.queue.push({ layer, url: layer.allskyUrl(), t });
     pump();
@@ -225,8 +233,16 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   }
 
   function pump() {
+    if (st.queue.length > 1) {
+      st.queue = st.queue.filter((j) => {
+        const stale = j.t.state === "queued" && j.t.want < st.frame - 1 && j.t.prio < 1e12;
+        if (stale) j.layer.tiles.delete(j.t.key);          // asked again if it comes back on screen
+        return !stale && j.t.state === "queued";
+      });
+      st.queue.sort((a, b) => b.t.prio - a.t.prio);         // pop() takes the smallest prio
+    }
     while (st.loads < MAX_PARALLEL_LOADS && st.queue.length) {
-      const job = st.queue.pop();          // newest first: what the user looks at now
+      const job = st.queue.pop();
       if (job.t.state !== "queued") continue;
       job.t.state = "loading";
       st.loads++;
@@ -268,8 +284,8 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   }
 
   /** Texture to draw for a tile: its own, or the nearest loaded ancestor with a sub-rectangle. */
-  function textureFor(layer, order, pix) {
-    const own = request(layer, order, pix);
+  function textureFor(layer, order, pix, prio) {
+    const own = request(layer, order, pix, prio);
     if (own.state === "ok") return { tex: own.tex, d: 0, aOff: 0, bOff: 0 };
     const { ix, iy } = nest2xyf(order, pix);
     for (let d = 1; order - d >= layer.minOrder; d++) {
@@ -278,7 +294,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
         const m = 2 ** d;
         return { tex: anc.tex, d, aOff: ix % m, bOff: iy % m };
       }
-      if (d === 1 && order - 1 >= layer.minOrder) request(layer, order - 1, Math.floor(pix / 4));
+      if (d === 1 && order - 1 >= layer.minOrder) request(layer, order - 1, Math.floor(pix / 4), prio - 1);
     }
     return null;
   }
@@ -293,11 +309,12 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     }
     const n = order <= 4 ? 8 : 4;
     for (const pix of visibleTiles(order)) {
-      const tx = textureFor(layer, order, pix);
-      if (!tx) continue;
       const g = tileGrid(order, pix, n);
       const sp = [];
       for (let i = 0; i < g.length; i += 2) sp.push(toScreen(g[i], g[i + 1]));
+      const mid = sp[Math.floor(sp.length / 2)];
+      const tx = textureFor(layer, order, pix, Math.hypot(mid.x - st.w / 2, mid.y - st.h / 2));
+      if (!tx) continue;
       const pos = [], uv = [];
       const m = 2 ** tx.d;
       const vtx = (a, b) => {
@@ -319,6 +336,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
 
   function render() {
     st.dirty = false;
+    st.frame++;
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0.02, 0.03, 0.06, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -336,7 +354,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
 
   function prefetch(layer) {
     const order = pickOrder(layer);
-    for (const pix of visibleTiles(order)) request(layer, order, pix);
+    for (const pix of visibleTiles(order)) request(layer, order, pix, 5e5);   // after visible tiles
   }
 
   function markDirty() {

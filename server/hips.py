@@ -109,6 +109,42 @@ def _sep_deg(ra1, dec1, ra2, dec2) -> float:
 
 
 def tile_png(target_dir: Path, ep: int, order: int, npix: int) -> bytes | None:
+    """PNG for one tile; rendered once per target version and then kept in memory (T41)."""
+    mtime = (target_dir / "target.json").stat().st_mtime
+    return _tile_cached(str(target_dir), mtime, ep, order, npix)
+
+
+@lru_cache(maxsize=4096)
+def _tile_cached(target_dir: str, mtime: float, ep: int, order: int, npix: int) -> bytes | None:
+    return _render_tile(Path(target_dir), ep, order, npix)
+
+
+def tiles_touching(target: dict, order: int) -> list[int]:
+    """HEALPix tiles of this order that overlap the field (corners + centre + edge midpoints)."""
+    import astropy.units as u
+    from astropy_healpix import HEALPix
+
+    c = target["center"]
+    h = target["size_arcmin"] / 120
+    cd = math.cos(math.radians(c["dec_deg"])) or 1e-6
+    pts = [(c["ra_deg"] + dx * h / cd, c["dec_deg"] + dy * h) for dx in (-1, -0.5, 0, 0.5, 1) for dy in (-1, -0.5, 0, 0.5, 1)]
+    hp = HEALPix(nside=2 ** order, order="nested")
+    return sorted({int(p) for p in hp.lonlat_to_healpix([p[0] for p in pts] * u.deg, [p[1] for p in pts] * u.deg)})
+
+
+def prerender(target_dir: Path) -> None:
+    """Render every tile of every epoch that touches the field, finest orders first (T41)."""
+    t = json.loads((target_dir / "target.json").read_text(encoding="utf-8"))
+    for order in range(HIPS_ORDER, -1, -1):
+        for npix in tiles_touching(t, order):
+            for ep in epochs(t):
+                try:
+                    tile_png(target_dir, ep, order, npix)
+                except Exception:  # noqa: BLE001 - best effort
+                    pass
+
+
+def _render_tile(target_dir: Path, ep: int, order: int, npix: int) -> bytes | None:
     """PNG (grey + alpha) for one HiPS tile, or None when the tile doesn't touch the field."""
     import astropy.units as u
     from astropy_healpix import HEALPix

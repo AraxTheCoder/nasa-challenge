@@ -1,0 +1,153 @@
+"""T41: server-side cache + prefetch for the all-sky HiPS maps the sky map shows.
+
+IRSA's HiPS answers each tile after ~0.7 s and speaks HTTP/1.1 (a browser opens 6 connections),
+its Allsky mosaic takes ~4 s. The viewer asks us instead:
+
+    GET /api/sky/<survey>/properties
+    GET /api/sky/<survey>/Norder<k>/Dir<d>/Npix<p>[_<slice>].<ext>
+    GET /api/sky/<survey>/Norder3/Allsky[_<slice>].<ext>
+
+First request: fetched upstream (mirrors in order), stored under data/hips_cache/<survey>/, then
+served from disk in milliseconds. Each tile request also prefetches, in the background, its 8
+neighbours and 4 children, so panning and zooming find the next tiles already here.
+"""
+from __future__ import annotations
+
+import re
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+SURVEYS = {
+    "spherex-cube": ["https://irsa.ipac.caltech.edu/data/hips/SPHEREx/spherex_allsky_cube"],
+    **{f"spherex-d{d}": [f"https://alasky.cds.unistra.fr/SPHEREx/D{d}", f"https://alaskybis.cds.unistra.fr/SPHEREx/D{d}"]
+       for d in range(1, 7)},
+    "2mass": ["https://irsa.ipac.caltech.edu/data/hips/CDS/2MASS/Color"],
+    "allwise": ["https://irsa.ipac.caltech.edu/data/hips/CDS/AllWISE/RGB-W4-W2-W1"],
+}
+TILE_RE = re.compile(r"^Norder(\d+)/Dir(\d+)/Npix(\d+)(_\d+)?\.(png|jpg|jpeg)$")
+ALLSKY_RE = re.compile(r"^Norder3/Allsky(_\d+)?\.(png|jpg|jpeg)$")
+MISSING = b"MISSING"
+TIMEOUT_S = 30
+
+
+class SkyCache:
+    def __init__(self, root: Path):
+        self.root = Path(root)
+        self._session = None
+        self._inflight: dict[str, threading.Event] = {}
+        self._lock = threading.Lock()
+        self._prefetch = ThreadPoolExecutor(16, thread_name_prefix="sky-prefetch")
+        self._props: dict[str, dict] = {}
+
+    def _http(self):
+        if self._session is None:
+            import requests
+            from requests.adapters import HTTPAdapter
+
+            s = requests.Session()
+            s.mount("https://", HTTPAdapter(pool_connections=8, pool_maxsize=48, max_retries=2))
+            s.headers["User-Agent"] = "spherex-blink tile cache"
+            self._session = s
+        return self._session
+
+    @staticmethod
+    def valid(survey: str, path: str) -> bool:
+        return survey in SURVEYS and (path == "properties" or bool(TILE_RE.match(path)) or bool(ALLSKY_RE.match(path)))
+
+    def get(self, survey: str, path: str) -> bytes | None:
+        """Bytes of the file (from disk or upstream), or None if upstream doesn't have it."""
+        f = self.root / survey / path
+        if f.exists():
+            data = f.read_bytes()
+            return None if data == MISSING else data
+        key = f"{survey}/{path}"
+        with self._lock:
+            ev = self._inflight.get(key)
+            owner = ev is None
+            if owner:
+                ev = self._inflight[key] = threading.Event()
+        if not owner:                                  # someone is fetching it: wait for them
+            ev.wait(TIMEOUT_S + 5)
+            return self.get(survey, path) if f.exists() else None
+        try:
+            data = self._fetch(survey, path)
+            f.parent.mkdir(parents=True, exist_ok=True)
+            tmp = f.with_name(f.name + f".{threading.get_ident()}.part")
+            tmp.write_bytes(data if data is not None else MISSING)
+            tmp.replace(f)
+            return data
+        finally:
+            with self._lock:
+                self._inflight.pop(key, None)
+            ev.set()
+
+    def _fetch(self, survey: str, path: str) -> bytes | None:
+        last = None
+        for base in SURVEYS[survey]:
+            try:
+                r = self._http().get(f"{base}/{path}", timeout=TIMEOUT_S)
+            except Exception as e:  # noqa: BLE001 - next mirror
+                last = e
+                continue
+            if r.status_code == 404:
+                return None
+            if r.ok and (path == "properties" or not r.content.startswith(b"<")):
+                return r.content
+            last = RuntimeError(f"HTTP {r.status_code}")
+        raise RuntimeError(f"{survey}/{path}: {last}")
+
+    # -- prefetch ----------------------------------------------------------------------------------
+
+    def prefetch_around(self, survey: str, path: str) -> None:
+        m = TILE_RE.match(path)
+        if not m:
+            return
+        order, pix, sl, ext = int(m.group(1)), int(m.group(3)), m.group(4) or "", m.group(5)
+        max_order = self._max_order(survey)
+        want = []
+        try:
+            from astropy_healpix import HEALPix
+
+            nb = HEALPix(nside=2 ** order, order="nested").neighbours(pix)
+            want += [(order, int(p)) for p in nb if p >= 0]
+        except Exception:  # noqa: BLE001
+            pass
+        if order < max_order:
+            want += [(order + 1, pix * 4 + i) for i in range(4)]
+        for k, p in want:
+            sub = f"Norder{k}/Dir{(p // 10000) * 10000}/Npix{p}{sl}.{ext}"
+            if not (self.root / survey / sub).exists():
+                self._prefetch.submit(self._quiet_get, survey, sub)
+
+    def _quiet_get(self, survey: str, path: str) -> None:
+        try:
+            self.get(survey, path)
+        except Exception:  # noqa: BLE001 - prefetch is best effort
+            pass
+
+    def _max_order(self, survey: str) -> int:
+        if survey not in self._props:
+            props = {}
+            try:
+                for line in (self.get(survey, "properties") or b"").decode("utf-8", "replace").splitlines():
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        props[k.strip()] = v.strip()
+            except Exception:  # noqa: BLE001
+                pass
+            self._props[survey] = props
+        return int(self._props[survey].get("hips_order", 3))
+
+    def warm(self, survey: str = "spherex-cube") -> None:
+        """Background: properties + the default band's Allsky, so the first zoomed-out view is instant."""
+        def run():
+            try:
+                self._max_order(survey)
+                first = self._props[survey].get("hips_cube_firstframe", "0")
+                ext = "png" if "png" in self._props[survey].get("hips_tile_format", "png") else "jpg"
+                sl = f"_{first}" if first not in ("", "0") else ""
+                self.get(survey, f"Norder3/Allsky{sl}.{ext}")
+            except Exception:  # noqa: BLE001
+                pass
+        self._prefetch.submit(run)
