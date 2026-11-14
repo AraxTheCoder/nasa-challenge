@@ -54,7 +54,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T15 | C: Submission text, data credits and AI-use disclosure | | open | | Needs official text in `docs/CHALLENGE.md` |
 | T16 | C: Demo video and slides | | open | | After feature freeze |
 | T17 | A: Compute wavelength-matched `pairs` across epochs (+ `bandwidth_um`) in `target.json` (contracts v0.2) | Joerg | open | | Part of T03/T04 output. Rule in CONTRACTS "Pair" |
-| T18 | C: Live API service: `GET /api/target?ra=&dec=&size=` builds (pipeline + detect) or serves from cache, progress while building, CORS (contracts v0.3) | Jonathan | doing | `jonathan/T18-live-api` | New folder `server/`. Uses `build_target` once T02–T04 exist; until then serves the fixture labelled synthetic |
+| T18 | C: Live API service: `GET /api/target?ra=&dec=&size=` builds (pipeline + detect) or serves from cache, progress while building, CORS (contracts v0.3) | Jonathan | done | `jonathan/T18-live-api` | `python -m server [--fixture]`, see `server/README.md`. Live mode works once `pipeline.build` (T02–T04) exists; until then `--fixture` |
 | T19 | A: Labels on the images: catalogue names/positions (SIMBAD, Gaia DR3 with proper motion, CatWISE) into `target.json` | Joerg | doing | `joerg/T19-labels` | [task file](tasks/T19-labels.md) |
 
 ## Decisions
@@ -160,3 +160,9 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   for T13. Accepts schema 0.1 and 0.2. Next: wire the viewer to the Live API (v0.3), then
   T12/T13. Gotchas: viewer does not call the Live API yet; T14's note "no live API calls" is
   outdated since v0.3.
+- 2026-11-14 [Jonathan + Claude] Done: official challenge text + Resources in `docs/CHALLENGE.md`;
+  decided live data (CONTRACTS v0.3 Live API); T18 merged (`server/`, FastAPI, 11 tests pass,
+  fixture output validates against the schema). Next: frontend needs RA/Dec input + `?ra=&dec=`
+  + polling (C), `pipeline.build` with optional `progress=` callback (A). Gotchas: ids round to
+  1e-4 deg (WISE 0855 → `c1337951-m072451-s15`); T14 GitHub Pages alone can't run the API, a
+  Python host is needed; Space Apps general judging criteria still not pasted.
