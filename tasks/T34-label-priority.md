@@ -1,0 +1,30 @@
+# T34: Label priority: only the most important names always visible, the rest on hover
+
+- **Owner:** (open)  ·  **Status:** open
+- **Branch:** –
+- **Depends on / feeds:** T22/T23 (`web/paths.js` names and hover), T19 (`labels`), T13 (objects panel)
+- **Requested by:** Mati, 2026-11-14, after seeing the real Barnard's Star field (271 labels): "labels
+  are too crowded".
+
+## Goal
+At any zoom, the image shows only a few names: the ones that matter. Every other label stays a small
+marker (or nothing) and shows its name only on hover. T23 already avoids overlapping names; this is a
+stricter rule: importance first, space second.
+
+## Plan (proposal, to be refined by whoever takes it)
+- [ ] Importance order, always shown: (1) the field's own object (the test field / object the user
+      asked for, e.g. Barnard's Star), (2) unknown movers and detections, (3) known asteroids/comets,
+      (4) named objects with a notable motion class (`proper motion`, `fast mover`, `distant body?`),
+      (5) a small number of the brightest named stars. Everything else: name on hover only.
+- [ ] A cap (e.g. ≤ 8 names) plus a "show all names" toggle for the curious
+- [ ] Hover / focus on any marker shows its name (keyboard accessible); the inspector (T23) still opens on click
+- [ ] Browser test checks: count of visible names ≤ cap on the real-like test target; hover reveals a hidden name
+
+## Findings
+
+## Questions / needs from others
+
+## Handoff
+
+## Notes from others
+(anyone may append here, dated and signed)

@@ -62,3 +62,6 @@ visible without blinking: a trail image and, later, shift-and-stack along a moti
 ## Handoff
 
 ## Notes from others
+- 2026-11-14 [Mati] Real Barnard's Star field (271 labels) still looks crowded. New open task T34: only
+  the most important names always visible, the rest on hover (proposal in tasks/T34). It touches
+  `paths.js`, so you may want it; otherwise someone from C picks it up later.
