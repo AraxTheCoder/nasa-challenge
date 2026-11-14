@@ -263,3 +263,7 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   SPHEREx HiPS per detector (`CDS/P/SPHEREx/QR2/D1`..`D6`, order 7) and IRSA a DR1 cube HiPS:
   usable for Google-Earth-style pan/zoom (Aladin Lite), but not split by epoch. T10 WIP merged
   (`detect/test_fields.py`): all 5 official fields have 2-4 epochs, fast movers shift 1-1.7 px.
+- 2026-11-14 [joerg + Claude] Jonathan's `pipeline.build` is in and already calls `add_labels`, so
+  `pipeline/reference/bake_target.py` is superseded (marked so). My local stopgap bakes were replaced
+  by real builds via `?refresh=1`. Still missing in builds: `pairs` (T17, open). T22 movement paths +
+  hover info are merged; the viewer draws `labels`, `known_objects` and `detections` tracks.

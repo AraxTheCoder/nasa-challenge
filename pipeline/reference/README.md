@@ -1,5 +1,8 @@
 # pipeline/reference: working exploration code
 
+> **Superseded 2026-11-14:** `pipeline.build` (T02-T04, Jonathan) now builds real fields, with labels.
+> Use it, not `bake_target.py`. These scripts stay as a record of how the data was first explored.
+
 Not part of the pipeline and not imported by anything. These are the scripts Joerg's session used
 on 2026-11-14 to look at real SPHEREx data (COSMOS, Barnard's Star). They work, and they show how
 each step of T02-T04 can be done. Copy what helps; nothing here is a contract.
@@ -7,6 +10,7 @@ each step of T02-T04 can be done. Copy what helps; nothing here is a contract.
 | File | Does | Relevant for |
 |---|---|---|
 | `fetch_cutouts.py` | IBE cutouts for one detector from a `pipeline.query` JSON, 8 threads, skip existing, 3 retries | T02 |
+| `bake_target.py` | stopgap: wrote a real target folder into the Live API cache before `pipeline.build` existed. Superseded | — |
 | `align_render.py` | reproject onto the common TAN grid, flag mask, zodi subtraction, wavelength + bandwidth at the centre, PNG with alpha, median residuals, matched pairs | T03, T04, T17 |
 
 What we learned (details also in the TEAM.md Log, 2026-11-14):
