@@ -85,7 +85,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T47 | All: Live tile generator (`tilegen/`) on Google Cloud `us-east4` next to the AWS SPHEREx bucket; viewer/API/builds stay local (EU); Tiles switch local/US VM | Jonathan | done | `jonathan/T47-gcp` | From Jonathan's idea. Measure S3 throughput on the VM first |
 
 | T48 | C: Cached Allsky fallback at deep zoom so pending/failed live tiles never erase available overview imagery | Joerg | done | `joerg/T48-map-overview-fallback` | [tasks/T48](tasks/T48-map-overview-fallback.md). User approved implementation + push; investigate repeated tile errors |
-| T49 | A/C: Light curves + spectra on the fly at any position: aperture photometry on the cached SPHEREx FITS (pipeline + `/api/targets/<id>/photometry` + viewer charts); for the variable test stars RW Aur / R Dra | Mati | doing | `mati/T49-photometry` | [tasks/T49](tasks/T49-photometry.md). Gap-scan ideas #2 + #3 |
+| T49 | A/C: Light curves + spectra on the fly at any position: aperture photometry on the cached SPHEREx FITS (pipeline + `/api/targets/<id>/photometry` + viewer charts); for the variable test stars RW Aur / R Dra | Mati | done | `mati/T49-photometry` | [tasks/T49](tasks/T49-photometry.md). `/api/targets/<id>/photometry`; panel under the timeline; CONTRACTS v0.10 |
 | T50 | All: `web/dev.py --host ADDR`: serve viewer + Live API on one address only (e.g. WireGuard 10.0.0.2) instead of all interfaces (`--lan`) | Joerg | done | `joerg/T50-dev-host` | [tasks/T50](tasks/T50-dev-host.md). Joerg's new host serves the team over WireGuard 10.0.0.0/24 |
 
 ## Decisions
@@ -173,6 +173,10 @@ Dated, one line each, with why.
   is known / unknown / artifact, written by `detect.classify` (T08) and shown in the objects panel. Why: an
   "artifact" or "unknown" label alone can't be checked by a human; the reason makes it checkable.
   Additive, `schema_version` stays "0.2".
+- 2026-11-14 [Mati] CONTRACTS v0.10: `GET /api/targets/<id>/photometry` (T49), aperture photometry at a position in
+  every frame (flux in µJy, wavelength/bandwidth at the star, masked flag). Why: the official test targets include
+  two variable stars and "spectra on the fly" is the extra-kudos item; both need calibrated fluxes, not PNGs.
+  New endpoint only; target.json unchanged; synthetic targets answer 200 `no_data`.
 
 ## Ideas
 
@@ -547,3 +551,8 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   checkout made local live tiles fail with 502. Now the index is built by itself in the background on
   first use (~3 min); meanwhile the team tile VM stands in (it is now the default `--tiles-remote`;
   `--tiles-remote none` to disable), else the API answers 503 + Retry-After and the map retries.
+- 2026-11-14 [Mati + Claude] Done: T49 light curves + spectra on the fly. Click any star (default: field centre):
+  spectrum per epoch + brightness change at matched wavelengths. Real data: RW Aur measurable at short λ (rising
+  IR spectrum, ~150 mJy at 1 µm → ~1 Jy at 4–5 µm); Barnard's Star and R Dra saturated in every frame (UI says
+  so). Calibration vs Gaia within ~20 %. 89 Python tests + browser test green. Gotcha: the API machine needs the
+  cached cutouts (`data/raw/`), i.e. photometry works where the field was built.
