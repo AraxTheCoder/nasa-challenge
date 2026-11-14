@@ -1,6 +1,6 @@
 # T50: `web/dev.py --host ADDR` (serve on one address only)
 
-- **Owner:** Joerg  ·  **Status:** doing
+- **Owner:** Joerg  ·  **Status:** done
 - **Branch:** `joerg/T50-dev-host`
 - **Depends on / feeds:** T21 (run kit), T14 (deploy)
 
