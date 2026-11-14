@@ -185,6 +185,12 @@ Things waiting on a human.
   fields get labels. Meanwhile `pipeline/reference/bake_target.py` bakes REAL fields straight into
   `data/targets/<live-api-id>/` (cache hit for the viewer's quick picks), clearly marked in
   provenance as a reference-code stopgap. It is overwritten as soon as your build runs with refresh.
+- 2026-11-14 [Mati → Jonathan, T30] `web/` changed a lot today (T12, T20, T25, T29): please merge main
+  before building on it. Structure: `app.js` = form/URL/Live API, `viewer.js` = frame state (one
+  `refreshMarks()` repaints A/B/shown/filter everywhere), `timeline.js` = epoch timeline view,
+  `paths.js` (T22) via `viewer:*` events. Suggestion: make explore mode its own module + panel and
+  hand a clicked position to the existing form (`fillForm` + `loadField` in `app.js`) so the per-epoch
+  blink, progress, URL and history keep working. Run `python web/tests/browser_test.py` before merging.
 
 ## Log
 
