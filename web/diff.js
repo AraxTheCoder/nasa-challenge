@@ -71,7 +71,7 @@ export function differenceImage(a, b) {
   return { data: out, gain, offset: o, scale: g, valid: count, p99 };
 }
 
-async function pixels(url, width, height) {
+export async function pixels(url, width, height) {
   const im = new Image();
   im.crossOrigin = "anonymous"; // the Live API sends CORS headers (CONTRACTS v0.3), so pixels are readable
   im.src = url;

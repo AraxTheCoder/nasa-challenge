@@ -13,6 +13,7 @@ import { initObjects } from "./objects.js";
 import { initDiff } from "./diff.js";
 import { initPhotometry } from "./photometry.js";
 import { initLamPick, lamFromUrl, setLamUrl } from "./lampick.js";
+import { initStack } from "./stackview.js";
 import { nearestBand, parseLam } from "./lambda.js";
 import * as explore from "./explore.js";
 
@@ -679,6 +680,7 @@ async function main() {
   initDiff();
   initPhotometry();
   initLamPick();
+  initStack();
   bindPage();
   const p = params();
   // Map only (Joerg, 2026-11-14): the explore map is the one view of the sky; the frame viewer (image,

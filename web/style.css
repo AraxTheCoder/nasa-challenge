@@ -190,6 +190,8 @@ button.link:hover { text-decoration: underline; }
 #explore-band-lam, #lam-at { width: 6.5em; font-variant-numeric: tabular-nums; }
 .lam-at { display: inline-flex; align-items: center; gap: 4px; }
 #lam-at-note { flex-basis: 100%; }
+/* T59: stacks */
+.stack-pick { display: inline-flex; align-items: center; gap: 4px; }
 
 /* ---------- build progress ---------- */
 .job {

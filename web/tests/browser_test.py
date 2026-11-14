@@ -495,6 +495,35 @@ try:
               f"T78: ?lam=1.21 in a link is applied on load ({lp.text_content('#lam-at-note')})")
         check(not lperr, f"T78: no page errors {lperr}")
 
+        # 8b6. T59: stacks (per epoch / per detector) over the stage, blinkable, exclusive with A - B and trail
+        sk = b.new_page(viewport={"width": 1280, "height": 900})
+        skerr = []
+        sk.on("pageerror", lambda x: skerr.append(str(x)))
+        sk.goto(WEB + "?explore=0&data=../data/test-targets/")
+        wait_loaded(sk)
+        sk.select_option("#stack-mode", "epoch")
+        sk.wait_for_selector("#stack-canvas:not([hidden])", timeout=8000)
+        lab = sk.text_content("#stage-stack-label")
+        check("Stack · epoch" in lab and "all detectors" in lab and sk.is_hidden("#stage-label") and "better" in sk.text_content("#stack-note"),
+              f"T59: per-epoch stack drawn and labelled ({lab})")
+        ep_a = lab
+        sk.keyboard.press("x")
+        sk.wait_for_function("document.querySelector('#stage-stack-label').textContent.startsWith('B')")
+        check(sk.text_content("#stage-stack-label") != ep_a, f"T59: flipping to B shows B's epoch stack ({sk.text_content('#stage-stack-label')})")
+        sk.select_option("#stack-mode", "detector")
+        sk.wait_for_function("document.querySelector('#stage-stack-label').textContent.includes('detector')")
+        check("epochs" in sk.text_content("#stage-stack-label"), f"T59: per-detector stack over the epochs ({sk.text_content('#stage-stack-label')})")
+        sk.click("#btn-diff")
+        sk.wait_for_selector("#diff-canvas:not([hidden])", timeout=8000)
+        check(sk.input_value("#stack-mode") == "off" and sk.is_hidden("#stack-canvas") and sk.is_hidden("#stage-stack-label"),
+              "T59: A − B ends the stack")
+        sk.select_option("#stack-mode", "epoch")
+        sk.wait_for_selector("#stack-canvas:not([hidden])", timeout=8000)
+        check(sk.get_attribute("#btn-diff", "aria-pressed") == "false" and sk.is_hidden("#diff-canvas"), "T59: the stack ends A − B")
+        sk.check("#trail-on")
+        check(sk.input_value("#stack-mode") == "off" and sk.is_hidden("#stack-canvas"), "T59: the trail view ends the stack")
+        check(not skerr, f"T59: no page errors {skerr}")
+
         # 8c. objects panel (T13) on the multi-epoch target
         q = b.new_page(viewport={"width": 1280, "height": 900})
         qerr = []
