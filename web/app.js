@@ -96,8 +96,27 @@ function fillForm(req) {
   f.ra.value = req.ra;
   f.dec.value = req.dec;
   f.size.value = String(req.size);
-  const i = app.presets.findIndex((p) => String(p.ra_deg) === req.ra && String(p.dec_deg) === req.dec);
+  syncPresetSelect();
+}
+
+/** Show the matching test field in the dropdown, or none once the user typed other coordinates. */
+function syncPresetSelect() {
+  const { ra, dec } = readForm();
+  const i = app.presets.findIndex((p) => String(p.ra_deg) === ra && String(p.dec_deg) === dec);
   $("#preset").value = i >= 0 ? String(i) : "";
+}
+
+const presetRequest = (f) => ({ ra: String(f.ra_deg), dec: String(f.dec_deg), size: clampSize(f.size_arcmin ?? SIZE_DEFAULT) });
+const defaultPreset = () => app.presets.find((p) => p.default) ?? app.presets[0] ?? null;
+
+/** Pre-fill the form with the default test field (no request; the user presses Show). */
+function fillDefaults() {
+  const f = defaultPreset();
+  $("#empty-default").hidden = !f;
+  if (!f) return;
+  fillForm(presetRequest(f));
+  $("#empty-default-name").textContent = f.name;
+  $("#empty-default-kind").textContent = f.kind ? ` (${f.kind.charAt(0).toLowerCase()}${f.kind.slice(1)})` : "";
 }
 
 function setPageUrl(req, push) {
@@ -125,6 +144,7 @@ function loadFromUrl() {
 async function loadField(req) {
   const { token, signal } = beginLoad();
   stopBlink();
+  $("#empty-default").hidden = true;
   app.request = req;
   try {
     const onProgress = (progress, id) => { if (token === app.loadToken) showJob(req, progress, id); };
@@ -191,7 +211,7 @@ async function loadPresets() {
 function onPresetPicked() {
   const f = app.presets[Number($("#preset").value)];
   if (!f) return;
-  const req = { ra: String(f.ra_deg), dec: String(f.dec_deg), size: clampSize(f.size_arcmin ?? SIZE_DEFAULT) };
+  const req = presetRequest(f);
   fillForm(req);
   setPageUrl(req, true);
   loadField(req);
@@ -272,6 +292,11 @@ function bindPage() {
     loadField(req);
   });
   $("#preset").addEventListener("change", onPresetPicked);
+  $("#field-form").addEventListener("input", (e) => {
+    if (e.target.name !== "ra" && e.target.name !== "dec") return;
+    syncPresetSelect();
+    $("#empty-default").hidden = true; // the form no longer holds the default field
+  });
   $("#target-select").addEventListener("change", (e) => openOffline(e.target.value));
 
   $("#job-cancel").addEventListener("click", () => {
@@ -305,6 +330,7 @@ function bindPage() {
       hideJob();
       clearMessages();
       clearTarget();
+      fillDefaults();
     }
   });
 }
@@ -320,6 +346,7 @@ async function main() {
   }
   await loadPresets();
   const requested = loadFromUrl();
+  if (!requested) fillDefaults();
   await showApiStatus(requested);
 }
 

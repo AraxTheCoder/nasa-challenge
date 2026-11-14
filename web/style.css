@@ -158,6 +158,8 @@ table.frames { width: 100%; border-collapse: collapse; font-size: 12px; font-var
 .field-form input[type="text"] { width: 13ch; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; }
 .field-form input[type="number"] { width: 6ch; }
 .field-form input:invalid:not(:placeholder-shown) { border-color: var(--error); }
+.form-hint { flex: 1 1 100%; margin: 0; font-size: 12px; color: var(--muted); }
+.form-hint strong { color: var(--text); font-weight: 600; }
 button.primary { background: var(--accent); color: #04111f; border-color: var(--accent); font-weight: 600; }
 button.link { background: none; border: none; color: var(--accent); padding: 4px 6px; }
 button.link:hover { text-decoration: underline; }
@@ -180,6 +182,7 @@ button.link:hover { text-decoration: underline; }
 }
 .empty h2 { margin-bottom: 8px; }
 .empty p { margin: 0; }
+.empty p + p { margin-top: 8px; }
 
 @media (max-width: 600px) {
   .field-form input[type="text"] { width: 100%; }
