@@ -1,7 +1,8 @@
 // SPHEREx Blink (T55 redesign, /app/): the sky map is the whole page. The Live API
 // (docs/CONTRACTS.md v0.3) builds any RA/Dec field on request; its SPHEREx epochs then show as map
 // layers (blinkable), with traces and names of the field's objects drawn on the map.
-// ?ra=&dec=&size= in the page URL requests that field on load; ?api=<base> sets the API address.
+// "Go" only moves the map to the typed RA/Dec and pins it; "Blink" builds the field at the view centre.
+// ?ra=&dec=&size= in the page URL goes there on load (+ &blink=1 builds it); ?api=<base> sets the API.
 //
 // Unlike web/ there is no frame viewer, analysis or side panel below the map, and no offline
 // (?data=) mode, which only fed the frame viewer.
@@ -12,6 +13,7 @@ import * as explore from "./explore.js";
 import "./traces.js";      // T35: paths + per-epoch positions of the field's objects on the map
 import "./skylabels.js";   // T72: catalogue names anywhere on the map
 import { initHud } from "./hud.js";   // T55: drag the floating panels anywhere
+import { parseDec, parseRa } from "./coords.js";
 
 const SIZE_MIN = 5;
 const SIZE_MAX = 60;
@@ -148,17 +150,20 @@ function fillDefaults() {
   if (f) fillForm(presetRequest(f));
 }
 
-function setPageUrl(req, push) {
+/** ?ra=&dec=&size= (+ &blink=1 when the field was built, so a reload or shared link builds it too). */
+function setPageUrl(req, push, blink = false) {
   const url = new URL(location.href);
   url.searchParams.set("ra", req.ra);
   url.searchParams.set("dec", req.dec);
   url.searchParams.set("size", String(req.size));
+  if (blink) url.searchParams.set("blink", "1");
+  else url.searchParams.delete("blink");
   if (url.href === location.href) return;
   if (push) history.pushState(null, "", url);
   else history.replaceState(null, "", url);
 }
 
-/** Request what the page URL asks for (?ra=&dec=&size=). Returns false if it asks for nothing. */
+/** Do what the page URL asks for: go to ?ra=&dec= (and build it if &blink=1). False if nothing. */
 function loadFromUrl() {
   const p = params();
   const ra = p.get("ra")?.trim();
@@ -166,8 +171,35 @@ function loadFromUrl() {
   if (!ra || !dec) return false;
   const req = { ra, dec, size: clampSize(Number(p.get("size")) || SIZE_DEFAULT) };
   fillForm(req);
-  loadField(req);
+  if (goTo(req) && p.get("blink") === "1") loadField(req);
   return true;
+}
+
+// ---------- T55 "Go": jump to a position and pin it (no build) ----------
+
+/** Move the map to req (as typed) and drop a pin; zoomed so that Blink there builds a req.size field. */
+function goTo(req) {
+  let ra, dec;
+  try {
+    ra = parseRa(req.ra);
+    dec = parseDec(req.dec);
+  } catch (err) {
+    clearMessages();
+    showMessage(`Can't use these coordinates: ${err.message}`);
+    return false;
+  }
+  clearMessages();
+  app.goal = { ra, dec, fovDeg: (req.size * 3) / 60 };   // Blink uses a third of the view
+  app.goalPending = !explore.getSky();                   // then startExplore shows it once the map is up
+  if (!app.goalPending) showGoal();
+  return true;
+}
+
+function showGoal() {
+  const g = app.goal;
+  if (!g) return;
+  explore.goTo(g.ra, g.dec, g.fovDeg);
+  explore.setPin(g.ra, g.dec);
 }
 
 async function loadField(req) {
@@ -240,8 +272,7 @@ function onPresetPicked() {
   if (!f) return;
   const req = presetRequest(f);
   fillForm(req);
-  setPageUrl(req, true);
-  loadField(req);
+  if (goTo(req)) setPageUrl(req, true);   // like Go: jump + pin; Blink builds it
 }
 
 async function warnIfApiDown(fieldRequested) {
@@ -257,8 +288,7 @@ function bindPage() {
     const req = readForm();
     if (!req.ra || !req.dec) return;
     fillForm(req);
-    setPageUrl(req, true);
-    loadField(req);
+    if (goTo(req)) setPageUrl(req, true);   // Go: jump + pin only; Blink builds the field
   });
   $("#preset").addEventListener("change", onPresetPicked);
   $("#field-form").addEventListener("input", (e) => {
@@ -365,7 +395,7 @@ async function startExplore() {
     if (!v) return;
     const req = { ra: v.ra.toFixed(4), dec: v.dec.toFixed(4), size: clampSize(v.fovArcmin / 3) };
     fillForm(req);
-    setPageUrl(req, true);
+    setPageUrl(req, true, true);
     loadField(req);
   });
   const f = readForm();
@@ -381,6 +411,7 @@ async function startExplore() {
     dbg.addEventListener("change", () => explore.setDebug(dbg.checked));
     setupTilesSwitch();
     setupBand(sky.base);
+    if (app.goalPending) { app.goalPending = false; showGoal(); }   // Go asked before the map existed
     if (app.shownTarget) syncExplore(app.shownTarget);   // a field loaded before the map was ready
     updateExplorePos();
   } catch (err) {
@@ -491,9 +522,8 @@ async function main() {
   if (p.get("api")) app.api = p.get("api");
   await loadPresets();
   startExplore();   // not awaited: the map loads in the background
-  const requested = loadFromUrl();
-  if (!requested) fillDefaults();
-  await warnIfApiDown(requested);
+  if (!loadFromUrl()) fillDefaults();
+  await warnIfApiDown(p.get("blink") === "1");   // a Go needs no API; a build reports its own error
 }
 
 main();

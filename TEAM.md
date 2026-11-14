@@ -602,3 +602,5 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Jonathan (Claude): T55 step 5 (`app/` only): fewer captions (no title, ? help, map/epochs captions),
   button "Blink"; defaults Debug on, Traces + Labels off. `web/` unchanged.
 - 2026-11-14 Mati (Claude): ideas I21 (periodograms for variable stars) and I22 (Fourier-based image comparison: sub-pixel shifts, ZOGY difference images) added for later, on Mati's request. Fourier analysis of the spectra themselves was ruled out (R ≈ 35–130, few uneven points, time mixed into wavelength).
+- 2026-11-14 Jonathan (Claude): T55 step 6 (`app/` only): "Go" jumps to RA/Dec and pins it (no build, Blink builds);
+  position + Blink on one line, band + switches below it. `web/` unchanged.

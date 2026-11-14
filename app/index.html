@@ -13,22 +13,23 @@
        Only map: SPHEREx 102 bands · live deep zoom. -->
   <div id="sky" class="sky-stage" aria-label="Sky map: drag to move, scroll or pinch to zoom, double-click to zoom in"></div>
 
-  <!-- Default layout (Jonathan's arrangement, 2026-11-14): two docks on the left. Top: the field
-       request (+ progress, messages), then "Blink". Bottom: the switches above band + epochs.
+  <!-- Default layout (Jonathan's arrangement, 2026-11-14): two docks on the left. Top: the go-to
+       form (+ progress, messages), then one panel with position + Blink on one line and band +
+       switches on the line below. Bottom: the field's epochs (+ traces).
        A dragged panel leaves its dock (hud.js); double-clicking its ⠿ docks it again. -->
   <div class="hud-dock hud-dock-top">
-  <!-- field request, then progress and messages -->
+  <!-- go to a position, then progress and messages -->
   <div class="hud" data-hud="field">
     <header class="hud-panel topbar">
-      <!-- Ask the Live API for any RA/Dec; the field's epochs then show in the map. -->
-      <form id="field-form" class="field-form" autocomplete="off" aria-label="Field to show">
+      <!-- "Go" only moves the map there and drops a pin (no build); "Blink" builds the field. -->
+      <form id="field-form" class="field-form" autocomplete="off" aria-label="Go to a position">
         <label title="Right ascension: decimal degrees (133.795) or hours (08h55m10.8s, 08:55:10.8)">RA
           <input name="ra" type="text" required placeholder="08h55m10.8s or 133.795" spellcheck="false"></label>
         <label title="Declination: decimal degrees (-7.245) or -7d14m42.5s, -07:14:42.5">Dec
           <input name="dec" type="text" required placeholder="-7d14m42.5s or -7.245" spellcheck="false"></label>
-        <label title="Side of the square field, 5–60 arcmin. Larger fields catch faster movers but take longer to build.">Field
+        <label title="Side of the square field, 5–60 arcmin: Go zooms so that Blink then builds a field this size.">Field
           <input name="size" type="number" min="5" max="60" step="1" value="15" required> ′</label>
-        <button type="submit" class="primary">Show</button>
+        <button type="submit" class="primary" title="Move the map to this position and mark it with a pin">Go</button>
         <select id="preset" aria-label="Test fields" title="The five test fields named in the challenge" hidden>
           <option value="">Test fields…</option>
         </select>
@@ -49,37 +50,35 @@
     <div id="messages" class="messages" role="status" aria-live="polite"></div>
   </div>
 
-  <!-- where the map looks, and blink that spot -->
-  <div class="hud" data-hud="spot">
-    <div class="hud-panel hud-row">
-      <span id="explore-pos" class="muted small"></span>
-      <button id="explore-blink" type="button" class="primary"
-              title="Build the per-epoch blink for the centre of this view (field of view clamped to 5–60′)">Blink</button>
+  <!-- line 1: where the map looks + build the blink there; line 2: band of the 102 + switches -->
+  <div class="hud" data-hud="view">
+    <div class="hud-panel hud-stack">
+      <div class="hud-row hud-nowrap">
+        <span id="explore-pos" class="muted small"></span>
+        <button id="explore-blink" type="button" class="primary"
+                title="Build the per-epoch blink for the centre of this view (field of view clamped to 5–60′)">Blink</button>
+      </div>
+      <div class="hud-row">
+        <label id="explore-band-box" hidden title="SPHEREx has 102 spectral channels; pick one">Band
+          <input id="explore-band" type="range" min="0" max="101" step="1" value="0">
+          <output id="explore-band-out" class="small"></output></label>
+        <label title="Names of catalogued stars and objects in the field (SIMBAD, Gaia DR3). Asked only when switched on.">
+          <input id="labels-toggle" type="checkbox"> Labels <span id="labels-note" class="muted small"></span></label>
+        <label id="tiles-box" class="muted small" hidden
+               title="Where the live deep-zoom tiles are computed: here, or on the Google Cloud VM next to the AWS SPHEREx bucket (much faster downloads)">Tiles
+          <select id="tiles-mode"><option value="local">local</option><option value="remote">US VM</option></select></label>
+        <label class="muted small" title="Debug: tile outlines (green sharp, yellow still blurry, red no tile), zoom level and loading state">
+          <input id="sky-debug" type="checkbox"> Debug</label>
+      </div>
     </div>
   </div>
   </div>
 
   <div class="hud-dock hud-dock-bottom">
-  <!-- map layers and switches -->
-  <div class="hud" data-hud="switches">
-    <div class="hud-panel hud-row">
-      <label title="Names of catalogued stars and objects in the field (SIMBAD, Gaia DR3). Asked only when switched on.">
-        <input id="labels-toggle" type="checkbox"> Labels <span id="labels-note" class="muted small"></span></label>
-      <label id="tiles-box" class="muted small" hidden
-             title="Where the live deep-zoom tiles are computed: here, or on the Google Cloud VM next to the AWS SPHEREx bucket (much faster downloads)">Tiles
-        <select id="tiles-mode"><option value="local">local</option><option value="remote">US VM</option></select></label>
-      <label class="muted small" title="Debug: tile outlines (green sharp, yellow still blurry, red no tile), zoom level and loading state">
-        <input id="sky-debug" type="checkbox"> Debug</label>
-    </div>
-    <span id="objects-note" class="hud-panel muted small"></span>
-  </div>
-
-  <!-- band of the 102, the field's epochs (+ traces switch, added by traces.js) -->
+  <!-- the field's epochs (+ traces switch, added by traces.js), known-objects status -->
   <div class="hud" data-hud="epochs">
+    <span id="objects-note" class="hud-panel muted small"></span>
     <div class="hud-panel hud-row">
-      <label id="explore-band-box" hidden title="SPHEREx has 102 spectral channels; pick one">Band
-        <input id="explore-band" type="range" min="0" max="101" step="1" value="0">
-        <output id="explore-band-out" class="small"></output></label>
       <span id="explore-epochs" class="explore-epochs" hidden></span>
     </div>
   </div>
@@ -88,6 +87,6 @@
   <!-- bottom right: how to move the map -->
   <p class="hud-hint muted small">Drag to move · scroll or pinch to zoom · double-click to zoom in · arrow keys and +/− ·
     drag a panel by ⠿ to rearrange it (double-click ⠿ docks it again) ·
-    the field's epochs appear in the red box after <strong>Show</strong> or <strong>Blink</strong></p>
+    <strong>Go</strong> jumps to a position and pins it; <strong>Blink</strong> builds the field's epochs in the red box</p>
 </body>
 </html>
