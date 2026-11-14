@@ -106,6 +106,20 @@ Dated, one line each, with why.
 ## Ideas
 
 Format: `[name] idea — status: new`. Agents don't act on an idea until a human moves it to the Board.
+- [Joerg] Draw paths, not just positions: for every label, known object and detection, a line
+  through its per-frame positions with a tick per frame and colour from early to late (data is
+  already in the JSON). — status: new
+- [Joerg] Motion classification for detections: from the track, rate + direction + shape, shown as
+  a label, e.g. "asteroid-like, 30"/h" (seen in one burst only), "moves between epochs only: nearby
+  star / brown dwarf", "large jump between epochs, slow drift within one: distant solar-system body".
+  Rough numbers: main belt ~150 px/day; Barnard 1.7 px/yr; a body at 500 AU swings ~+-0.11 deg/yr
+  from Earth's orbit, i.e. up to ~14' between epochs (about one default field!), ~1 px/day within
+  an epoch. — status: new
+- [Joerg] Shift-and-stack: add frames after shifting each along a guessed motion; faint movers
+  sharpen, stars smear. Standard for distant-object searches; matches the challenge's "add together
+  or subtract images". — status: new
+- [Joerg] Trail image: sum one burst (or one epoch) into a single picture so movers show as dot rows
+  or streaks without playing the blink. — status: new
 
 ## Questions / Blockers
 
