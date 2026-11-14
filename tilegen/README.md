@@ -18,5 +18,8 @@ The Live API in Europe / on your PC uses it with
     python -m server --tiles-remote https://136-107-125-170.sslip.io [--use-remote]
 
 and the viewer's "Tiles" switch (or `POST /api/settings {"tiles": "remote"|"local"}`) flips between
-local and remote rendering. Needs the local image index (`python -m pipeline.mirror harvest`, `build`).
+local and remote rendering. Local rendering needs the image index `data/mirror/index.npz` (gitignored,
+45 MB). On a fresh checkout it is built by itself in the background on first use (~3 min); meanwhile the
+team VM (default `--tiles-remote`) stands in, or the API answers 503 and the map retries. To build it
+up front: `python -m pipeline.mirror harvest && python -m pipeline.mirror build`.
 Tests: `python -m pytest tilegen`.

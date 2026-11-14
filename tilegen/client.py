@@ -31,8 +31,15 @@ class TileGenerator:
     def get(self, slice_: int, order: int, npix: int) -> bytes | None:
         if self.remote:
             return self._remote(slice_, order, npix)
+        from pipeline.mirror import IndexNotReady
+
         from . import render
-        return render.render(slice_, order, npix)
+        try:
+            return render.render(slice_, order, npix)
+        except IndexNotReady:
+            if self.remote_url:            # fresh checkout: the remote generator stands in meanwhile
+                return self._remote(slice_, order, npix)
+            raise
 
     def _http(self):
         with self._lock:

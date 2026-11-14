@@ -69,3 +69,33 @@ def test_api_settings_switch(tmp_path):
     assert c.post("/api/settings", json={"tiles": "local"}).json()["tiles"] == "local"
     c2 = TestClient(api(tmp_path / "t2", fixture=True))
     assert c2.post("/api/settings", json={"tiles": "remote"}).status_code == 400
+
+
+def test_fresh_checkout_without_index(monkeypatch, tmp_path):
+    """data/ is gitignored: no index -> it gets built in the background, the remote generator
+    stands in meanwhile, and without a remote the API answers 503 (retry), not 502."""
+    import threading
+
+    from pipeline import mirror
+
+    started = threading.Event()
+    monkeypatch.setattr(mirror, "MIRROR", tmp_path / "mirror")
+    monkeypatch.setattr(mirror, "harvest", lambda root=None: started.set())
+    monkeypatch.setattr(mirror, "build", lambda root=None: None)
+    monkeypatch.setattr(mirror, "_building", {"thread": None, "error": None})
+    monkeypatch.setattr(mirror.ensure_background, "__defaults__", (tmp_path / "mirror",))
+    monkeypatch.setattr(render, "_index", None)
+
+    g = TileGenerator("https://vm.example")
+
+    class S:
+        def get(self, url, timeout):
+            return _Resp(200, b"from-vm")
+    g._session = S()
+    assert g.get(20, 7, 1) == b"from-vm"            # local index missing -> remote stands in
+    assert started.wait(5)                          # ... and the index build was started
+
+    from server.app import create_app as api
+    c = TestClient(api(tmp_path / "targets", fixture=True))
+    r = c.get("/api/sky/spherex-live/Norder7/Dir0/Npix5_20.png")
+    assert r.status_code == 503 and r.headers["retry-after"] == "20"

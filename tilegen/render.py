@@ -44,10 +44,16 @@ _images = ThreadPoolExecutor(8, thread_name_prefix="live-image")     # one task 
 
 
 def _mirror():
+    """The local SPHEREx image index. data/ is gitignored, so on a fresh checkout it is missing:
+    then it is built in the background (once, ~3 min) and IndexNotReady is raised meanwhile."""
     global _index
     with _index_lock:
         if _index is None:
-            from pipeline.mirror import Index
+            from pipeline.mirror import Index, IndexNotReady, ensure_background
+            state = ensure_background()
+            if state != "ready":
+                raise IndexNotReady(f"local SPHEREx index (data/mirror/index.npz) {state}; "
+                                    "building it takes ~3 min, tiles come after that")
             _index = Index()
         return _index
 
