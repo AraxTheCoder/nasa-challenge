@@ -20,6 +20,7 @@ from .builder import REPO, Builder
 from .photometry import router as photometry_router  # T49
 from .fieldspectra import router as fieldspectra_router  # T85/T86
 from .updates import router as updates_router  # T64
+from .chemistry import router as chemistry_router  # T93
 from .coords import CoordError, parse_dec, parse_ra, parse_size, target_id
 
 _ID = re.compile(r"^[a-z0-9-]+$")
@@ -44,6 +45,7 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
     app.include_router(photometry_router)  # T49: /api/targets/<id>/photometry
     app.include_router(fieldspectra_router)  # T85/T86: /api/targets/<id>/spectral-outliers
     app.include_router(updates_router)  # T64: /api/targets/<id>/updates
+    app.include_router(chemistry_router)  # T93: /api/targets/<id>/chemistry
 
     def reply(job) -> JSONResponse:
         return JSONResponse(job.body(), status_code=_HTTP[job.status])

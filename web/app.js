@@ -19,6 +19,7 @@ import { initLamPick, lamFromUrl, setLamUrl } from "./lampick.js";
 import { initStack } from "./stackview.js";
 import { nearestBand, parseLam } from "./lambda.js";
 import * as explore from "./explore.js";
+import { initChemistry } from "./chemistry.js";
 
 const SIZE_MIN = 5;
 const SIZE_MAX = 60;
@@ -736,6 +737,7 @@ async function main() {
   // depend on external tile servers being up).
   if (p.get("explore") === "0") $("#explore").hidden = true;
   else startExplore();   // not awaited: the map loads in the background
+  initChemistry(app.api);   // T93: the Chemistry selector, for real fields on the map
   const requested = loadFromUrl();
   if (!requested) {
     fillDefaults();

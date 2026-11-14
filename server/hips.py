@@ -48,7 +48,7 @@ def epochs(target: dict) -> dict[int, list[dict]]:
     return dict(sorted(out.items()))
 
 
-LAYER_RE = r"^(e\d+(d[1-6]|c)?|f\d{3,}|d-f\d{3,}-f\d{3,})$"
+LAYER_RE = r"^(e\d+(d[1-6]|c)?|f\d{3,}|d-f\d{3,}-f\d{3,}|x-[a-z0-9_]+)$"   # x-<feature>: T93 chemistry map
 # T89: e<ep>d<n> = the epoch's frames of detector n only (one band of the map); e<ep>c = false colour of
 # all of them: blue = D1+D2 (0.75-1.62 µm), green = D3+D4 (1.63-3.82 µm), red = D5+D6 (3.83-5.0 µm).
 COLOUR = ((5, 6), (3, 4), (1, 2))          # R, G, B detector pairs
@@ -77,6 +77,9 @@ def has_layer(target: dict, key: str) -> bool:
     if key.startswith("d-"):
         _, a, b = key.split("-")
         return a in ids and b in ids
+    if key.startswith("x-"):                           # T93: made by GET /api/targets/<id>/chemistry first
+        from pipeline.chemistry import FEATURES
+        return key[2:] in FEATURES
     return key in ids
 
 
@@ -94,7 +97,8 @@ def layers(tid: str, target: dict) -> list[dict]:
 def properties(tid: str, target: dict, ep) -> str:
     c = target["center"]
     key = ep if isinstance(ep, str) else f"e{ep}"
-    what = {"e": f"epoch {key[1:]}", "f": f"frame {key}", "d": f"difference {key[2:].replace('-', ' − ')}"}[key[0]]
+    what = {"e": f"epoch {key[1:]}", "f": f"frame {key}", "d": f"difference {key[2:].replace('-', ' − ')}",
+            "x": f"chemistry map {key[2:]} (feature minus continuum, T93)"}[key[0]]
     if key[0] == "e":
         ep, det, colour = epoch_key(key)
         what = f"epoch {ep}" + (f", detector {det}" if det else ", false colour" if colour else "")
@@ -192,7 +196,22 @@ def layer_image(target_dir: str, mtime: float, key: str) -> tuple[np.ndarray, np
     if key.startswith("d-"):
         _, a, b = key.split("-")
         return diff_image(target_dir, mtime, a, b)
+    if key.startswith("x-"):
+        return chemistry_image(target_dir, key[2:])
     return frame_image(target_dir, mtime, key)
+
+
+def chemistry_image(target_dir: str, feature: str) -> tuple[np.ndarray, np.ndarray]:
+    """T93: the chemistry map (grey 128 = like the continuum) and its coverage; empty if not made yet."""
+    from PIL import Image
+
+    p = Path(target_dir) / "chemistry" / f"{feature}.png"
+    if not p.is_file():
+        t = json.loads((Path(target_dir) / "target.json").read_text(encoding="utf-8"))
+        n = int(t["image"]["width"])
+        return np.full((n, n), 128.0, np.float32), np.zeros((n, n), bool)
+    a = np.asarray(Image.open(p).convert("LA"), np.float32)
+    return a[..., 0], a[..., 1] > 0
 
 
 def _grid_wcs(target: dict):
@@ -219,6 +238,9 @@ def tile_png(target_dir: Path, ep, order: int, npix: int) -> bytes | None:
     ep: an epoch number, or a layer key (`e1`, `f003`, `d-f003-f017`, T81)."""
     mtime = (target_dir / "target.json").stat().st_mtime
     key = ep if isinstance(ep, str) else f"e{ep}"
+    if key.startswith("x-"):                  # T93: a chemistry map changes without target.json changing
+        chem = target_dir / "chemistry" / f"{key[2:]}.png"
+        mtime = chem.stat().st_mtime if chem.is_file() else 0.0
     return _tile_cached(str(target_dir), mtime, key, order, npix)
 
 
