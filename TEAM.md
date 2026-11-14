@@ -243,6 +243,12 @@ Format: `[name] idea — status: new`. Agents don't act on an idea until a human
   11. **Limits before a public deploy** (T14): anyone can request any field and `refresh=1`, i.e. trigger
      unlimited IRSA/AWS downloads and JPL queries. Rate limit per IP, cap concurrent builds, disable
      `refresh` publicly (token), cache size cap with eviction. Server ~1 h.
+- [Jonathan] Host the Live API + viewer in a cloud region next to AWS us-east-1 (where the SPHEREx
+  bucket is): Google Cloud `us-east4` (Ashburn) or Azure `East US` (Virginia), VM with 2 vCPU / 4 GB
+  (GCP e2-medium / Azure B2s), free credits available. Why: from Europe S3 gave 0.04-0.1 MB/s per
+  connection in the afternoon (another us-east-1 bucket too), so live deep-zoom tiles take 20-60 s;
+  next to the bucket they should take ~1 s. Needs: Dockerfile, warm-up script, HTTPS, guide; would
+  also cover T14. — status: new
 
 ## Questions / Blockers
 
