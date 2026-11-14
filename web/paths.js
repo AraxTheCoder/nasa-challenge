@@ -93,7 +93,7 @@ function draw() {
   const px = (n) => n / u;         // n screen px in image px
   const visible = st.objects.filter((o) => opts[o.group]);
   // paths first, markers and names on top
-  const paths = [], marks = [], names = [], hits = [];
+  const paths = [], marks = [], names = [], hits = [], wanted = [];
   for (const o of visible) {
     const moving = o.extent >= STILL_PX;
     if (opts.paths && moving && o.pts.length > 1) {
@@ -129,19 +129,44 @@ function draw() {
     marks.push(svg("circle", { cx: cur.x, cy: cur.y, r: px(ring), class: `path-mark is-${o.group}` }));
     hits.push(svg("circle", { cx: cur.x, cy: cur.y, r: px(Math.max(ring + 3, 8)), class: "path-hit", "data-obj": st.objects.indexOf(o) }));
     if (o.group !== "catalogue") {
-      const right = cur.x < (st.target.image?.width ?? 1) * 0.7;
       const cls = o.motion?.class && o.motion.class !== "still" ? ` · ${o.motion.class}` : "";
-      const text = o.name + cls + (o.synthetic ? " · synthetic" : "");
-      names.push(svg("text", {
-        x: cur.x + (right ? 1 : -1) * px(ring + 5), y: cur.y + px(4), "text-anchor": right ? "start" : "end",
-        class: `path-name is-${o.group}`, "font-size": px(12),
-      }, text));
+      const moving = o.group === "movers" || (o.motion && o.motion.class !== "still");
+      wanted.push({ o, cur, ring, text: o.name + cls + (o.synthetic ? " · synthetic" : ""), prio: moving ? 0 : 1 });
     }
   }
+  names.push(...placeNames(wanted, px));
   g.append(...paths, ...marks, ...names, ...hits);
   if (tip.obj && !visible.includes(tip.obj)) hideTip(true);
   else if (tip.obj) fillTip(tip.obj);
   updateLegend(visible);
+}
+
+// Cleaner labels: each name tries right, left, above, below its object and takes the first spot
+// that overlaps no name placed before it (moving objects go first). No free spot: name hidden,
+// ring stays, hover still shows everything.
+function placeNames(wanted, px) {
+  const W = st.target.image?.width ?? 1, H = st.target.image?.height ?? 1;
+  const fs = px(12), charW = fs * 0.62, placed = [], out = [];
+  let hidden = 0;
+  wanted.sort((a, b) => a.prio - b.prio);
+  for (const w of wanted) {
+    const tw = w.text.length * charW, th = fs * 1.1, gap = px(w.ring + 5);
+    const { x, y } = w.cur;
+    const tries = [
+      { x: x + gap, y: y + fs * 0.35, anchor: "start", box: [x + gap, y - th / 2, tw, th] },
+      { x: x - gap, y: y + fs * 0.35, anchor: "end", box: [x - gap - tw, y - th / 2, tw, th] },
+      { x, y: y - gap - fs * 0.2, anchor: "middle", box: [x - tw / 2, y - gap - th, tw, th] },
+      { x, y: y + gap + fs * 0.9, anchor: "middle", box: [x - tw / 2, y + gap, tw, th] },
+    ];
+    const fits = (b) => b[0] >= -0.5 && b[1] >= -0.5 && b[0] + b[2] <= W && b[1] + b[3] <= H &&
+      !placed.some((p) => b[0] < p[0] + p[2] && p[0] < b[0] + b[2] && b[1] < p[1] + p[3] && p[1] < b[1] + b[3]);
+    const spot = tries.find((t) => fits(t.box));
+    if (!spot) { hidden++; continue; }
+    placed.push(spot.box);
+    out.push(svg("text", { x: spot.x, y: spot.y, "text-anchor": spot.anchor, class: `path-name is-${w.o.group}`, "font-size": fs }, w.text));
+  }
+  st.hiddenNames = hidden;
+  return out;
 }
 
 // ---------- hover / click info ----------
@@ -264,7 +289,8 @@ function updateLegend(visible) {
   $("#paths-t0").textContent = st.frames[0]?.time_utc?.slice(0, 10) ?? "";
   $("#paths-t1").textContent = st.frames[st.frames.length - 1]?.time_utc?.slice(0, 10) ?? "";
   const moving = visible.filter((o) => o.extent >= STILL_PX).length;
-  $("#paths-count").textContent = `· ${visible.length} shown, ${moving} moving`;
+  $("#paths-count").textContent = `· ${visible.length} shown, ${moving} moving` +
+    (st.hiddenNames ? ` · ${st.hiddenNames} name${st.hiddenNames === 1 ? "" : "s"} hidden to avoid overlap (hover the ring)` : "");
   for (const g of ["names", "catalogue", "movers"]) {
     const n = st.objects.filter((o) => o.group === g).length;
     const input = $(`#paths-${g}`);
