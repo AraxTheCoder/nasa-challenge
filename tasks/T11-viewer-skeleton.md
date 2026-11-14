@@ -25,6 +25,11 @@ with no build step.
   step, row click, blink alternation, phone width (390 px, no horizontal scroll), missing data root
   and unknown target messages. The test script is not committed yet.
 
+- **Fix (2026-11-14, Mati's report):** in the narrow layout the frame table sits under the image and
+  `scrollIntoView()` on the shown row scrolled the whole page there on every blink. Now only the
+  table's own box scrolls (`keepRowVisible` in `viewer.js`). Arrow keys also step when a button has
+  focus. Regression checks in `web/tests/browser_test.py`.
+
 ## Questions / needs from others
 - (answered) [to Joerg] no-data pixels as alpha 0: yes, in CONTRACTS v0.2.
 

@@ -224,3 +224,6 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   room. The viewer now looks for the API on port 8000 of the page's host. Gotchas: plain
   `python -m http.server` shares the whole repo with your network, use `--bind 127.0.0.1`; `pytest`/
   `httpx` (server tests) are not in any requirements file (question for Jonathan in tasks/T21).
+- 2026-11-14 [Mati + Claude] Fix merged: blinking no longer scrolls the page down to the frame table
+  on narrow screens (Mati's report); arrow keys step after clicking A/B/Blink. Branch
+  `mati/T11-fix-blink-scroll`, details in tasks/T11. Merges cleanly with T22.
