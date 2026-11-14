@@ -1,7 +1,7 @@
 # T64: A/C: Data release in the UI: release per frame (DR1 / QR3) in target.json, shown in frame info, "newer data available: rebuild" when a cached field is older
 
-- **Owner:** –  ·  **Status:** open
-- **Branch:** –
+- **Owner:** Mati  ·  **Status:** doing
+- **Branch:** `mati/T64-data-release`
 - **Depends on / feeds:** T01, T58 (refresh token)
 
 ## Goal
