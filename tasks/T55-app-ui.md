@@ -16,6 +16,9 @@ Rework the UI without blocking anyone: the redesign lives in `app/` (URL `/app/`
         zoom" (picker removed), north-up button + N key removed, everything below the map removed
         (frame viewer, blink controls, timeline, brightness/spectrum analysis, side panel, footer),
         offline `?data=` mode removed; unused modules deleted from `app/`
+  - [x] Step 2 (Jonathan, 2026-11-14): map fills the whole window; controls float over it in panels
+        around the edges (top left form/progress/messages, top right switches, bottom left band +
+        epochs, bottom right position + Blink this spot, bottom centre hint)
 - [ ] Port relevant `web/` changes made after the copy
 - [ ] When done: decide (TEAM.md Decisions) whether `app/` replaces `web/`
 

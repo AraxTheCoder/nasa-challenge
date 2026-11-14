@@ -7,77 +7,93 @@
   <link rel="stylesheet" href="style.css">
   <script type="module" src="app.js"></script>
 </head>
-<body>
-  <header class="topbar">
-    <h1>SPHEREx Blink</h1>
-
-    <!-- Ask the Live API for any RA/Dec; the field's epochs then show in the map. -->
-    <form id="field-form" class="field-form" autocomplete="off" aria-describedby="form-tip-text">
-      <label title="Right ascension: decimal degrees (133.795) or hours (08h55m10.8s, 08:55:10.8)">RA
-        <input name="ra" type="text" required placeholder="08h55m10.8s or 133.795" spellcheck="false"></label>
-      <label title="Declination: decimal degrees (-7.245) or -7d14m42.5s, -07:14:42.5">Dec
-        <input name="dec" type="text" required placeholder="-7d14m42.5s or -7.245" spellcheck="false"></label>
-      <label title="Side of the square field, 5–60 arcmin. Larger fields catch faster movers but take longer to build.">Field of view
-        <input name="size" type="number" min="5" max="60" step="1" value="15" required> arcmin</label>
-      <button type="submit" class="primary">Show</button>
-      <select id="preset" aria-label="Test fields" title="The five test fields named in the challenge" hidden>
-        <option value="">Test fields…</option>
-      </select>
-      <button type="button" id="form-help" class="help-btn" aria-controls="form-tip" aria-expanded="false"
-              title="How to enter coordinates">?</button>
-      <!-- RA/Dec help bubble (T29). Switched off for now: FORM_TIP_ENABLED in app.js, or ?tip=1. -->
-      <div id="form-tip" class="form-tip" role="note" hidden>
-        <span class="form-tip-icon" aria-hidden="true">i</span>
-        <p id="form-tip-text">
-          <strong>Choose any patch of sky.</strong> Change RA and Dec, in decimal degrees (133.795, -7.245)
-          or sexagesimal (08h55m10.8s, -7d14m42.5s), and the field of view (5–60 arcmin), or pick a test
-          field. Then press <strong>Show</strong>.
-        </p>
-        <button type="button" id="form-tip-close" class="form-tip-close">Got it</button>
-      </div>
-    </form>
-
-    <span id="synthetic-badge" class="badge badge-synthetic" hidden>Synthetic data · not SPHEREx</span>
-  </header>
-
-  <div id="messages" class="messages" role="status" aria-live="polite"></div>
-
-  <section id="job" class="job" hidden aria-live="polite">
-    <div class="job-head">
-      <strong id="job-title">Building field…</strong>
-      <span id="job-elapsed" class="muted"></span>
-      <button id="job-cancel" type="button" class="link">Stop waiting</button>
-    </div>
-    <progress id="job-progress"></progress>
-    <p id="job-message" class="muted small"></p>
-  </section>
-
+<body class="fullmap">
   <!-- T30/T36 Sky map: pan/zoom the whole sky (own WebGL HiPS renderer, sky.js), then blink a spot.
-       T55: the only map is SPHEREx 102 bands · live deep zoom, and nothing sits below the map. -->
-  <section id="explore" class="explore" aria-label="Sky map">
-    <div class="explore-bar">
+       T55: the map fills the whole window; the controls float over it, arranged around the edges.
+       Only map: SPHEREx 102 bands · live deep zoom. -->
+  <div id="sky" class="sky-stage" aria-label="Sky map: drag to move, scroll or pinch to zoom, double-click to zoom in"></div>
+
+  <!-- top left: title + field request, then progress and messages -->
+  <div class="hud hud-tl">
+    <header class="hud-panel topbar">
+      <h1>SPHEREx Blink</h1>
+      <!-- Ask the Live API for any RA/Dec; the field's epochs then show in the map. -->
+      <form id="field-form" class="field-form" autocomplete="off" aria-describedby="form-tip-text">
+        <label title="Right ascension: decimal degrees (133.795) or hours (08h55m10.8s, 08:55:10.8)">RA
+          <input name="ra" type="text" required placeholder="08h55m10.8s or 133.795" spellcheck="false"></label>
+        <label title="Declination: decimal degrees (-7.245) or -7d14m42.5s, -07:14:42.5">Dec
+          <input name="dec" type="text" required placeholder="-7d14m42.5s or -7.245" spellcheck="false"></label>
+        <label title="Side of the square field, 5–60 arcmin. Larger fields catch faster movers but take longer to build.">Field
+          <input name="size" type="number" min="5" max="60" step="1" value="15" required> ′</label>
+        <button type="submit" class="primary">Show</button>
+        <select id="preset" aria-label="Test fields" title="The five test fields named in the challenge" hidden>
+          <option value="">Test fields…</option>
+        </select>
+        <button type="button" id="form-help" class="help-btn" aria-controls="form-tip" aria-expanded="false"
+                title="How to enter coordinates">?</button>
+        <!-- RA/Dec help bubble (T29). Switched off for now: FORM_TIP_ENABLED in app.js, or ?tip=1. -->
+        <div id="form-tip" class="form-tip" role="note" hidden>
+          <span class="form-tip-icon" aria-hidden="true">i</span>
+          <p id="form-tip-text">
+            <strong>Choose any patch of sky.</strong> Change RA and Dec, in decimal degrees (133.795, -7.245)
+            or sexagesimal (08h55m10.8s, -7d14m42.5s), and the field of view (5–60 arcmin), or pick a test
+            field. Then press <strong>Show</strong>.
+          </p>
+          <button type="button" id="form-tip-close" class="form-tip-close">Got it</button>
+        </div>
+      </form>
+      <span id="synthetic-badge" class="badge badge-synthetic" hidden>Synthetic data · not SPHEREx</span>
+    </header>
+
+    <section id="job" class="hud-panel job" hidden aria-live="polite">
+      <div class="job-head">
+        <strong id="job-title">Building field…</strong>
+        <span id="job-elapsed" class="muted"></span>
+        <button id="job-cancel" type="button" class="link">Stop waiting</button>
+      </div>
+      <progress id="job-progress"></progress>
+      <p id="job-message" class="muted small"></p>
+    </section>
+
+    <div id="messages" class="messages" role="status" aria-live="polite"></div>
+  </div>
+
+  <!-- top right: map layers and switches -->
+  <div class="hud hud-tr">
+    <div class="hud-panel hud-row">
       <span class="muted small" title="SPHEREx all-sky cube (IRSA DR1) up to order 5, deeper: live tiles from the AWS level-2 images">SPHEREx · 102 bands · live deep zoom</span>
-      <label id="explore-band-box" hidden title="SPHEREx has 102 spectral channels; pick one">Band
-        <input id="explore-band" type="range" min="0" max="101" step="1" value="0">
-        <output id="explore-band-out" class="small"></output></label>
-      <span id="explore-epochs" class="explore-epochs" hidden></span>
       <label title="Names of catalogued stars and objects in the field (SIMBAD, Gaia DR3). Asked only when switched on.">
         <input id="labels-toggle" type="checkbox"> Labels <span id="labels-note" class="muted small"></span></label>
-      <span id="objects-note" class="muted small"></span>
-      <span class="spacer"></span>
       <label id="tiles-box" class="muted small" hidden
              title="Where the live deep-zoom tiles are computed: here, or on the Google Cloud VM next to the AWS SPHEREx bucket (much faster downloads)">Tiles
         <select id="tiles-mode"><option value="local">local</option><option value="remote">US VM</option></select></label>
       <label class="muted small" title="Debug: tile outlines (green sharp, yellow still blurry, red no tile), zoom level and loading state">
         <input id="sky-debug" type="checkbox"> Debug</label>
+    </div>
+    <span id="objects-note" class="hud-panel muted small"></span>
+  </div>
+
+  <!-- bottom left: band of the 102, the field's epochs (+ traces switch, added by traces.js) -->
+  <div class="hud hud-bl">
+    <div class="hud-panel hud-row">
+      <label id="explore-band-box" hidden title="SPHEREx has 102 spectral channels; pick one">Band
+        <input id="explore-band" type="range" min="0" max="101" step="1" value="0">
+        <output id="explore-band-out" class="small"></output></label>
+      <span id="explore-epochs" class="explore-epochs" hidden></span>
+    </div>
+  </div>
+
+  <!-- bottom right: where the map looks, and blink that spot -->
+  <div class="hud hud-br">
+    <div class="hud-panel hud-row">
       <span id="explore-pos" class="muted small"></span>
       <button id="explore-blink" type="button" class="primary"
               title="Build the per-epoch blink for the centre of this view (field of view clamped to 5–60′)">Blink this spot</button>
     </div>
-    <div id="sky" class="sky-stage" aria-label="Sky map: drag to move, scroll or pinch to zoom, double-click to zoom in"></div>
-    <p class="muted small explore-note">Drag to move · scroll or pinch to zoom · double-click to zoom in ·
-      arrow keys and +/− when the map has focus. The map combines every epoch; the field's
-      epochs appear inside the red box after <strong>Show</strong> or <strong>Blink this spot</strong>.</p>
-  </section>
+  </div>
+
+  <!-- bottom centre: how to move the map -->
+  <p class="hud hud-bc muted small">Drag to move · scroll or pinch to zoom · double-click to zoom in · arrow keys and +/− ·
+    the field's epochs appear in the red box after <strong>Show</strong> or <strong>Blink this spot</strong></p>
 </body>
 </html>

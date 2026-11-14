@@ -12,6 +12,10 @@ viewer and the default URL.
   offline `?data=` mode. "Show" / "Blink this spot" still build the field; its epochs, traces and
   names show in the map. Modules: `app.js`, `api.js`, `util.js`, `explore.js`, `sky.js`,
   `healpix.js`, `traces.js`, `skylabels.js`.
+- Step 2: the map fills the whole window (`#sky` fixed, no border); the controls float over it in
+  glass panels at the edges (`.hud-tl` form + progress + messages, `.hud-tr` labels/tiles/debug,
+  `.hud-bl` band + epochs + traces, `.hud-br` position + "Blink this spot", `.hud-bc` hint).
+  Drags between the panels reach the map.
 - Changes made in `web/` after the copy are **not** picked up automatically; the T55 owner ports
   them into `app/` when needed. When the redesign is done, `app/` replaces `web/` (decided then,
   with a line under TEAM.md "Decisions").

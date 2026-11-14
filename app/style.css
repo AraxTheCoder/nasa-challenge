@@ -264,15 +264,38 @@ button.link:hover { text-decoration: underline; }
 .focus-ring { fill: none; stroke: var(--warn); stroke-width: 2.5; animation: focus-pulse 1.4s ease-in-out infinite; }
 @keyframes focus-pulse { 50% { stroke-opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .focus-ring { animation: none; } }
-/* T30/T36 sky map (own renderer, sky.js) */
-.explore { max-width: 1280px; margin: 0 auto; padding: 8px 16px 0; }
-.explore-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 8px; }
-.explore-bar label { display: inline-flex; align-items: center; gap: 6px; }
-.explore-bar .spacer { flex: 1; }
-.explore-note { margin: 6px 0; }
-/* T55 /app/: the map is the whole page, so it takes the height below the header and bar */
-.sky-stage { position: relative; width: 100%; height: max(420px, calc(100vh - 200px)); border: 1px solid var(--border);
-  border-radius: 8px; overflow: hidden; background: #05080f; }
+/* T30/T36 sky map (own renderer, sky.js).
+   T55 /app/: the map fills the whole window; the controls float over it in panels at the edges
+   (.hud = a fixed corner/edge slot that lets drags through, .hud-panel = the clickable glass card). */
+.sky-stage { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: #05080f; }
+body.fullmap { overflow: hidden; height: 100vh; }
+.hud { position: fixed; z-index: 10; display: flex; flex-direction: column; gap: 8px;
+  max-width: calc(100vw - 24px); pointer-events: none; margin: 0; }
+.hud > * { pointer-events: auto; }
+.hud-tl { top: 12px; left: 12px; max-width: min(760px, calc(100vw - 24px)); }
+.hud-tr { top: 12px; right: 12px; align-items: flex-end; }
+.hud-bl { bottom: 12px; left: 12px; }
+.hud-br { bottom: 12px; right: 12px; align-items: flex-end; }
+.hud-bc { bottom: 16px; left: 50%; transform: translateX(-50%); max-width: 40vw; text-align: center;
+  pointer-events: none; text-shadow: 0 1px 3px #000; opacity: 0.8; }
+.hud-panel {
+  background: rgb(20 24 33 / 0.82); border: 1px solid rgb(255 255 255 / 0.10); border-radius: 10px;
+  padding: 8px 12px; box-shadow: 0 6px 20px rgb(0 0 0 / 0.45);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.hud-panel:empty, .hud-row:not(:has(> :not([hidden]))) { display: none; }   /* nothing to show yet */
+.hud-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.hud-row label { display: inline-flex; align-items: center; gap: 6px; }
+#explore-pos { font-variant-numeric: tabular-nums; }
+.hud .topbar { border-bottom: none; padding: 10px 12px; gap: 8px 14px; }
+.hud .field-form { flex: 0 1 auto; }
+.hud .job { margin: 0; max-width: none; background: rgb(15 26 43 / 0.9); border-color: var(--accent); }
+.hud .messages { padding: 0; }
+.hud .msg { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+@media (max-width: 700px) {
+  .hud-bc { display: none; }                       /* the corners need the room on a phone */
+  .hud-tr { top: auto; bottom: 64px; }             /* switches above the bottom-right panel */
+}
 /* Hover card of the map names (skylabels.js); was in paths.css with the frame viewer */
 .paths-tip {
   position: absolute; z-index: 5; max-width: 300px; padding: 8px 10px; border-radius: 6px;
@@ -289,7 +312,6 @@ button.link:hover { text-decoration: underline; }
 .sky-stage .sky-gl:active { cursor: grabbing; }
 .explore-epochs { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .explore-epochs button[aria-pressed="true"] { outline: 2px solid currentColor; }
-@media (max-width: 600px) { .sky-stage { height: 60vh; } }
 
 /* ---------- T43: difference view A − B ---------- */
 .diff-canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
