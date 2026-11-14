@@ -59,6 +59,8 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T20 | C: Viewer ↔ Live API: RA/Dec/size input, `?ra=&dec=&size=` in the page URL, request + poll with progress, load from `target_url`, quick picks for the official test fields (contracts v0.3) | Mati | done | `mati/T20-live-api-client` | [tasks/T20](tasks/T20-live-api-client.md). Run: `web/README.md` (API :8000, viewer :8080). Test fields in `web/presets.json` |
 | T21 | C: Everyone can run the viewer locally: one-command launcher (API + viewer), README run steps for Linux/macOS/Windows | Mati | done | `mati/T21-run-kit` | [tasks/T21](tasks/T21-run-kit.md). `python web/dev.py`, setup in README "How to run" |
 | T22 | C: Movement paths in the viewer: line + tick per frame, early→late colour, current position + name, labelled exaggerated arrow for slow movers | Joerg | doing | `joerg/T22-movement-paths` | [task file](tasks/T22-movement-paths.md). From the "Draw paths" idea |
+| T23 | A: Labelling over time: labels that follow moving objects, motion summary + motion class per object, trail image, shift-and-stack | Joerg | doing | `joerg/T23-labels-over-time` | [task file](tasks/T23-labels-over-time.md). Umbrella for T19 (done) + T22; from 4 Ideas |
+| T24 | All: Pin exact dependency versions so everyone runs the same | Joerg | done | `joerg/T24-pin-deps` | Lock files at root; README "Dependencies". Python 3.12+ |
 
 ## Decisions
 
@@ -103,6 +105,12 @@ Dated, one line each, with why.
   stars, position per frame with proper motion), written by `pipeline.labels`. `schema_version`
   stays "0.2" so existing readers keep working. Why: official targets are fast-moving stars;
   labels that follow them make motion visible. Details: tasks/T19-labels.md.
+- 2026-11-14 [Joerg] All Python dependencies pinned exactly (`==`); install from `requirements.lock`
+  (app) or `requirements-dev.lock` (tests). Minimum Python is now **3.12** (was 3.11). Why: same
+  versions for everyone; numpy 2.5 needs 3.12. Checked: fresh 3.14 venv installs from the lock with
+  plain pip, `pytest server` 11 passed, `web/dev.py` serves API + viewer. Updating: README "Dependencies".
+- 2026-11-14 [Joerg] Ideas "Draw paths", "Motion classification", "Trail image" and
+  "Shift-and-stack" are on the Board now: T22 (paths) and T23 (the rest).
 
 ## Ideas
 
@@ -152,6 +160,9 @@ Things waiting on a human.
   cutouts, alignment, flags, wavelength/bandwidth, alpha PNGs and pairs is in `pipeline/reference/`
   (README there). (3) After `target.json` is written, call `pipeline.labels.add_labels(target)`
   (T19). (4) CLAUDE.md asks for a task file per task: T02-T04, T06, T10 don't have one yet.
+- 2026-11-14 [Joerg → Mati] `web/dev.py` line 145 still says `pip install -r server/requirements.txt`.
+  That still works (direct deps are pinned), but `requirements.lock` is now the documented install.
+  Your file, so I left it.
 
 ## Log
 

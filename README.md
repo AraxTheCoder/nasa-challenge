@@ -23,14 +23,15 @@ Interfaces between the three parts: `docs/CONTRACTS.md`.
 
 ## How to run
 
-Needs **Python 3.11 or newer** and git. From a fresh clone:
+Needs **Python 3.12 or newer** (3.12–3.14 tested) and git. Check with `python3 --version`; if yours is
+older, see "Python too old" below. From a fresh clone:
 
 ```bash
 git clone git@github.com:jabra11/nasa-challenge.git
 cd nasa-challenge
 python3 -m venv .venv
 source .venv/bin/activate                  # Linux, macOS, WSL. Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install -r server/requirements.txt
+python -m pip install -r requirements.lock      # exact versions, same for everyone
 python web/dev.py
 ```
 
@@ -50,6 +51,11 @@ Activating is only a shortcut. Without it, call the venv's Python directly:
 
 Troubleshooting:
 
+- **Python too old** (numpy 2.5 needs 3.12+): install 3.12 or newer from python.org, your package
+  manager (`sudo apt install python3.12 python3.12-venv`), or with uv: `uv python install 3.12`, then
+  create the venv with that Python (`python3.12 -m venv .venv` or `uv venv --python 3.12 .venv`).
+  If an old `.venv` exists, delete it first.
+
 - **Activation fails**: on Linux/macOS/WSL it is `source .venv/bin/activate` (with `source`; running
   the file directly gives "Permission denied"). In WSL use the Linux commands, not the Windows ones.
   Or skip activating, see above.
@@ -68,6 +74,27 @@ Pipeline and detection on their own (track A/B, as they become available):
 python -m pipeline.query --ra <deg> --dec <deg>            # list SPHEREx images covering a position (T01)
 python -m pipeline.build --id <id> --ra <deg> --dec <deg> --size <arcmin>   # planned (T02-T04)
 python -m detect.run data/targets/<id>                      # planned (T06-T08)
+```
+
+## Dependencies
+
+All versions are pinned exactly so everyone runs the same thing.
+
+| File | What |
+|---|---|
+| `pipeline/requirements.txt`, `server/requirements.txt` | the packages each part needs, `==` pins, edited by hand |
+| `requirements-dev.txt` | test tools on top (pytest, httpx, jsonschema, playwright) |
+| `requirements.lock`, `requirements-dev.lock` | everything incl. sub-dependencies, generated; **install from these** |
+
+Tests: `python -m pip install -r requirements-dev.lock` (and `playwright install chromium` for the
+browser test).
+
+Updating dependencies (whoever adds or bumps a package): change the pin in the `requirements*.txt`
+file, regenerate both locks, commit all of it together, and add a line under TEAM.md "Decisions":
+
+```
+uv pip compile server/requirements.txt --python-version 3.12 --universal -o requirements.lock
+uv pip compile requirements-dev.txt --python-version 3.12 --universal -o requirements-dev.lock
 ```
 
 ## Repository layout
