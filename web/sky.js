@@ -3,8 +3,10 @@
 // layers (our per-epoch SPHEREx HiPS, T32), of which one is shown at a time, so blinking is just a
 // switch between already loaded textures.
 //
-// Geometry: HEALPix NESTED tiles (healpix.js), orthographic (SIN) projection around the view
-// centre, north up, east left. Tile texel (row, col) <-> sub-pixel ix (even bits) = row, iy = col.
+// Geometry: HEALPix NESTED tiles (healpix.js), stereographic projection around the view centre
+// (conformal, like Aladin's default), north up, east left. Dragging turns the sphere under the
+// cursor. Zoomed out, the whole sky comes from each HiPS's Norder3/Allsky mosaic (one image).
+// Tile texel (row, col) <-> sub-pixel ix (even bits) = row, iy = col.
 //
 //   const sky = createSky(container)
 //   await sky.setBase(url) ; sky.setOverlays([{url, label, epoch}]) ; sky.showOverlay(i)
@@ -14,7 +16,8 @@ import { ang2pix, nest2xyf, tileGrid } from "./healpix.js";
 
 const DEG = Math.PI / 180;
 const TEXEL_ARCSEC_ORDER0 = 412.2;        // HiPS texel size at order 0 (512 px tiles)
-const MAX_FOV = 180;
+const MAX_FOV = 240;                      // stereographic shows more than a hemisphere
+const BACK_COSC = -0.6;                   // don't draw beyond ~127 deg from the centre
 const MIN_FOV = 1 / 60;                   // 1 arcmin
 const MAX_TEXTURES = 200;           // 1 MB of GPU memory each
 const MAX_PARALLEL_LOADS = 8;
@@ -40,7 +43,8 @@ class Layer {
     const formats = (props.hips_tile_format ?? "png").split(/\s+/);
     this.ext = formats.includes("png") ? "png" : formats.includes("jpeg") ? "jpg" : formats[0];
     this.depth = Number(props.hips_cube_depth ?? 1);
-    this.slice = Math.min(this.depth - 1, opts.slice ?? Math.floor(this.depth / 2));
+    // Cubes: start on the band the HiPS recommends (IRSA's SPHEREx cube: frames 50/51 are blank).
+    this.slice = Math.min(this.depth - 1, opts.slice ?? Number(props.hips_cube_firstframe ?? 0));
     this.label = opts.label ?? props.obs_title ?? url;
     this.props = props;
     this.tiles = new Map();     // key -> {state: "loading"|"ok"|"missing", tex, used}
@@ -50,6 +54,10 @@ class Layer {
     return `${this.url}/Norder${order}/Dir${Math.floor(pix / 10000) * 10000}/Npix${pix}${s}.${this.ext}`;
   }
   key(order, pix) { return `${this.slice}/${order}/${pix}`; }
+  allskyUrl() {
+    const s = this.depth > 1 && this.slice > 0 ? `_${this.slice}` : "";
+    return `${this.url}/Norder3/Allsky${s}.${this.ext}`;
+  }
 }
 
 // ---------- WebGL ----------------------------------------------------------------------------
@@ -99,23 +107,25 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   const st = { ra, dec, fov, w: 1, h: 1, dpr: 1, base: null, overlays: [], shown: -1,
     dirty: true, loads: 0, queue: [], hooks: [], listeners: { change: [], tiles: [] } };
 
-  // ----- projection (SIN, north up, east left) -----
-  const R = () => (st.w / 2) / Math.sin(Math.min(st.fov, 179.9) * DEG / 2);   // px per unit sphere
+  // ----- projection (stereographic, north up, east left) -----
+  // Screen px per unit of the projection plane: the view's half width covers fov/2.
+  const R = () => (st.w / 2) / (2 * Math.tan((Math.min(st.fov, MAX_FOV) * DEG) / 4));
   function toScreen(raDeg, decDeg) {
     const d0 = st.dec * DEG, a = decDeg * DEG, dl = (raDeg - st.ra) * DEG;
     const cosc = Math.sin(d0) * Math.sin(a) + Math.cos(d0) * Math.cos(a) * Math.cos(dl);
-    const x = Math.cos(a) * Math.sin(dl);
-    const y = Math.cos(d0) * Math.sin(a) - Math.sin(d0) * Math.cos(a) * Math.cos(dl);
+    const k = 2 / Math.max(1e-6, 1 + cosc);
+    const x = k * Math.cos(a) * Math.sin(dl);
+    const y = k * (Math.cos(d0) * Math.sin(a) - Math.sin(d0) * Math.cos(a) * Math.cos(dl));
     const r = R();
-    return { x: st.w / 2 - x * r, y: st.h / 2 - y * r, front: cosc > 0, cosc };
+    return { x: st.w / 2 - x * r, y: st.h / 2 - y * r, front: cosc > BACK_COSC, cosc };
   }
   function fromScreen(px, py) {
     const r = R();
     const x = -(px - st.w / 2) / r, y = -(py - st.h / 2) / r;
     const rho = Math.hypot(x, y);
-    if (rho > 1) return null;
-    const c = Math.asin(rho), d0 = st.dec * DEG;
     if (rho < 1e-12) return [st.ra, st.dec];
+    const c = 2 * Math.atan(rho / 2), d0 = st.dec * DEG;
+    if (Math.cos(c) <= BACK_COSC) return null;
     const dec = Math.asin(Math.cos(c) * Math.sin(d0) + (y * Math.sin(c) * Math.cos(d0)) / rho) / DEG;
     const ra = st.ra + Math.atan2(x * Math.sin(c), rho * Math.cos(d0) * Math.cos(c) - y * Math.sin(d0) * Math.sin(c)) / DEG;
     return [((ra % 360) + 360) % 360, dec];
@@ -163,6 +173,57 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     return t;
   }
 
+  function requestAllsky(layer) {
+    const k = `${layer.slice}/allsky`;
+    let t = layer.tiles.get(k);
+    if (t) { t.used = performance.now() + 1e9; return t; }    // never evicted first
+    t = { state: "queued", tex: null, used: performance.now() + 1e9 };
+    layer.tiles.set(k, t);
+    st.queue.push({ layer, url: layer.allskyUrl(), t });
+    pump();
+    return t;
+  }
+
+  /** Zoomed out: all visible order-3 tiles from the Allsky mosaic, one texture, one draw call. */
+  function drawAllsky(layer, t) {
+    const cols = 27, rows = Math.ceil(768 / cols), n = 4;
+    const pos = [], uv = [];
+    for (const pix of visibleTiles(3)) {
+      const g = tileGrid(3, pix, n);
+      const sp = [];
+      for (let i = 0; i < g.length; i += 2) sp.push(toScreen(g[i], g[i + 1]));
+      const c0 = pix % cols, r0 = Math.floor(pix / cols);
+      const vtx = (a, b) => {
+        const s = sp[a * (n + 1) + b];
+        pos.push((s.x / st.w) * 2 - 1, 1 - (s.y / st.h) * 2);
+        uv.push((c0 + b / n) / cols, (r0 + a / n) / rows);
+      };
+      for (let a = 0; a < n; a++) {
+        for (let b = 0; b < n; b++) {
+          const q = [sp[a * (n + 1) + b], sp[(a + 1) * (n + 1) + b], sp[a * (n + 1) + b + 1], sp[(a + 1) * (n + 1) + b + 1]];
+          if (q.some((p) => !p.front)) continue;
+          vtx(a, b); vtx(a + 1, b); vtx(a, b + 1);
+          vtx(a + 1, b); vtx(a + 1, b + 1); vtx(a, b + 1);
+        }
+      }
+    }
+    drawTriangles(t.tex, pos, uv);
+  }
+
+  function drawTriangles(tex, pos, uv) {
+    if (!pos.length) return;
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.bindBuffer(gl.ARRAY_BUFFER, G.posBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pos), gl.STREAM_DRAW);
+    gl.enableVertexAttribArray(G.loc.pos);
+    gl.vertexAttribPointer(G.loc.pos, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, G.uvBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uv), gl.STREAM_DRAW);
+    gl.enableVertexAttribArray(G.loc.uv);
+    gl.vertexAttribPointer(G.loc.uv, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, pos.length / 2);
+  }
+
   function pump() {
     while (st.loads < MAX_PARALLEL_LOADS && st.queue.length) {
       const job = st.queue.pop();          // newest first: what the user looks at now
@@ -188,7 +249,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
         pump();
       };
       img.onerror = () => { st.loads--; job.t.state = "missing"; pump(); };
-      img.src = job.layer.tileUrl(job.order, job.pix);
+      img.src = job.url ?? job.layer.tileUrl(job.order, job.pix);
     }
   }
 
@@ -225,8 +286,12 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   function drawLayer(layer, alpha) {
     if (!layer) return;
     const order = pickOrder(layer);
-    const n = order <= 2 ? 16 : order <= 4 ? 8 : 4;
     gl.uniform1f(G.loc.alpha, alpha);
+    if (order <= 3) {                        // zoomed out: whole sky at once, sharper tiles on top
+      const all = requestAllsky(layer);
+      if (all.state === "ok") drawAllsky(layer, all);
+    }
+    const n = order <= 4 ? 8 : 4;
     for (const pix of visibleTiles(order)) {
       const tx = textureFor(layer, order, pix);
       if (!tx) continue;
@@ -248,17 +313,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
           vtx(a + 1, b); vtx(a + 1, b + 1); vtx(a, b + 1);
         }
       }
-      if (!pos.length) continue;
-      gl.bindTexture(gl.TEXTURE_2D, tx.tex);
-      gl.bindBuffer(gl.ARRAY_BUFFER, G.posBuf);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pos), gl.STREAM_DRAW);
-      gl.enableVertexAttribArray(G.loc.pos);
-      gl.vertexAttribPointer(G.loc.pos, 2, gl.FLOAT, false, 0, 0);
-      gl.bindBuffer(gl.ARRAY_BUFFER, G.uvBuf);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uv), gl.STREAM_DRAW);
-      gl.enableVertexAttribArray(G.loc.uv);
-      gl.vertexAttribPointer(G.loc.uv, 2, gl.FLOAT, false, 0, 0);
-      gl.drawArrays(gl.TRIANGLES, 0, pos.length / 2);
+      drawTriangles(tx.tex, pos, uv);
     }
   }
 
