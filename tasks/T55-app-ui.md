@@ -57,6 +57,11 @@ Rework the UI without blocking anyone: the redesign lives in `app/` (URL `/app/`
   ecliptic poles (observed almost all the time) a pass boundary cuts through. A pass tile is a mosaic
   (1 image, more where it has holes): a fast asteroid can be cut or doubled at a tile edge; slow movers
   (stars, Planet X) are fine. Index (data/mirror) has passes 1-3 (to 2026-10).
+- Step 14 speed (18 new pass tiles = 6 positions x 3 passes, 4 browser connections, via the Live API):
+  20-24 s before -> 12-13 s. The VM (e2-medium, 2 vCPU) is CPU-bound (0 % idle; one Python process only
+  reached ~1.2 CPUs: GIL -> now 2 workers); pass tiles use 1 image + fill (was 3); pass tiles beyond 6 at
+  the VM render on this PC (`TILES_REMOTE_MAX`); a pass tile asked for starts the other passes. Next lever
+  costs money: a bigger VM (e2-standard-8 + `--workers 8`).
 - Copy taken from main at 6026134 (2026-11-14); refreshed from `web/` at 07974ed (2026-11-14, before any redesign edit): T52 labels, T63 spectrum, T72 map names, new `skylabels.js` + `spectrum.js`.
 
 ## Questions / needs from others

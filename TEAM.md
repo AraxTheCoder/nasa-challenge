@@ -692,3 +692,5 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   (new `GET /api/pass-dates`, CONTRACTS v0.14). Faster pass loading: base map capped at order 6 under the passes,
   the Live API renders a tile's other passes in the background, VM tuned (12 slots, more S3 threads), redeployed.
 - 2026-11-14 [Joerg] Claimed T85 (spectra for a whole field) and T86 (spectral outliers); T87 (features per band) added, open. Idea I23 (Mati: expected vs. measured spectrum) is folded into T86 as its second opinion; [to Mati] if you want to do the catalogue prediction part yourself, say so in tasks/T86 "Notes from others" and I leave it.
+- 2026-11-14 Jonathan (Claude): faster pass tiles: VM 2 worker processes (it was GIL/CPU-bound), 1 image per pass
+  tile, overflow pass tiles render on the local PC. 18 new pass tiles 20-24 s -> 12-13 s. VM redeployed.

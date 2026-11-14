@@ -6,7 +6,13 @@
 """
 from __future__ import annotations
 
+import os
 import threading
+
+# T55: pass tiles beyond this many at the VM at once are rendered here instead: the VM (2 vCPUs) is
+# CPU-bound, this machine idle meanwhile. Pass tiles look the same either way (1 image + fill, same
+# stretch); combined live tiles always go to the VM (3 images there, 1 here: no mixed tiles).
+REMOTE_MAX = int(os.environ.get("TILES_REMOTE_MAX", "6"))
 
 
 class _NoPassRoute(Exception):
@@ -20,6 +26,8 @@ class TileGenerator:
         self._session = None
         self._lock = threading.Lock()
         self._remote_passes = True       # False once the VM answered that it has no pass route (old deploy)
+        self._at_remote = 0              # pass tiles the VM is rendering for us right now
+        self.stats = {"remote": 0, "local": 0}
 
     @property
     def mode(self) -> str:
@@ -34,11 +42,19 @@ class TileGenerator:
         return {"tiles": self.mode, "remote_url": self.remote_url, "remote_available": bool(self.remote_url)}
 
     def get(self, slice_: int, order: int, npix: int, pass_: int | None = None) -> bytes | None:
-        if self.remote and (pass_ is None or self._remote_passes):
+        if self.remote and pass_ is None:
+            return self._remote(slice_, order, npix)
+        if self.remote and self._remote_passes and self._take_remote():
             try:
+                self.stats["remote"] += 1
                 return self._remote(slice_, order, npix, pass_)
             except _NoPassRoute:              # VM older than T82 pass tiles: render those here
                 self._remote_passes = False
+            finally:
+                with self._lock:
+                    self._at_remote -= 1
+        if pass_:
+            self.stats["local"] += 1
         from pipeline.mirror import IndexNotReady
 
         from . import render
@@ -48,6 +64,15 @@ class TileGenerator:
             if self.remote_url and (pass_ is None or self._remote_passes):   # fresh checkout: the VM stands in
                 return self._remote(slice_, order, npix, pass_)
             raise
+
+    def _take_remote(self) -> bool:
+        """A VM slot for one pass tile, or False when it is busy enough (then render here, if we can)."""
+        from pipeline import mirror
+        with self._lock:
+            if self._at_remote >= REMOTE_MAX and mirror.available():
+                return False
+            self._at_remote += 1
+            return True
 
     def _http(self):
         with self._lock:

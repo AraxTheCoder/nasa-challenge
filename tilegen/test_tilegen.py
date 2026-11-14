@@ -159,8 +159,9 @@ def test_pass_tile_renders_the_other_passes_too(tmp_path, monkeypatch):
     sky = SkyCache(tmp_path, tiles=Gen())
     assert sky.get("spherex-live-p2", "Norder7/Dir0/Npix5_20.png") == b"png"
     sky.prefetch_around("spherex-live-p2", "Norder7/Dir0/Npix5_20.png")
-    for _ in range(100):
-        if len(asked) == 3:
+    done = tmp_path / "spherex-live-p3/Norder7/Dir0/Npix5_20.png"
+    for _ in range(250):
+        if len(asked) == 3 and done.exists() and (tmp_path / "spherex-live-p1/Norder7/Dir0/Npix5_20.png").exists():
             break
         time.sleep(0.02)
     assert sorted(asked) == [1, 2, 3]
@@ -175,3 +176,33 @@ def test_api_pass_dates(tmp_path, monkeypatch):
     body = c.get("/api/pass-dates?ra=-90.5&dec=4.7").json()
     assert body["ra"] == 269.5 and body["passes"][0]["start"] == "2025-08-18"
     assert c.get("/api/pass-dates?ra=1&dec=95").status_code == 400
+
+
+def test_client_pass_tiles_overflow_to_local(monkeypatch):
+    """T55: with REMOTE_MAX pass tiles already at the VM, the next one renders here."""
+    import threading
+
+    from pipeline import mirror
+    from tilegen import client
+
+    monkeypatch.setattr(client, "REMOTE_MAX", 1)
+    monkeypatch.setattr(mirror, "available", lambda root=None: True)
+    monkeypatch.setattr(render, "render", lambda sl, o, n, pass_=None: b"local")
+    g = TileGenerator("https://vm.example", use_remote=True)
+    inside, release = threading.Event(), threading.Event()
+
+    class Slow:
+        def get(self, url, timeout):
+            inside.set()
+            release.wait(5)
+            return _Resp(200, b"vm")
+    g._session = Slow()
+    out = {}
+    t = threading.Thread(target=lambda: out.setdefault("a", g.get(20, 7, 1, pass_=1)))
+    t.start()
+    assert inside.wait(5)
+    assert g.get(20, 7, 2, pass_=2) == b"local"          # VM full: rendered here
+    release.set()
+    t.join(5)
+    assert out["a"] == b"vm" and g.stats == {"remote": 1, "local": 1}
+    assert g.get(20, 7, 3, pass_=3) == b"vm"             # VM free again
