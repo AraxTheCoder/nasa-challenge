@@ -470,6 +470,31 @@ try:
         check(ph.get_attribute("#ph-measure", "aria-pressed") == "false" and ph.is_hidden("#ph-catcher"), "measure mode ends after one click")
         check(not pherr, f"T49: no page errors {pherr}")
 
+        # 8b5. T78: type an exact wavelength -> A/B = closest frames in the earliest and latest epoch
+        lp = b.new_page(viewport={"width": 1280, "height": 900})
+        lperr = []
+        lp.on("pageerror", lambda x: lperr.append(str(x)))
+        lp.goto(WEB + "?explore=0&data=../data/test-targets/")
+        wait_loaded(lp)
+        lp.fill("#lam-at", "1.23"); lp.press("#lam-at", "Enter")
+        lp.wait_for_function("document.querySelector('#lam-at-note').textContent.includes('f007')")
+        note = lp.text_content("#lam-at-note")
+        check("A f001" in note and "B f007" in note and "fair comparison" in note and "lam=1.23" in lp.url,
+              f"T78: 1.23 µm picks f001 (epoch 1) and f007 (epoch 3), URL remembers it ({note})")
+        check("A · f001" in lp.text_content("#stage-label"), "T78: A is shown")
+        lp.fill("#lam-at", "1.82"); lp.press("#lam-at", "Enter")
+        lp.wait_for_function("document.querySelector('#lam-at-note').textContent.includes('f006')")
+        check("A f003" in lp.text_content("#lam-at-note"), f"T78: 1.82 µm stays on one detector ({lp.text_content('#lam-at-note')})")
+        lp.fill("#lam-at", "abc"); lp.press("#lam-at", "Enter")
+        check("between 0.75 and 5.0" in lp.text_content("#lam-at-note"), "T78: a typo gets a hint, nothing changes")
+        check(lp.eval_on_selector_all("#lam-features option", "os => os.length") >= 8, "T78: feature wavelengths offered as suggestions")
+        lp.goto(WEB + "?explore=0&data=../data/test-targets/&lam=1.21")
+        wait_loaded(lp)
+        lp.wait_for_function("document.querySelector('#lam-at-note').textContent.includes('B ')")
+        check(lp.input_value("#lam-at") == "1.21" and "A f000" in lp.text_content("#lam-at-note"),
+              f"T78: ?lam=1.21 in a link is applied on load ({lp.text_content('#lam-at-note')})")
+        check(not lperr, f"T78: no page errors {lperr}")
+
         # 8c. objects panel (T13) on the multi-epoch target
         q = b.new_page(viewport={"width": 1280, "height": 900})
         qerr = []

@@ -47,6 +47,7 @@
   </header>
 
   <div id="messages" class="messages" role="status" aria-live="polite"></div>
+  <datalist id="lam-features"></datalist>
   <p id="pick-why" class="pick-why" hidden></p>
 
   <section id="job" class="job" hidden aria-live="polite">
@@ -66,6 +67,8 @@
         <select id="explore-survey"></select></label>
       <label id="explore-band-box" hidden title="SPHEREx has 102 spectral channels; pick one">Band
         <input id="explore-band" type="range" min="0" max="101" step="1" value="0">
+        <input id="explore-band-lam" type="text" inputmode="decimal" list="lam-features" placeholder="µm" size="6"
+               title="Type a wavelength in µm: the map jumps to the closest of the 102 channels" aria-label="Band wavelength in µm">
         <output id="explore-band-out" class="small"></output></label>
       <span id="explore-epochs" class="explore-epochs" hidden></span>
       <label title="Names of catalogued stars and objects in the field (SIMBAD, Gaia DR3). Asked only when switched on.">
@@ -154,6 +157,9 @@
           <button id="lam-reset" type="button" class="link" hidden>All frames</button>
           <span id="filter-count" class="muted small"></span>
           <button id="btn-match" type="button" title="Set B to the frame from another epoch at the closest wavelength to A (M)">Match B to A's λ</button>
+          <label class="lam-at" title="Type a wavelength (µm): A and B become the frames closest to it in the earliest and the latest epoch">Frames at
+            <input id="lam-at" type="text" inputmode="decimal" list="lam-features" placeholder="e.g. 2.17" size="7" aria-label="Show frames at this wavelength, in µm"> µm</label>
+          <span id="lam-at-note" class="muted small" aria-live="polite"></span>
           <label id="pair-wrap" hidden>Matched pairs <select id="pair-select"></select></label>
         </div>
 
