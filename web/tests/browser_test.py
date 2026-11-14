@@ -275,6 +275,19 @@ try:
         check(o.locator("#paths-layer").count() == 1 and "Fake asteroid · synthetic" in (o.text_content("#overlay") or ""),
               "T22: paths layer drawn, synthetic object named as such")
         check(o.is_hidden("#explore"), "offline mode hides the sky map (no tile server)")
+        # T52: the committed schema-0.2 fixture (every optional field) loads and shows what it contains
+        o.goto(WEB + "?explore=0&data=../fixtures/targets/&target=demo-epochs")
+        wait_loaded(o)
+        o.wait_for_selector("#objects-list .obj-row")
+        txt = o.text_content("#objects-list")
+        check(o.locator(".table-wrap tbody tr").count() == 9 and o.locator("#pair-select option").count() >= 3,
+              "demo-epochs fixture: 9 frames and its pairs")
+        check("Synthetic asteroid A" in txt and "Synthetic asteroid B" in txt and "unknown" in txt.lower(),
+              f"demo-epochs fixture: known, not-detected and unknown objects listed ({txt[:160]})")
+        if not o.is_checked("#labels-toggle"):
+            o.click("#labels-toggle")   # labels are remembered per browser; an earlier check may have switched them off
+        o.wait_for_selector(".path-hit[aria-label^='Synthetic star PM-1']", state="attached", timeout=5000)
+        check(o.locator(".path-hit[aria-label^='Synthetic variable V-1']").count() == 1, "demo-epochs: its labels are drawn")
         check(not oerr, f"offline: no page errors {oerr}")
 
         # 8b. timeline, wavelength filter, matched pairs (T12) on the multi-epoch target

@@ -284,6 +284,14 @@
         }
       }
     },
+    "labels_requested": {
+      "type": "boolean",
+      "description": "v0.8: GET /api/targets/<id>/labels has run (labels are filled, possibly empty)"
+    },
+    "objects_requested": {
+      "type": "boolean",
+      "description": "v0.11: GET /api/targets/<id>/objects has run (known_objects and detections are filled)"
+    },
     "labels": {
       "type": "array",
       "items": {
@@ -313,8 +321,10 @@
           "source": {
             "enum": [
               "simbad",
-              "gaia_dr3"
-            ]
+              "gaia_dr3",
+              "synthetic"
+            ],
+            "description": "v0.11: synthetic = made-up object in a synthetic fixture, never on real frames"
           },
           "named": {
             "type": "boolean"

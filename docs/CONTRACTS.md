@@ -1,4 +1,10 @@
-# Contracts (v0.10)
+# Contracts (v0.11)
+
+v0.11 (T52) brings this file in line with the code: no pre-baked `web/targets/` and no `pipeline.publish`
+(made obsolete by v0.3 live data); entry points and signatures as they are; the Live API routes the viewer
+already uses are written down (`/objects`, `/sky`, `/settings`, `/health`); `labels_requested` /
+`objects_requested` in target.json; label `source: "synthetic"` for made-up labels in fixtures; a second,
+schema-0.2 fixture `fixtures/targets/demo-epochs/`. Nothing changes for code that follows the code.
 
 v0.10 adds `GET /api/targets/<id>/photometry` (T49): aperture photometry at a position in every frame of a
 built target, for spectra and light curves (see "Photometry"). New endpoint only; target.json unchanged.
@@ -40,30 +46,36 @@ TEAM.md "Decisions" that says why.
                         │ cache hit → serve data/targets/<id>/
                         │ cache miss → build in background, report progress
                         ▼
-pipeline/ (A)                detect/ (B)                       web/ (C)
-IRSA → cutouts → aligned  →  adds known_objects + detections →  calls the Live API, then reads
-frames + target.json         to the same target.json            target.json + frame images
+pipeline/ (A)                detect/ (B), on request (T51)     web/ (C)
+IRSA/AWS → cutouts →      →  adds known_objects + detections →  calls the Live API, then reads
+aligned frames +             to the same target.json            target.json + frame images
+target.json                  (GET /api/targets/<id>/objects)
 ```
 
-The frontend never calls IRSA or JPL directly; it only talks to the Live API, which serves target
-folders. Data is live (fetched from IRSA when first requested) and cached, not pre-baked.
+The frontend never calls IRSA, AWS, JPL or the catalogues directly; it only talks to the Live API, which
+serves target folders, photometry and sky-map tiles. Data is live (fetched when first requested) and
+cached, not pre-baked. Catalogue labels (v0.8) and known objects (v0.11) are added after the build, when
+the viewer asks for them, because SIMBAD/Gaia and JPL take from seconds to minutes.
 
 ## Folder layout
 
 ```
 pipeline/                      A: Python package, data access + frame building
 detect/                        B: Python package, mover detection + cross-match
-web/                           C: static site, deployed to GitHub Pages
-server/                        T18: Live API (Python), builds and caches target folders
-web/targets/                   baked targets for the demo (committed, see size budget)
+web/                           C: static site, no build step (web/dev.py serves it locally; any static host)
+server/                        T18: Live API (Python, FastAPI), builds and caches target folders
+tilegen/                       T42/T47: live deep-zoom sky-map tiles (in-process, or the team VM in us-east4)
+deploy/                        T47: scripts for the tile-generator VM
+tests/                         T46: contract checks (fixtures vs. schema, presets), run by CI
 data/                          gitignored: downloads, caches, work in progress
-data/raw/                      cached downloads (FITS)
-data/targets/<id>/             pipeline + detect output before publishing
+data/raw/                      cached downloads (FITS cutouts)
+data/targets/<id>/             the Live API cache: one built target per requested field
+data/mirror/                   T31: local copy of the SPHEREx image index
 fixtures/targets/<id>/         tiny committed samples for tests and frontend development
 docs/target.schema.json        JSON Schema for target.json
 ```
 
-A **target folder** looks the same in `data/targets/`, `fixtures/targets/` and `web/targets/`:
+A **target folder** looks the same in `data/targets/` and `fixtures/targets/`:
 
 ```
 <targets-root>/index.json      list of targets
@@ -71,7 +83,7 @@ A **target folder** looks the same in `data/targets/`, `fixtures/targets/` and `
 <targets-root>/<id>/frames/<frame_id>.png|webp
 ```
 
-Size budget for anything committed: one target ≤ 5 MB, `web/targets/` ≤ 50 MB in total.
+Committed samples (`fixtures/`) stay tiny: ≤ 5 MB per target, no `.fits`. Real fields are never committed.
 
 ## index.json
 
@@ -87,7 +99,10 @@ Size budget for anything committed: one target ≤ 5 MB, `web/targets/` ≤ 50 M
 
 ## target.json
 
-Formal schema: `docs/target.schema.json`. Example: `fixtures/targets/demo-synthetic/target.json`.
+Formal schema: `docs/target.schema.json`. Examples, both synthetic: `fixtures/targets/demo-synthetic/` (schema
+0.1, the minimum) and `fixtures/targets/demo-epochs/` (schema 0.2 with every optional field: 3 epochs, pairs,
+no-data pixels, labels with motion, known objects, known / unknown / artifact detections; regenerate with
+`python fixtures/make_demo_epochs.py`).
 
 | Field | Written by | Meaning |
 |---|---|---|
@@ -104,6 +119,8 @@ Formal schema: `docs/target.schema.json`. Example: `fixtures/targets/demo-synthe
 | `detections` | B | moving sources found by us. A writes `[]` |
 | `pairs` | A | optional (v0.2): frames from different epochs at matching wavelength, see below |
 | `labels` | A | optional (v0.4): catalogue objects in the field with a position per frame, see below |
+| `labels_requested` | server | optional (v0.8): `true` once `GET …/labels` has run (labels may still be `[]`) |
+| `objects_requested` | server | optional (v0.11): `true` once `GET …/objects` has run (known objects + detections) |
 
 ### Frame
 
@@ -150,7 +167,8 @@ view (C) should prefer pairs over arbitrary frame combinations.
 - `positions`: one per frame, catalogue position moved to that frame's time with the proper
   motion (parallax ignored, < 0.1 px). For a fast star the label follows it across epochs.
 - `source`: `simbad` (names, object types; tries the CDS host, then the Harvard and IDIA mirrors)
-  or `gaia_dr3` (stars brighter than G = 16; `mag` is Gaia G).
+  or `gaia_dr3` (stars brighter than G = 16; `mag` is Gaia G). `synthetic` (v0.11) only in synthetic
+  fixtures: a made-up object; the viewer marks it as not real.
 - `named`: `true` for a human-readable name (Barnard's star, V3214 Oph), `false` for catalogue
   numbers (Gaia DR3 …, ZTF J…). Suggested UI default: show named labels, the rest on demand.
 - `kind`: plain-words object type for the UI; `otype` is the raw SIMBAD type.
@@ -209,30 +227,45 @@ from the geocentre.
 - `motion.pa_deg`: direction of motion, degrees east of north.
 - `reason` (v0.9, optional): one plain-words sentence why the detection got its status, e.g.
   "follows (4) Vesta (JPL) within 0.4 px on 3 frame(s)" or "seen in one frame only". Shown in the UI.
-- Pipeline for detections: T06 finds tracks → `detect.known_objects` (T07, JPL) fills `known_objects`
+- Pipeline for detections: T06 finds tracks → `detect.known_objects` (T07: candidates from IMCCE SkyBoT,
+  JPL sb_ident as fallback, positions from JPL Horizons as seen from SPHEREx) fills `known_objects`
   → `detect.classify` (T08) sets `status`, `matched_object`, `score`, `motion`, `reason`.
+  `detect.run.detect_target` (T51) runs these steps; T06 plugs in there.
 
 ## Entry points
 
 ```
-python -m server [--port 8000] [--fixture]            # Live API (T18)
-python -m pipeline.build --id <id> --ra <deg> --dec <deg> --size <arcmin> [--out data/targets]
-python -m detect.run <target_dir>
-python -m detect.known_objects <target_dir> [--vmag 20]  # T07: known asteroids/comets from JPL
+python web/dev.py [--fixture|--live] [--lan|--host ADDR]  # Live API + viewer in one go (T21)
+python -m server [--port 8000] [--fixture] [--cache data/targets] [--tiles-remote URL] [--use-remote]  # Live API (T18)
+python -m pipeline.query --ra <deg> --dec <deg>          # T01: SPHEREx images covering a position
+python -m pipeline.build --id <id> --ra <deg> --dec <deg> --size <arcmin> [--out data/targets] [--labels] [--refresh]
+python -m pipeline.labels <target_dir>                   # T19: SIMBAD + Gaia labels into target.json
+python -m pipeline.photometry <target_dir> --ra <deg> --dec <deg>   # T49: fluxes in every frame
+python -m pipeline.stack <target_dir> [--object <id|name>]          # T23: shift-and-stack image
+python -m pipeline.mirror harvest|build|find             # T31: local SPHEREx image index
+python -m detect.run <target_dir> [--vmag 20]            # T51: known objects + classify (+ T06 later)
+python -m detect.known_objects <target_dir> [--vmag 20]  # T07: known asteroids/comets
 python -m detect.classify <target_dir>                   # T08: status/score/reason per detection
-python -m pipeline.publish <id> [--to web/targets]      # copies a target and updates index.json
+python web/warm.py [--only <name>] [--refresh]           # T05: pre-build the official test fields
+python fixtures/make_demo_epochs.py                      # T52: regenerate the schema-0.2 fixture
 ```
 
 ```python
 # pipeline/build.py (A)
-def build_target(target_id: str, ra_deg: float, dec_deg: float,
-                 size_arcmin: float, out_root: Path = Path("data/targets")) -> Path:
-    """Query, download, align, render. Returns the target folder with a valid target.json."""
+def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: float,
+                 out_root: Path = Path("data/targets"), progress=None, per_group: int = PER_GROUP,
+                 name: str | None = None, refresh: bool = False, final_root: Path | None = None,
+                 labels: bool = False) -> Path:
+    """Query, download, align, render. Returns the target folder with a valid target.json.
+    progress(step, done=None, total=None, message="") feeds the Live API's progress bar."""
 
 # detect/run.py (B)
-def detect(target_dir: Path) -> dict:
-    """Read target.json + frames, fill known_objects and detections, write target.json back.
-    Touches only those two fields and appends to provenance. Returns the updated dict."""
+def detect_target(target: dict, jpl=None, vmag_lim: float = DEFAULT_VMAG) -> dict:
+    """Fill known_objects and detections in place; touches only those two fields and appends to
+    provenance. A failed JPL lookup never raises: known_objects stays [] and the error goes into provenance."""
+
+def detect(target_dir: str | Path, jpl=None, vmag_lim: float = DEFAULT_VMAG) -> Path:
+    """detect_target on <target_dir>/target.json, written back. Returns target_dir."""
 ```
 
 `detect` works on the rendered frames and the JSON. If B needs the aligned FITS data as well,
@@ -265,8 +298,8 @@ Responses:
 | 404 | `{"status": "no_data", "id": "...", "message": "..."}` | SPHEREx has no images here |
 | 500 | `{"status": "error", "id": "...", "message": "..."}` | build failed |
 
-`progress`: `{"step": "query|download|align|render|detect", "done": 12, "total": 39, "message": "..."}`
-(`done`/`total` may be `null`).
+`progress`: `{"step": "query|download|align|render", "done": 12, "total": 39, "message": "..."}`
+(`done`/`total` may be `null`). Known objects and labels are not part of the build (see below).
 
 ### Poll a build
 
@@ -280,6 +313,7 @@ GET /api/jobs/<id>          → same body as /api/target (ready / building / no_
 GET /api/targets/<id>/target.json
 GET /api/targets/<id>/frames/<frame_id>.png|webp
 GET /api/targets            → index.json of everything in the cache (same format as above)
+GET /api/health             → {"ok": true, "mode": "live" | "fixture"}
 ```
 
 Image paths inside `target.json` stay relative to the target folder, so the frontend resolves
@@ -318,10 +352,10 @@ VARIANCE or the annulus scatter (S3 cutouts have no VARIANCE). Answer (200):
   1e-4 deg (0.36″) before building, and `center` in `target.json` is the rounded position.
 - The cache is the target folder `data/targets/<id>/` (same layout as everywhere else), plus raw
   downloads in `data/raw/`. A cached target is served as long as it exists; `refresh=1` rebuilds.
-- The demo fields named in `docs/CHALLENGE.md` are warmed by requesting them before the demo,
-  not committed. That is still live data, only cached.
-- Until `pipeline.build` exists, the server can run with `--fixture` and answers every request
-  with `fixtures/targets/demo-synthetic`, which is `"synthetic": true` and must be shown as such.
+- The demo fields named in `docs/CHALLENGE.md` are warmed by requesting them before the demo
+  (`web/warm.py`, T05), not committed. That is still live data, only cached.
+- `--fixture` (tests, offline development) answers every request with a copy of
+  `fixtures/targets/demo-synthetic` in its own cache, which is `"synthetic": true` and must be shown as such.
 
 ### Labels on request (v0.8, T37)
 
@@ -334,6 +368,20 @@ GET /api/targets/<id>/labels   → 202 {"status": "building", "message"} while r
 ```
 
 When done, `target.json` has `labels` filled (same format as before, T19) and `"labels_requested": true`.
+
+### Known objects on request (v0.11, T51)
+
+Builds don't ask JPL either (SkyBoT + Horizons take minutes per field, and JPL allows ~20 searches per
+5 min). The viewer asks once the field is shown, unless `objects_requested` is set or the target is synthetic:
+
+```
+GET /api/targets/<id>/objects  → 202 {"status": "building", "n": null, "message"} while running (poll),
+                                 200 {"status": "ready", "n"} once target.json has them,
+                                 404 not built, 500 {"status": "error", "message"}
+```
+
+When done, `target.json` has `known_objects` and `detections` filled by `detect.run.detect_target` and
+`"objects_requested": true`. Then reload `target_url`.
 
 ### Per-epoch HiPS (v0.6, T32)
 
@@ -351,12 +399,37 @@ GET /api/hips/<id>/e<n>/Norder<k>/Dir<d>/Npix<p>.png
 nside 2^(k+9): `p * 512² + interleave(row → even bits, col → odd bits)` (checked against IRSA's
 2MASS HiPS).
 
+### Sky map tiles (T41, T42) and tile settings (T47)
+
+The viewer's sky map (`web/sky.js`) reads all-sky HiPS maps through the Live API, which caches them on disk:
+
+```
+GET /api/sky/<survey>/properties
+GET /api/sky/<survey>/Norder<k>/Dir<d>/Npix<p>[_<slice>].png|jpg
+GET /api/sky/<survey>/Norder3/Allsky[_<slice>].png|jpg
+```
+
+`survey`: `spherex-cube` (IRSA's SPHEREx all-sky cube, one slice per band), `spherex-d1` … `spherex-d6`
+(CDS, one per detector), `spherex-live` (the cube up to order 5, then order 6-7 tiles we render from the
+level-2 images in the AWS bucket, `tilegen/`), `2mass`, `allwise`. 404 = upstream has no such tile;
+503 + `Retry-After` = the local image index is still being built; 502 = upstream or tile generator down.
+
+```
+GET  /api/settings                     → {"tiles": "local" | "remote", "remote_url", "remote_available"}
+POST /api/settings {"tiles": "remote"} → same body; which generator renders the live tiles
+```
+
+`remote` is the team's tile generator on a VM next to the bucket (`deploy/`, T47): seconds instead of
+minutes from Europe. Only the tiles go there; builds, caches and the API stay local.
+
 ### Frontend URL
 
 The viewer reads `?ra=&dec=&size=` from its own URL and requests that field on load, so links and
-embeds work (official "Potential Considerations").
+embeds work (official "Potential Considerations"). Other parameters (`?api=`, `?data=`, `?explore=0`, …):
+`web/README.md`.
 
 ## Validation
 
-Every `target.json` that is committed or published must validate against
-`docs/target.schema.json`.
+Every `target.json` that is committed or built must validate against `docs/target.schema.json`. CI
+(T46) checks the committed fixtures on every push (`tests/test_contract.py`). Built targets are not
+validated at build time yet (idea: validate in `server/builder.py` before a build counts as ready).
