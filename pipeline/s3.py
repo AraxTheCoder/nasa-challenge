@@ -353,7 +353,12 @@ class S3Image:
             self.dir.mkdir(parents=True, exist_ok=True)
             tmp = meta_f.with_name(f"meta.{threading.get_ident()}.part")
             tmp.write_text(json.dumps(meta), encoding="utf-8")
-            tmp.replace(meta_f)
+            try:
+                tmp.replace(meta_f)
+            except PermissionError:          # Windows: another thread wrote / is reading it right now
+                tmp.unlink(missing_ok=True)
+                if not meta_f.exists():
+                    raise
         self.himg = fits.Header.fromstring(meta["himg"])
         self.hflags = fits.Header.fromstring(meta["hflags"])
         self.data0, self.off_flags, self.sflags = meta["data0"], meta["off_flags"], meta["sflags"]

@@ -1,4 +1,8 @@
-# Contracts (v0.15)
+# Contracts (v0.16)
+
+v0.16 (T55): tile settings get a third mode, `balanced` (default when a remote tile generator is configured):
+each live tile goes to this machine or the VM, whichever is expected to finish it first; `GET /api/settings`
+reports the measured throughput per side under `balance`. `local` / `remote` behave as before.
 
 v0.15 (T85, T86): `GET /api/targets/<id>/spectral-outliers`: spectra of every catalogue source of a field and
 the sources whose spectral shape is out of distribution for that field. New endpoint and cache only; nothing
@@ -484,9 +488,16 @@ within 1.2 deg, all detectors); passes without images there are left out. 503 + 
 local image index is being built.
 
 ```
-GET  /api/settings                     → {"tiles": "local" | "remote", "remote_url", "remote_available"}
-POST /api/settings {"tiles": "remote"} → same body; which generator renders the live tiles
+GET  /api/settings                     → {"tiles": "balanced" | "local" | "remote", "remote_url", "remote_available",
+                                          "balance": {"local": {avg_s, tiles_per_s, inflight, done, failed}, "remote": {…}}}
+POST /api/settings {"tiles": "balanced"} → same body; which generator renders the live tiles (400 if unknown)
 ```
+
+`balanced` (v0.16, default with a remote): a tile costs (tiles in flight on that side + 1) / that side's measured
+throughput (tiles in flight / seconds per tile, moving average); the cheaper side renders it, a side unused for
+20 s gets the next tile while idle (so both stay measured), a failing side is backed off. Local renders of
+combined tiles use the VM's images per tile, so tiles look the same from either side. `balance` is omitted
+without a remote.
 
 `remote` is the team's tile generator on a VM next to the bucket (`deploy/`, T47): seconds instead of
 minutes from Europe. Only the tiles go there; builds, caches and the API stay local.
