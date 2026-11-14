@@ -21,6 +21,11 @@ const STEP_LABELS = {
   detect: "Looking for moving sources",
 };
 
+// RA/Dec help bubble under the form (T29). Off while we test the site; switch on for the demo.
+// The page URL can override it: ?tip=1 shows it, ?tip=0 hides it.
+const FORM_TIP_ENABLED = false;
+const TIP_DISMISSED_KEY = "spherex-blink.formTipDismissed";
+
 const app = {
   api: DEFAULT_API,
   dataRoot: null,    // offline mode: folder with index.json
@@ -195,6 +200,57 @@ function hideJob() {
   app.jobTimer = null;
 }
 
+// ---------- RA/Dec help bubble ----------
+
+function tipEnabled() {
+  const q = params().get("tip");
+  return q === "1" ? true : q === "0" ? false : FORM_TIP_ENABLED;
+}
+
+function tipDismissed() {
+  try {
+    return localStorage.getItem(TIP_DISMISSED_KEY) === "1";
+  } catch {
+    return false; // storage blocked: just show it again next time
+  }
+}
+
+function showTip() {
+  if (!tipEnabled() || tipDismissed() || app.dataRoot) return;
+  $("#form-tip").hidden = false;
+  placeTip();
+}
+
+/**
+ * One-row form (desktop): bubble right under the RA input, arrow pointing at it.
+ * Stacked form (phone): bubble under the whole form, so it never covers an input you type into.
+ */
+function placeTip() {
+  const tip = $("#form-tip");
+  if (tip.hidden) return;
+  const form = $("#field-form");
+  const ra = form.ra;
+  const stacked = form.dec.offsetTop > ra.offsetTop;
+  const controls = [...form.querySelectorAll("input, select, button[type=submit]")].filter((c) => c.offsetParent);
+  const bottom = stacked
+    ? Math.max(...controls.map((c) => c.offsetTop + c.offsetHeight))
+    : ra.offsetTop + ra.offsetHeight;
+  const left = Math.max(0, Math.min(ra.offsetLeft, form.clientWidth - tip.offsetWidth));
+  tip.style.left = `${left}px`;
+  tip.style.top = `${bottom + 10}px`;
+  tip.style.setProperty("--arrow-x", `${Math.max(12, ra.offsetLeft - left + 16)}px`);
+}
+
+function hideTip({ remember = false } = {}) {
+  $("#form-tip").hidden = true;
+  if (!remember) return;
+  try {
+    localStorage.setItem(TIP_DISMISSED_KEY, "1");
+  } catch {
+    // storage blocked: it comes back on the next visit, which is fine
+  }
+}
+
 async function loadPresets() {
   let fields = [];
   try {
@@ -285,13 +341,20 @@ async function openOffline(id) {
 function bindPage() {
   $("#field-form").addEventListener("submit", (e) => {
     e.preventDefault();
+    hideTip();
     const req = readForm();
     if (!req.ra || !req.dec) return;
     fillForm(req);
     setPageUrl(req, true);
     loadField(req);
   });
-  $("#preset").addEventListener("change", onPresetPicked);
+  $("#preset").addEventListener("change", () => { hideTip(); onPresetPicked(); });
+  $("#field-form").addEventListener("focusin", (e) => {
+    if (e.target.name === "ra" || e.target.name === "dec") showTip();
+  });
+  $("#form-tip-close").addEventListener("click", () => hideTip({ remember: true }));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideTip(); });
+  window.addEventListener("resize", placeTip);
   $("#field-form").addEventListener("input", (e) => {
     if (e.target.name !== "ra" && e.target.name !== "dec") return;
     syncPresetSelect();
@@ -346,7 +409,10 @@ async function main() {
   }
   await loadPresets();
   const requested = loadFromUrl();
-  if (!requested) fillDefaults();
+  if (!requested) {
+    fillDefaults();
+    showTip();
+  }
   await showApiStatus(requested);
 }
 

@@ -12,7 +12,7 @@
     <h1>SPHEREx Blink</h1>
 
     <!-- Live mode (default): ask the Live API for any RA/Dec. -->
-    <form id="field-form" class="field-form" autocomplete="off" aria-describedby="form-hint">
+    <form id="field-form" class="field-form" autocomplete="off" aria-describedby="form-tip-text">
       <label title="Right ascension: decimal degrees (133.795) or hours (08h55m10.8s, 08:55:10.8)">RA
         <input name="ra" type="text" required placeholder="08h55m10.8s or 133.795" spellcheck="false"></label>
       <label title="Declination: decimal degrees (-7.245) or -7d14m42.5s, -07:14:42.5">Dec
@@ -23,10 +23,16 @@
       <select id="preset" aria-label="Test fields" title="The five test fields named in the challenge" hidden>
         <option value="">Test fields…</option>
       </select>
-      <p id="form-hint" class="form-hint">
-        <span aria-hidden="true">✎</span> Change RA, Dec or field of view (5–60 arcmin), or pick a test field,
-        then press <strong>Show</strong>. RA/Dec in decimal degrees or as 08h55m10.8s / -7d14m42.5s.
-      </p>
+      <!-- RA/Dec help bubble (T29). Switched off for now: FORM_TIP_ENABLED in app.js, or ?tip=1. -->
+      <div id="form-tip" class="form-tip" role="note" hidden>
+        <span class="form-tip-icon" aria-hidden="true">i</span>
+        <p id="form-tip-text">
+          <strong>Choose any patch of sky.</strong> Change RA and Dec, in decimal degrees (133.795, -7.245)
+          or sexagesimal (08h55m10.8s, -7d14m42.5s), and the field of view (5–60 arcmin), or pick a test
+          field. Then press <strong>Show</strong>.
+        </p>
+        <button type="button" id="form-tip-close" class="form-tip-close">Got it</button>
+      </div>
     </form>
 
     <!-- Offline mode (?data=<folder>): pick from a static index.json. -->
