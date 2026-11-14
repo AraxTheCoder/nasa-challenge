@@ -24,7 +24,7 @@ def _write(root):
 def test_build_and_find(tmp_path, monkeypatch):
     root = tmp_path / "mirror"
     _write(root)
-    mirror.build(root)
+    mirror.build(root, learn_weeks=False)
     asked = []
     monkeypatch.setattr(mirror, "resolve_urls", lambda dids: asked.extend(dids) or {
         d: "https://irsa.ipac.caltech.edu/ibe/data/spherex/qr3/level2/2026W38_1A/l2b-v27-2026-261/2/"

@@ -36,6 +36,9 @@ JOBS = {f"obscore_d{d}": f"""SELECT obs_id, obs_collection, t_min, t_max, t_expt
         s_ra, s_dec FROM spherex.obscore WHERE obs_collection IN ({COLS})
         AND dataproduct_type = 'image' AND energy_bandpassname = 'SPHEREx-D{d}'""" for d in range(1, 7)}
 # A sample of FITS paths (one per week folder is enough) to learn the processing version per week.
+# One FITS path per week folder (first exposure of each), so most paths can be derived offline.
+URI_WEEKS = """SELECT a.uri FROM spherex.artifact AS a WHERE a.producttype = 'science'
+        AND a.uri LIKE '%_0001_1D1_spx_%'"""
 URI_SAMPLE = """SELECT TOP 20000 a.uri FROM spherex.artifact AS a WHERE a.producttype = 'science'
         AND a.uri LIKE '%D1_spx_%'"""
 
@@ -107,7 +110,7 @@ def harvest(root: Path = MIRROR) -> None:
     from concurrent.futures import ThreadPoolExecutor
 
     root.mkdir(parents=True, exist_ok=True)
-    jobs = dict(JOBS, uri_sample=URI_SAMPLE)
+    jobs = dict(JOBS, uri_sample=URI_SAMPLE, uri_weeks=URI_WEEKS)
     with ThreadPoolExecutor(len(jobs)) as pool:
         futs = {pool.submit(run_async, q, root / f"{name}.csv"): name for name, q in jobs.items()}
         failed = []
@@ -148,7 +151,7 @@ def derive_url(collection: str, obs_id: str, detector: int, versions: dict[str, 
             f"level2_{obs_id}D{detector}_spx_{ver}.fits")
 
 
-def build(root: Path = MIRROR) -> Path:
+def build(root: Path = MIRROR, learn_weeks: bool = True) -> Path:
     cols = {k: [] for k in ("obs_id", "collection", "detector", "t_min", "t_max", "exptime",
                             "em_min", "em_max", "s_ra", "s_dec")}
     for d in range(1, 7):
@@ -170,8 +173,32 @@ def build(root: Path = MIRROR) -> Path:
         detector=np.array(cols["detector"], np.int8),
         **{k: np.array(cols[k]) for k in ("t_min", "t_max", "exptime", "em_min", "em_max", "s_ra", "s_dec")},
         provenance=np.array(json.dumps(prov)))
+    if learn_weeks:
+        learn_all_weeks(root, cols)
     print(f"wrote {out}: {len(cols['obs_id'])} images, {len(learn_versions(root))} week folders with known paths")
     return out
+
+
+def learn_all_weeks(root: Path = MIRROR, cols: dict | None = None) -> int:
+    """Resolve one image per week folder whose processing version we don't know yet (one TAP call
+    per 500), so map tiles never wait for TAP (~10 s each on 2026-11-14). Returns weeks learnt."""
+    versions = learn_versions(root)
+    if cols is None:
+        z = np.load(root / "index.npz", allow_pickle=False)
+        cols = {"obs_id": z["obs_id"].tolist(), "collection": z["collection"].tolist(), "detector": z["detector"].tolist()}
+    todo = {}
+    for obs, coll, det in zip(cols["obs_id"], cols["collection"], cols["detector"]):
+        key = f"{coll.split('_')[1]}/{obs.rsplit('_', 2)[0]}"
+        if key not in versions and key not in todo:
+            todo[key] = f"ivo://irsa.ipac/{coll}?{obs}/D{det}"
+    if not todo:
+        return 0
+    found = resolve_urls(list(todo.values()))
+    with open(root / "uri_learned.csv", "a", encoding="utf-8") as fh:
+        for url in found.values():
+            fh.write(url + "\n")
+    print(f"learnt the processing version of {len(found)} of {len(todo)} more week folders")
+    return len(found)
 
 
 # -- lookup ----------------------------------------------------------------------------------------
@@ -266,6 +293,7 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("harvest")
     sub.add_parser("build")
+    sub.add_parser("weeks", help="learn the path of every week folder (part of build)")
     f = sub.add_parser("find")
     f.add_argument("--ra", type=float, required=True)
     f.add_argument("--dec", type=float, required=True)
@@ -274,6 +302,8 @@ def main(argv=None):
         harvest()
     elif args.cmd == "build":
         build()
+    elif args.cmd == "weeks":
+        learn_all_weeks()
     else:
         t0 = time.time()
         ex, _ = find_exposures_local(args.ra, args.dec)

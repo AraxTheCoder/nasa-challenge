@@ -14,6 +14,8 @@ if [ ! -f data/mirror/index.npz ]; then
   (cd app && sudo -u spherex ../venv/bin/python -m pipeline.mirror harvest \
           && sudo -u spherex ../venv/bin/python -m pipeline.mirror build)
 fi
+# Learn the path of every week folder, so tiles never wait for an IRSA TAP lookup (cheap if known)
+(cd app && sudo -u spherex ../venv/bin/python -m pipeline.mirror weeks)
 systemctl restart spherex-tilegen
 for i in $(seq 1 20); do
   if curl -fsS http://127.0.0.1:8100/health; then echo " <- tilegen up"; exit 0; fi
