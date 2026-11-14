@@ -12,14 +12,29 @@
     <h1>SPHEREx Blink</h1>
 
     <!-- Live mode (default): ask the Live API for any RA/Dec. -->
-    <form id="field-form" class="field-form" autocomplete="off">
-      <label>RA <input name="ra" type="text" required placeholder="08h55m10.8s or 133.795" spellcheck="false"></label>
-      <label>Dec <input name="dec" type="text" required placeholder="-7d14m42.5s or -7.245" spellcheck="false"></label>
-      <label>Field <input name="size" type="number" min="5" max="60" step="1" value="15" required> ′</label>
+    <form id="field-form" class="field-form" autocomplete="off" aria-describedby="form-tip-text">
+      <label title="Right ascension: decimal degrees (133.795) or hours (08h55m10.8s, 08:55:10.8)">RA
+        <input name="ra" type="text" required placeholder="08h55m10.8s or 133.795" spellcheck="false"></label>
+      <label title="Declination: decimal degrees (-7.245) or -7d14m42.5s, -07:14:42.5">Dec
+        <input name="dec" type="text" required placeholder="-7d14m42.5s or -7.245" spellcheck="false"></label>
+      <label title="Side of the square field, 5–60 arcmin. Larger fields catch faster movers but take longer to build.">Field of view
+        <input name="size" type="number" min="5" max="60" step="1" value="15" required> arcmin</label>
       <button type="submit" class="primary">Show</button>
-      <select id="preset" aria-label="Test fields" hidden>
+      <select id="preset" aria-label="Test fields" title="The five test fields named in the challenge" hidden>
         <option value="">Test fields…</option>
       </select>
+      <button type="button" id="form-help" class="help-btn" aria-controls="form-tip" aria-expanded="false"
+              title="How to enter coordinates">?</button>
+      <!-- RA/Dec help bubble (T29). Switched off for now: FORM_TIP_ENABLED in app.js, or ?tip=1. -->
+      <div id="form-tip" class="form-tip" role="note" hidden>
+        <span class="form-tip-icon" aria-hidden="true">i</span>
+        <p id="form-tip-text">
+          <strong>Choose any patch of sky.</strong> Change RA and Dec, in decimal degrees (133.795, -7.245)
+          or sexagesimal (08h55m10.8s, -7d14m42.5s), and the field of view (5–60 arcmin), or pick a test
+          field. Then press <strong>Show</strong>.
+        </p>
+        <button type="button" id="form-tip-close" class="form-tip-close">Got it</button>
+      </div>
     </form>
 
     <!-- Offline mode (?data=<folder>): pick from a static index.json. -->
@@ -46,9 +61,12 @@
     <section class="viewer" aria-label="Frame viewer">
       <div id="empty" class="empty">
         <h2>Pick a patch of sky</h2>
-        <p class="muted">Enter RA and Dec above (decimal degrees or sexagesimal) or choose one of the
-          test fields. The first request for a field builds it from SPHEREx data and can take a minute
-          or two; later requests come from the cache.</p>
+        <p id="empty-default" hidden>The form above is filled in with
+          <strong id="empty-default-name"></strong><span id="empty-default-kind"></span>.
+          Press <strong>Show</strong> to load it.</p>
+        <p class="muted">Or type any RA and Dec (decimal degrees or sexagesimal) and a field of view, or
+          choose another test field. The first request for a field builds it from SPHEREx data and can
+          take a minute or two; later requests come from the cache.</p>
       </div>
 
       <div id="viewer-body" hidden>
