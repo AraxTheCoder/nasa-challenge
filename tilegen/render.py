@@ -141,8 +141,36 @@ def _covers(fits_url: str, ra: float, dec: float, margin_px: int = 20) -> bool:
     return margin_px <= x <= im.nx - 1 - margin_px and margin_px <= y <= im.ny - 1 - margin_px
 
 
-def _sample(fits_url: str, lon: np.ndarray, lat: np.ndarray) -> np.ndarray | None:
-    """Noise-normalised values of one image at the given sky positions (NaN = no data)."""
+# Detector coordinates are computed exactly only on a coarse grid of tile texels and interpolated
+# in between (SIP distortion and the HEALPix layout are smooth over a tile): 1089 instead of
+# 262144 iterative WCS inversions per image. Checked < 0.02 px against the exact result.
+GRID = np.unique(np.r_[np.arange(0, 512, 16), 511])
+
+
+def _grid_lonlat(order: int, npix: int):
+    import astropy.units as u
+    from astropy_healpix import HEALPix
+
+    xy = _xy_table()[np.ix_(GRID, GRID)]
+    lon, lat = HEALPix(nside=2 ** (order + 9), order="nested").healpix_to_lonlat(
+        (np.int64(npix) * TILE * TILE + xy).ravel())
+    return lon.to_value(u.deg).reshape(len(GRID), len(GRID)), lat.to_value(u.deg).reshape(len(GRID), len(GRID))
+
+
+def _pixels(wcs, glon: np.ndarray, glat: np.ndarray):
+    """Detector x, y of every tile texel (flat, row-major), from the exact values on the grid."""
+    from scipy.interpolate import RegularGridInterpolator
+
+    gx, gy = _world2pix(wcs, glon.ravel(), glat.ravel())
+    rr, cc = np.meshgrid(np.arange(TILE), np.arange(TILE), indexing="ij")
+    pts = np.stack([rr.ravel(), cc.ravel()], axis=1)
+    x = RegularGridInterpolator((GRID, GRID), gx.reshape(glon.shape))(pts)
+    y = RegularGridInterpolator((GRID, GRID), gy.reshape(glon.shape))(pts)
+    return x, y
+
+
+def _sample(fits_url: str, glon: np.ndarray, glat: np.ndarray, sel: np.ndarray | None = None) -> np.ndarray | None:
+    """Noise-normalised values of one image at the tile texels (or the subset sel; NaN = no data)."""
     from scipy.ndimage import map_coordinates
 
     from pipeline.s3 import CHUNK_ROWS, NotInBucket, S3Image
@@ -151,7 +179,10 @@ def _sample(fits_url: str, lon: np.ndarray, lat: np.ndarray) -> np.ndarray | Non
         im = S3Image.get(fits_url)
     except NotInBucket:          # reprocessed file under another path: the other images still do
         return None
-    x, y = _world2pix(im.wcs, lon, lat)
+    x, y = _pixels(im.wcs, glon, glat)
+    if sel is not None:
+        x, y = x[sel], y[sel]
+    lon = x                                     # only its shape is used below
     inside = np.isfinite(x) & np.isfinite(y) & (x >= 0) & (x <= im.nx - 1) & (y >= 0) & (y <= im.ny - 1)
     if not inside.any():
         return None
@@ -188,10 +219,9 @@ def render(slice_: int, order: int, npix: int) -> bytes | None:
         urls = pick_images(lon_c.to_value(u.deg), lat_c.to_value(u.deg), detector)
     if not urls:
         return None
-    lon, lat = HEALPix(nside=2 ** (order + 9), order="nested").healpix_to_lonlat(
-        (np.int64(npix) * TILE * TILE + _xy_table()).ravel())
-    lon, lat = lon.to_value(u.deg), lat.to_value(u.deg)
-    stack = [s for s in _images.map(lambda url: _sample(url, lon, lat), urls) if s is not None]
+    glon, glat = _grid_lonlat(order, npix)
+    npx = TILE * TILE
+    stack = [s for s in _images.map(lambda url: _sample(url, glon, glat), urls) if s is not None]
     # Fill holes: where the chosen image ends inside the tile or has masked pixels, sample further
     # images (best placed for this tile first) only at the still empty pixels.
     v = None
@@ -202,14 +232,14 @@ def render(slice_: int, order: int, npix: int) -> bytes | None:
         extra = [x for x in pick_images(lon_c.to_value(u.deg), lat_c.to_value(u.deg), detector, k=len(urls) + MAX_FILL)
                  if x not in urls][:MAX_FILL]
         for url in extra:
-            hole = ~np.isfinite(v) if v is not None else np.ones(lon.shape, bool)
+            hole = ~np.isfinite(v) if v is not None else np.ones(npx, bool)
             if not hole.any():
                 break
-            s = _sample(url, lon[hole], lat[hole])
+            s = _sample(url, glon, glat, hole)
             if s is None:
                 continue
             if v is None:
-                v = np.full(lon.shape, np.nan, np.float32)
+                v = np.full(npx, np.nan, np.float32)
             v[hole] = s
             if np.isfinite(v).mean() >= FILL_UNTIL:
                 break
@@ -221,5 +251,5 @@ def render(slice_: int, order: int, npix: int) -> bytes | None:
     grey = (np.clip(g, 0, 1) * 255).astype(np.uint8)
     alpha = np.where(ok, 255, 0).astype(np.uint8)
     buf = io.BytesIO()
-    Image.fromarray(np.dstack([grey.reshape(TILE, TILE), alpha.reshape(TILE, TILE)]), "LA").save(buf, "PNG")
+    Image.fromarray(np.dstack([grey.reshape(TILE, TILE), alpha.reshape(TILE, TILE)]), "LA").save(buf, "PNG", compress_level=3)
     return buf.getvalue()

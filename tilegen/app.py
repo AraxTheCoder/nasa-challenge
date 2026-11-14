@@ -23,20 +23,78 @@ TILE_RE = re.compile(r"^Norder(\d+)/Dir(\d+)/Npix(\d+)(?:_(\d+))?\.png$")
 MISSING = b"MISSING"
 
 
-def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6) -> FastAPI:
+def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, prefetch: bool = True) -> FastAPI:
     app = FastAPI(title="SPHEREx tile generator", version="1")
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
     sem = threading.BoundedSemaphore(slots)
     inflight: dict[str, threading.Event] = {}
     lock = threading.Lock()
-    stats = {"rendered": 0, "cached": 0, "seconds": 0.0}
+    stats = {"rendered": 0, "cached": 0, "seconds": 0.0, "prefetched": 0}
+    busy = {"n": 0}
+    # Background prefetch: newest asked tile first (LIFO), only while no request is being rendered,
+    # one at a time, so it never slows down what users wait for.
+    pending: list[str] = []
+    wake = threading.Condition()
+
+    def render_to_cache(path: str, m) -> None:
+        f = cache_root / path
+        t0 = time.time()
+        png = render.render(int(m.group(4) or 0), int(m.group(1)), int(m.group(3)))
+        stats["seconds"] += time.time() - t0
+        f.parent.mkdir(parents=True, exist_ok=True)
+        tmp = f.with_name(f.name + f".{threading.get_ident()}.part")
+        tmp.write_bytes(png if png is not None else MISSING)
+        tmp.replace(f)
+
+    def queue_neighbours(path: str, m) -> None:
+        try:
+            from astropy_healpix import HEALPix
+            order, npix, sl = int(m.group(1)), int(m.group(3)), m.group(4)
+            nb = HEALPix(nside=2 ** order, order="nested").neighbours(npix)
+        except Exception:  # noqa: BLE001
+            return
+        with wake:
+            for p in nb:
+                if p < 0:
+                    continue
+                sub = f"Norder{order}/Dir{(int(p) // 10000) * 10000}/Npix{int(p)}{'_' + sl if sl else ''}.png"
+                if not (cache_root / sub).exists() and sub not in pending:
+                    pending.append(sub)
+            del pending[:-64]                                   # keep the newest 64
+            wake.notify()
+
+    def prefetcher() -> None:
+        while True:
+            with wake:
+                while not pending or busy["n"] > 0:
+                    wake.wait(1.0)
+                path = pending.pop()
+            if (cache_root / path).exists():
+                continue
+            with lock:
+                if path in inflight:
+                    continue
+                ev = inflight[path] = threading.Event()
+            try:
+                render_to_cache(path, TILE_RE.match(path))
+                stats["prefetched"] += 1
+            except Exception:  # noqa: BLE001 - best effort
+                pass
+            finally:
+                with lock:
+                    inflight.pop(path, None)
+                ev.set()
+
+    if prefetch:
+        threading.Thread(target=prefetcher, daemon=True, name="tilegen-prefetch").start()
 
     @app.get("/health")
     def health():
         n = stats["rendered"]
         return {"ok": True, "orders": list(render.LIVE_ORDERS), "images_per_tile": render.IMAGES_PER_TILE,
-                "rendered": n, "served_from_cache": stats["cached"],
-                "mean_render_s": round(stats["seconds"] / n, 2) if n else None}
+                "rendered": n, "served_from_cache": stats["cached"], "prefetched": stats["prefetched"],
+                "prefetch_pending": len(pending),
+                "mean_render_s": round(stats["seconds"] / (n + stats["prefetched"]), 2) if n + stats["prefetched"] else None}
 
     @app.get("/tiles/live/{path:path}")
     def tile(path: str):
@@ -53,22 +111,20 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6) ->
                 if owner:
                     ev = inflight[path] = threading.Event()
             if owner:
+                busy["n"] += 1
                 try:
-                    t0 = time.time()
                     with sem:
-                        png = render.render(int(m.group(4) or 0), int(m.group(1)), int(m.group(3)))
+                        render_to_cache(path, m)
                     stats["rendered"] += 1
-                    stats["seconds"] += time.time() - t0
-                    f.parent.mkdir(parents=True, exist_ok=True)
-                    tmp = f.with_name(f.name + f".{threading.get_ident()}.part")
-                    tmp.write_bytes(png if png is not None else MISSING)
-                    tmp.replace(f)
                 finally:
+                    busy["n"] -= 1
                     with lock:
                         inflight.pop(path, None)
                     ev.set()
             else:
                 ev.wait(300)                       # same tile already being rendered: wait for it
+        if prefetch:
+            queue_neighbours(path, m)
         if not f.exists():
             raise HTTPException(503, "render failed")
         data = f.read_bytes()

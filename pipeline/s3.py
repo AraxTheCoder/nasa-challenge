@@ -69,6 +69,27 @@ def _header_at(url: str, offset: int, guess_blocks: int = 12):
         n *= 2
 
 
+def _two_headers(head: bytes, url: str):
+    """Parse the primary header and the IMAGE header that follows it from the first bytes of a file.
+    Returns (IMAGE header, its size, offset of the IMAGE HDU). Falls back to a second request."""
+    from astropy.io import fits
+
+    def end_of(buf, start):
+        for k in range(start, len(buf), 80):
+            if buf[k:k + 80] == b"END" + b" " * 77:
+                return math.ceil((k + 80) / BLOCK) * BLOCK
+        return None
+
+    s0 = end_of(head, 0)
+    e1 = end_of(head, s0) if s0 else None
+    if s0 and e1:
+        return fits.Header.fromstring(head[s0:e1].decode("ascii")), e1 - s0, s0
+    if not s0:
+        _, s0 = _header_at(url, 0, 2)
+    himg, simg = _header_at(url, s0, 12)
+    return himg, simg, s0
+
+
 def _data_size(h) -> int:
     nax = [h.get(f"NAXIS{i}", 0) for i in range(1, h.get("NAXIS", 0) + 1)]
     n = abs(h["BITPIX"]) // 8 * (math.prod(nax) if nax else 0) * h.get("GCOUNT", 1) + h.get("PCOUNT", 0)
@@ -174,9 +195,19 @@ def fetch_cutout(fits_url: str, ra: float, dec: float, size_deg: float, dest: Pa
 
 # -- T42: whole-image access with cached headers and row chunks (for live map tiles) -------------
 
+import os
 import threading
+from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 
-CHUNK_ROWS = 128
+# 64 rows: less over-read (and RICE decoding of FLAGS) at the edges of a map tile than 128.
+CHUNK_ROWS = 64
+# Decoded chunks kept in memory (~0.6 MB each); disk copies are written in the background.
+CHUNK_MEM = int(os.environ.get("S3_CHUNK_MEM", "1500"))
+_mem_chunks: "OrderedDict[str, tuple]" = OrderedDict()
+_mem_lock = threading.Lock()
+_disk_writer = ThreadPoolExecutor(1, thread_name_prefix="chunk-writer")
+_fetchers = ThreadPoolExecutor(16, thread_name_prefix="chunk-image-rows")
 CHUNK_ROOT = Path("data/raw/s3chunks")
 
 
@@ -209,12 +240,12 @@ class S3Image:
             meta = json.loads(meta_f.read_text(encoding="utf-8"))
         else:
             try:
-                _, s0 = _header_at(self.url, 0, 2)
+                head = _get(self.url, 0, 16 * BLOCK)          # primary + IMAGE header in one go
             except Exception as e:
                 if "404" in str(e):
                     raise NotInBucket(self.url) from e
                 raise
-            himg, simg = _header_at(self.url, s0, 12)
+            himg, simg, s0 = _two_headers(head, self.url)
             data0 = s0 + simg
             off_flags = data0 + _data_size(himg)
             hflags, sflags = _header_at(self.url, off_flags, 8)
@@ -251,24 +282,51 @@ class S3Image:
             return self._chunk(i)
 
     def _chunk(self, i: int):
-        f = self.dir / f"c{i:02d}.npz"
+        key = f"{self.dir}/{CHUNK_ROWS}/{i}"
+        with _mem_lock:
+            hit = _mem_chunks.get(key)
+            if hit is not None:
+                _mem_chunks.move_to_end(key)
+                return hit
+        f = self.dir / f"r{CHUNK_ROWS}_{i:03d}.npz"
         if f.exists():
             z = np.load(f)
-            return z["img"], z["bad"], float(z["med"]), float(z["sig"])
+            out = (z["img"], z["bad"], float(z["med"]), float(z["sig"]))
+            self._remember(key, out)
+            return out
         y0, y1 = i * CHUNK_ROWS, min(self.ny, (i + 1) * CHUNK_ROWS)
         bpp = abs(self.himg["BITPIX"]) // 8
         dtype = {-32: ">f4", -64: ">f8", 32: ">i4", 16: ">i2"}[self.himg["BITPIX"]]
-        raw = _get(self.url, self.data0 + y0 * self.nx * bpp, self.data0 + y1 * self.nx * bpp)
-        img = np.frombuffer(raw, dtype).reshape(y1 - y0, self.nx).astype(np.float32)
+        # image rows and the FLAGS tiles (descriptors -> heap) are independent: fetch in parallel
+        raw_f = _fetchers.submit(_get, self.url, self.data0 + y0 * self.nx * bpp, self.data0 + y1 * self.nx * bpp)
         flags = _flags_rows(self.url, self.off_flags, self.hflags, self.sflags, y0, y1, 0, self.nx)
+        img = np.frombuffer(raw_f.result(), dtype).reshape(y1 - y0, self.nx).astype(np.float32)
         bad = ((flags & HW_MASK) != 0) | ~np.isfinite(img)
         good = img[~bad]
         med = float(np.median(good)) if good.size else 0.0
         sig = float(1.4826 * np.median(np.abs(good - med))) if good.size else 1.0
-        tmp = f.with_name(f"{f.stem}.{threading.get_ident()}.part.npz")
-        np.savez(tmp, img=img, bad=bad, med=med, sig=max(sig, 1e-6))
-        tmp.replace(f)
-        return img, bad, med, max(sig, 1e-6)
+        out = (img, bad, med, max(sig, 1e-6))
+        self._remember(key, out)
+        _disk_writer.submit(self._write, f, out)       # off the critical path (slow VM disk)
+        return out
+
+    @staticmethod
+    def _remember(key: str, value: tuple) -> None:
+        with _mem_lock:
+            _mem_chunks[key] = value
+            _mem_chunks.move_to_end(key)
+            while len(_mem_chunks) > CHUNK_MEM:
+                _mem_chunks.popitem(last=False)
+
+    @staticmethod
+    def _write(f: Path, value: tuple) -> None:
+        try:
+            img, bad, med, sig = value
+            tmp = f.with_name(f"{f.stem}.{threading.get_ident()}.part.npz")
+            np.savez(tmp, img=img, bad=bad, med=med, sig=sig)
+            tmp.replace(f)
+        except OSError:
+            pass
 
 
 HW_MASK = sum(1 << b for b in (0, 1, 2, 6, 9, 10, 11, 14, 17, 25, 26, 27, 28))   # as pipeline.build

@@ -21,7 +21,7 @@ const BACK_COSC = -0.6;                   // don't draw beyond ~127 deg from the
 const MIN_FOV = 1 / 60;                   // 1 arcmin
 const MAX_TEXTURES = 200;           // 1 MB of GPU memory each
 const MAX_PARALLEL_LOADS = 6;             // = what a browser opens per host over HTTP/1.1
-const MAX_SLOW_LOADS = 2;                 // live-rendered tiles: leave connections for the rest
+const MAX_SLOW_LOADS = 4;                 // live-rendered tiles; leaves 2 connections for the rest
 const PRELOAD = 1e6;                      // prio >= PRELOAD: preload (other epochs, parent tiles)
 const MAX_PRELOADS = 3;                   // preloads in flight at once, and only when nothing visible waits
 // Preload tiers, in this order after every visible tile: parent (zoom out), ring around the view
