@@ -33,6 +33,8 @@ Rework the UI without blocking anyone: the redesign lives in `app/` (URL `/app/`
         zooms to order 7, pin on the centre until the mouse moves; epochs = line 3 of the band panel
   - [x] Step 9 (Jonathan, 2026-11-14): pin left of the point; after Go it stays on the position and fades
         after 5 s; 📍 button = pick mode (follows the mouse, left click sets form + URL, then fades)
+  - [x] Steps 10-12 (Jonathan, 2026-11-14): pin tip on the point with RA/Dec below; Blink builds the whole
+        view (≤ 60′, API limit) and the red outline marks that part of the view; no jump when it is ready
 - [ ] Port relevant `web/` changes made after the copy
 - [ ] When done: decide (TEAM.md Decisions) whether `app/` replaces `web/`
 
