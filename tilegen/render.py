@@ -257,7 +257,7 @@ def _sample(fits_url: str, glon: np.ndarray, glat: np.ndarray, sel: np.ndarray |
     return out
 
 
-def render(slice_: int, order: int, npix: int, pass_: int | None = None) -> bytes | None:
+def render(slice_: int, order: int, npix: int, pass_: int | None = None, images: int | None = None) -> bytes | None:
     """PNG (grey + alpha) of one live tile, or None if no SPHEREx image covers it.
     pass_: only images from that survey pass (T82: blink passes anywhere on the map)."""
     import astropy.units as u
@@ -272,7 +272,7 @@ def render(slice_: int, order: int, npix: int, pass_: int | None = None) -> byte
     # if those don't cover this tile, fall back to the best images for the tile itself.
     parent = npix >> (2 * (order - SHARE_ORDER))
     lon_p, lat_p = HEALPix(nside=2 ** SHARE_ORDER, order="nested").healpix_to_lonlat(parent)
-    k = PASS_IMAGES if pass_ else IMAGES_PER_TILE
+    k = images or (PASS_IMAGES if pass_ else IMAGES_PER_TILE)     # images: the VM's count (balanced mode)
     urls = pick_images(lon_p.to_value(u.deg), lat_p.to_value(u.deg), detector, k=k, pass_=pass_)
     if not urls or not _covers(urls[0], lon_c.to_value(u.deg), lat_c.to_value(u.deg)):
         urls = pick_images(lon_c.to_value(u.deg), lat_c.to_value(u.deg), detector, k=k, pass_=pass_)

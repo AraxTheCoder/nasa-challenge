@@ -7,15 +7,14 @@
 // Always running: no play / pause, no buttons. Each pass is labelled with when SPHEREx imaged the view
 // centre in it (GET /api/pass-dates), e.g. "Aug–Sep 2025".
 //
-// Source switch (next to Debug): "passes" (this, default) or "epochs" (app.js builds the view's field at
-// level 7 and blinks its epochs, T32). A field opened from a link switches to "epochs".
+// The source is chosen by app.js on its own: "passes" (this, default) or "epochs" (the field of the order-6
+// tile the view rests on, once it is built, T32); app.js shows which one in a text indicator.
 
 import { $, el } from "./util.js";
 import * as explore from "./explore.js";
 
 export const SHARP_ORDER = 7;    // deepest live order: blink only here
 const STEP_MS = 800;
-const MODE_KEY = "spherex-app-blink-source";
 const DATES_MOVE_DEG = 0.3;      // ask for the dates again once the centre moved this far
 
 const st = { mode: "passes", passes: [], layers: false, shown: -1, labels: [], note: null, listeners: [],
@@ -25,14 +24,11 @@ export const mode = () => st.mode;
 export const sharp = () => (explore.wantedOrder() ?? 0) >= SHARP_ORDER;
 export function onModeChange(fn) { st.listeners.push(fn); }
 
-/** "passes" or "epochs"; remembered in this browser unless remember is false. */
-export async function setMode(m, { remember = true } = {}) {
+/** "passes" or "epochs" (app.js decides; the options object is accepted for older callers). */
+export async function setMode(m, _opts = {}) {
   if (m !== "passes" && m !== "epochs") return;
   const changed = m !== st.mode;
   st.mode = m;
-  if (remember) { try { localStorage.setItem(MODE_KEY, m); } catch { /* private mode */ } }
-  const sel = $("#blink-source");
-  if (sel) sel.value = m;
   $("#explore-passes").hidden = m !== "passes";
   explore.setBaseCap(m === "passes" ? SHARP_ORDER - 1 : null);
   if (m === "passes") await loadLayers();
@@ -161,16 +157,8 @@ export async function initPasses() {
   st.labels = st.passes.map((n) => el("span", { class: "pass-label" }, `pass ${n}`));
   st.note = el("span", { class: "muted small" });
   box.replaceChildren(...st.labels, st.note);
-  const sel = $("#blink-source");
-  sel.addEventListener("change", () => setMode(sel.value));
-  let saved = "passes";
-  try { saved = localStorage.getItem(MODE_KEY) ?? "passes"; } catch { /* private mode */ }
-  if (!st.passes.length) {                           // map without pass layers (offline / old API)
-    sel.querySelector('option[value="passes"]').disabled = true;
-    saved = "epochs";
-  }
   st.mode = null;                                    // force a full setMode
-  await setMode(saved, { remember: false });
+  await setMode(st.passes.length ? "passes" : "epochs");   // no pass layers (offline / old API): epochs only
   explore.onTiles(update);                           // every redraw: loading state, zoom level
   explore.on("change", onMove);
   onMove();

@@ -369,6 +369,28 @@ body.map-only #ph-measure { display: none !important; }
 .disc-table tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 @media (max-width: 1280px) { .discoveries { margin: 8px 16px 0; } }
 
+/* T86: unusual spectra in the field */
+.outliers { max-width: 1248px; margin: 8px auto 0; }
+@media (max-width: 1280px) { .outliers { margin: 8px 16px 0; } }
+.ol-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.ol-head h3 { margin: 0 0 6px; }
+.ol-list { margin: 8px 0; padding-left: 22px; display: grid; gap: 10px; }
+.ol-item { border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.ol-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.ol-detail { align-items: center; margin-top: 4px; flex-wrap: nowrap; }
+.ol-detail p { margin: 0; min-width: 0; }
+.ol-name { font-weight: 600; }
+.ol-score { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ol-chart { flex: none; background: var(--panel-2); border-radius: 4px; }
+.ol-zero { stroke: var(--border); stroke-width: 1; }
+.ol-bar { opacity: 0.45; }
+.ol-bar.ol-run { opacity: 1; }
+.ol-up { fill: var(--slot-b); }
+.ol-down { fill: var(--accent); }
+.ol-tick { fill: var(--muted); font-size: 8px; }
+.ol-caveat { margin: 4px 0 0; }
+@media (max-width: 600px) { .ol-detail { flex-wrap: wrap; } .ol-chart { width: 100%; } }
+
 /* ---------- T64: newer SPHEREx data for the shown field ---------- */
 .target-updates { margin: 4px 0 0; padding: 4px 8px; border-left: 3px solid var(--warn); color: var(--text); }
 .target-updates button { margin-left: 6px; }

@@ -1,9 +1,17 @@
-# Contracts (v0.15)
+# Contracts (v0.17)
 
-v0.15 (T64): data releases. Each frame may carry `collection` (the IRSA collection = SPHEREx release, e.g.
+v0.17 (T64): data releases. Each frame may carry `collection` (the IRSA collection = SPHEREx release, e.g.
 `spherex_qr3_deep`); target.json may carry `source_exposures` (what SPHEREx had at the centre at build time);
 `GET /api/targets/<id>/updates` says whether newer images or a new release exist (see "Newer data"). Image
 searches cover new releases automatically (`pipeline.releases`). Additive; `schema_version` stays `"0.2"`.
+
+v0.16 (T55): tile settings get a third mode, `balanced` (default when a remote tile generator is configured):
+each live tile goes to this machine or the VM, whichever is expected to finish it first; `GET /api/settings`
+reports the measured throughput per side under `balance`. `local` / `remote` behave as before.
+
+v0.15 (T85, T86): `GET /api/targets/<id>/spectral-outliers`: spectra of every catalogue source of a field and
+the sources whose spectral shape is out of distribution for that field. New endpoint and cache only; nothing
+existing changes. See "Spectral outliers".
 
 v0.14 (T55, T82): survey passes on the sky map: `spherex-live-p<n>` layers documented, `x_survey_passes`
 in the live properties, and `GET /api/pass-dates` (when each pass imaged a point). New fields / endpoint
@@ -140,7 +148,7 @@ no-data pixels, labels with motion, known objects, known / unknown / artifact de
 | `labels` | A | optional (v0.4): catalogue objects in the field with a position per frame, see below |
 | `labels_requested` | server | optional (v0.8): `true` once `GET …/labels` has run (labels may still be `[]`) |
 | `objects_requested` | server | optional (v0.11): `true` once `GET …/objects` has run (known objects + detections) |
-| `source_exposures` | A | optional (v0.15): `{count, latest_mjd, latest_utc, collections, checked_utc}`: the SPHEREx exposures covering the centre at build time (the frames are a selection of them) |
+| `source_exposures` | A | optional (v0.17): `{count, latest_mjd, latest_utc, collections, checked_utc}`: the SPHEREx exposures covering the centre at build time (the frames are a selection of them) |
 
 ### Frame
 
@@ -161,7 +169,7 @@ no-data pixels, labels with motion, known objects, known / unknown / artifact de
   From v0.2, pixels with no data (outside the rotated original frame, or masked) are fully
   transparent (alpha 0), so the viewer can show them as "no data" instead of dark sky.
 - `obs_id`, `source_url`: where the frame came from. `null` for synthetic frames.
-- `collection`: optional (v0.15): the IRSA collection the exposure belongs to = its SPHEREx release
+- `collection`: optional (v0.17): the IRSA collection the exposure belongs to = its SPHEREx release
   (`spherex_dr1`, `spherex_dr1_deep`, `spherex_qr3`, …; DR = data release, QR = quick release). Older builds
   don't have it; the release folder in `source_url` (`…/qr3/level2/…`) tells the same.
 
@@ -369,6 +377,42 @@ VARIANCE or the annulus scatter (S3 cutouts have no VARIANCE). Answer (200):
 - `missing`: frames without a cached cutout or where the position is off the image.
 - Synthetic targets: 200 with `{"status": "no_data", "message": ...}`. Unknown target: 404. Bad ra/dec: 400.
 
+### Spectral outliers (v0.15, T85, T86)
+
+```
+GET /api/targets/<id>/spectral-outliers            cached result, else {"status": "not_started"}
+GET /api/targets/<id>/spectral-outliers?start=1    start measuring; 202 {"status": "building", "done", "total"}
+                                                   while it runs (poll without start), then 200 as below
+```
+
+T85 (`pipeline.fieldspectra`) reads every SPHEREx exposure of the field once (a field-sized cutout each) and
+measures every catalogue label (no solar-system objects, no X-ray / radio positions) with the T49 photometry,
+each source moved along its own track. Cached as `data/field_spectra/<id>.json` (sources × exposures arrays);
+each source's spectrum is also written to the T66 per-position cache, so `/api/photometry` at a source
+answers at once. T86 (`pipeline.spectral_outliers`) ranks them. Answer (200):
+
+```json
+{ "status": "ready", "id": "...", "version": 1, "summary": "9 of 137 sources stand out ...",
+  "n_sources": 172, "n_judged": 137, "n_reference": 80, "components": 2, "epochs": [1, 2, 3],
+  "method": "...", "scatter_pct": [3.0, ...],
+  "field": { "target_id": "...", "n_sources": 172, "n_exposures": 237, "missing": 0, "seconds": 21.2 },
+  "scores": { "<label id>": 23.3 },
+  "not_judged": [ { "id": "l000", "name": "RW Aur", "why": "saturated / flagged in most exposures", "bands": 3 } ],
+  "items": [ { "id": "l111", "name": "Gaia DR3 ...", "source": "gaia_dr3", "otype": "*", "mag": 15.18,
+               "ra_deg": 77.00062, "dec_deg": 30.33474, "score": 23.3, "chi2": 10.1,
+               "reason": "Redder than ordinary sources here: ...", "caveats": ["blended: ..."],
+               "deviations": [ { "um_min": 1.249, "um_max": 1.363, "sign": -1, "pct": -35.1, "z": 8.2,
+                                 "n_bands": 1, "epochs_agree": 2, "epochs_seen": 3, "meaning": "..." } ],
+               "bands_um": [0.77, ...], "residual_pct": [12.0, null, ...], "z": [1.2, null, ...] } ] }
+```
+
+- Shape only: each (source, epoch) is scaled to its own level; "ordinary" is learned from the field's own
+  unblended, non-variable, non-galaxy sources (mean shape + `components` principal shapes).
+- `items` are sorted by `score` (summed significance of consistent deviations; halved for blends, ×0.3 for
+  jagged residuals). `scores` has every judged source, for colouring.
+- `items[].ra_deg/dec_deg` open the source's spectrum with `GET /api/photometry?ra=&dec=`.
+- Synthetic targets: 200 `{"status": "no_data"}`. Unknown target: 404.
+
 ### Target id and cache
 
 - The id is derived from the request, so equal requests hit the same cache entry:
@@ -453,14 +497,21 @@ within 1.2 deg, all detectors); passes without images there are left out. 503 + 
 local image index is being built.
 
 ```
-GET  /api/settings                     → {"tiles": "local" | "remote", "remote_url", "remote_available"}
-POST /api/settings {"tiles": "remote"} → same body; which generator renders the live tiles
+GET  /api/settings                     → {"tiles": "balanced" | "local" | "remote", "remote_url", "remote_available",
+                                          "balance": {"local": {avg_s, tiles_per_s, inflight, done, failed}, "remote": {…}}}
+POST /api/settings {"tiles": "balanced"} → same body; which generator renders the live tiles (400 if unknown)
 ```
+
+`balanced` (v0.16, default with a remote): a tile costs (tiles in flight on that side + 1) / that side's measured
+throughput (tiles in flight / seconds per tile, moving average); the cheaper side renders it, a side unused for
+20 s gets the next tile while idle (so both stay measured), a failing side is backed off. Local renders of
+combined tiles use the VM's images per tile, so tiles look the same from either side. `balance` is omitted
+without a remote.
 
 `remote` is the team's tile generator on a VM next to the bucket (`deploy/`, T47): seconds instead of
 minutes from Europe. Only the tiles go there; builds, caches and the API stay local.
 
-### Newer data (v0.15, T64)
+### Newer data (v0.17, T64)
 
 ```
 GET /api/targets/<id>/updates
@@ -482,7 +533,7 @@ Answer (200):
   "built": { ... source_exposures ... }, "now": { ... same shape, now ... } }
 ```
 
-- Newer images = exposures after `source_exposures.latest_mjd`. Fields built before v0.15 (`basis: "frames"`):
+- Newer images = exposures after `source_exposures.latest_mjd`. Fields built before v0.17 (`basis: "frames"`):
   only exposures more than 30 days after the last frame (a new survey pass) count, because the frames are a
   selection and later exposures of the last pass may just not have been picked.
 - `new_releases`: release folders in the bucket this code didn't know (2026-11-14: `dr1`, `qr2`, `qr3`); they are

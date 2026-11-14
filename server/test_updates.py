@@ -1,4 +1,4 @@
-"""T64: GET /api/targets/<id>/updates and the release fields of a build (CONTRACTS v0.15 "Newer data")."""
+"""T64: GET /api/targets/<id>/updates and the release fields of a build (CONTRACTS v0.17 "Newer data")."""
 import json
 from datetime import datetime, timedelta
 

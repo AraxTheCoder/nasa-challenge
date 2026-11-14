@@ -402,3 +402,47 @@ def test_hips_frame_and_difference_layers(client):
     assert grey.size and abs(float(np.median(grey)) - 128) <= 1
     assert client.get(f"/api/hips/{t['id']}/f999/properties").status_code == 404
     assert client.get(f"/api/hips/{t['id']}/x1/properties").status_code == 404
+
+
+def test_spectral_outliers_job(tmp_path, monkeypatch):
+    """T85/T86: not_started -> start=1 (202 while measuring) -> 200 with the ranked outliers; spectra seeded."""
+    import json
+
+    import numpy as np
+
+    import pipeline.fieldspectra as FS
+    import pipeline.photometry as ph
+    from pipeline.test_fieldspectra import _field
+
+    monkeypatch.setattr(FS, "ROOT", tmp_path / "fs")
+    monkeypatch.setattr(ph, "SPECTRA_ROOT", tmp_path / "spectra")
+    tid = "c0100000-p200000-s15"
+    labels = [{"id": f"s{i}", "name": f"star {i}", "source": "gaia_dr3", "mag": 12.0,
+               "positions": [{"frame_id": "f0", "ra_deg": 10 + i * 0.01, "dec_deg": 20.0}]} for i in range(60)]
+    target = {"id": tid, "synthetic": False, "center": {"ra_deg": 10.0, "dec_deg": 20.0}, "size_arcmin": 15,
+              "frames": [{"id": "f0", "mjd": 60800.0}], "labels": labels}
+    (tmp_path / tid).mkdir()
+    (tmp_path / tid / "target.json").write_text(json.dumps(target))
+
+    def fake_measure(t, progress=None, **kw):
+        progress(3, 3)
+        fs = _field(odd={5: lambda w: 1 + 0.8 * np.clip((w - 2.8) / 2.0, 0, None)})
+        srcs = FS.sources_of(t)
+        fs.update(version=FS.VERSION, target_id=t["id"], sources=srcs, sources_key=FS._key(srcs), missing=[], seconds=1.0)
+        FS._write(FS.cache_path(t["id"]), fs)
+        return fs
+
+    monkeypatch.setattr(FS, "measure_field", fake_measure)
+    client = TestClient(create_app(tmp_path))
+    url = f"/api/targets/{tid}/spectral-outliers"
+    assert client.get(url).json()["status"] == "not_started"
+    r = client.get(url, params={"start": 1})
+    for _ in range(100):
+        if r.status_code == 200:
+            break
+        time.sleep(0.02)
+        r = client.get(url)
+    body = r.json()
+    assert r.status_code == 200 and body["status"] == "ready" and body["items"][0]["name"] == "star 5"
+    assert body["field"]["n_sources"] == 60 and "flux_ujy" not in body
+    assert len(list((tmp_path / "spectra").glob("*.json"))) == 60          # clicks on these sources are instant

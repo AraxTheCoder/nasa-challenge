@@ -146,7 +146,7 @@
           },
           "collection": {
             "type": "string",
-            "description": "v0.15 (T64): IRSA collection = SPHEREx release, e.g. spherex_dr1, spherex_qr3_deep"
+            "description": "v0.17 (T64): IRSA collection = SPHEREx release, e.g. spherex_dr1, spherex_qr3_deep"
           },
           "bandwidth_um": {
             "type": "number",
@@ -290,7 +290,7 @@
     },
     "source_exposures": {
       "type": "object",
-      "description": "v0.15 (T64): the SPHEREx exposures covering the centre when the field was built (the frames are a selection)",
+      "description": "v0.17 (T64): the SPHEREx exposures covering the centre when the field was built (the frames are a selection)",
       "required": ["count"],
       "properties": {
         "count": { "type": "integer", "minimum": 0 },

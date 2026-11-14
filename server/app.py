@@ -18,6 +18,7 @@ from . import hips
 from .skycache import SkyCache
 from .builder import REPO, Builder
 from .photometry import router as photometry_router  # T49
+from .fieldspectra import router as fieldspectra_router  # T85/T86
 from .discoveries import router as discoveries_router  # T76
 from .updates import router as updates_router  # T64
 from .coords import CoordError, parse_dec, parse_ra, parse_size, target_id
@@ -39,6 +40,7 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
                        allow_headers=["*"])
     app.state.builder = builder
     app.include_router(photometry_router)  # T49: /api/targets/<id>/photometry
+    app.include_router(fieldspectra_router)  # T85/T86: /api/targets/<id>/spectral-outliers
     app.include_router(discoveries_router)  # T76: /api/discoveries
     app.include_router(updates_router)  # T64: /api/targets/<id>/updates
 
@@ -262,7 +264,7 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
         body = await request.json()
         if "tiles" in body:
             try:
-                sky.tiles.use_remote(body["tiles"] == "remote")
+                sky.tiles.set_mode(body["tiles"])      # T55: local | remote | balanced
             except ValueError as e:
                 return JSONResponse({"error": str(e)}, status_code=400)
         return settings_info()

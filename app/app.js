@@ -19,6 +19,7 @@ import { initHud } from "./hud.js";   // T55: drag the floating panels anywhere
 import { parseDec, parseRa } from "./coords.js";
 import { initCursorPin, isPicking, pinAt, setPicking } from "./cursorpin.js";   // T55: 📍 marker + pick mode
 import * as passes from "./passes.js";   // T55: survey passes blink by themselves at level 7
+import { ang2pix, tileGrid } from "./healpix.js";
 
 const SIZE_MIN = 5;
 const SIZE_MAX = 210;   // API limit = one SPHEREx detector (3.49 deg), server/coords.py
@@ -154,7 +155,7 @@ function fillDefaults() {
   if (f) fillForm(presetRequest(f));
 }
 
-/** ?ra=&dec= after Go; after Blink also &size=&blink=1, so a reload or shared link builds it again. */
+/** ?ra=&dec= after Go (blink=true: also &size=&blink=1; unused since T55 step 15, blinking is automatic). */
 function setPageUrl(req, push, blink = false) {
   const url = new URL(location.href);
   url.searchParams.set("ra", req.ra);
@@ -179,9 +180,8 @@ function loadFromUrl() {
   if (!ra || !dec) return false;
   const req = { ra, dec, size: clampSize(Number(p.get("size")) || SIZE_DEFAULT) };
   fillForm(req);
-  const blink = p.get("blink") === "1";
-  // a link to a built field shows the field (view = field size, square outline); a plain link like Go
-  if (goTo(req, blink ? { fovDeg: req.size / 60 } : {}) && blink) loadField(req);
+  // T55: like Go (zoomed in to level 7); the field epochs there come by themselves (old &blink=1 links too)
+  goTo(req);
   return true;
 }
 
@@ -224,17 +224,26 @@ function onPicked(ra, dec) {
   setPageUrl(req, true);
 }
 
-async function loadField(req) {
+/** Build (or fetch the cached) field req. quiet (T55 auto builds): no progress panel, no error popup:
+ *  progress and errors go to the blink indicator instead. */
+async function loadField(req, { quiet = false } = {}) {
   const { token, signal } = beginLoad();
   app.request = req;
   try {
-    const onProgress = (progress, id) => { if (token === app.loadToken) showJob(req, progress, id); };
+    const onProgress = (progress, id) => {
+      if (token !== app.loadToken) return;
+      if (quiet) { autoField.progress = progress; showBlinkStatus(); } else showJob(req, progress, id);
+    };
     const { id, targetUrl } = await requestField(app.api, req, { onProgress, signal });
     if (token !== app.loadToken) return;
     await openTarget(targetUrl, id, token, signal);
   } catch (err) {
     if (err.name === "AbortError" || token !== app.loadToken) return;
-    showLoadError(err);
+    if (quiet) {
+      autoField.building = null;
+      autoField.error = err.message ?? String(err);
+      showBlinkStatus();
+    } else showLoadError(err);
   } finally {
     if (token === app.loadToken) hideJob();
   }
@@ -339,13 +348,10 @@ function bindPage() {
 
 function syncExplore(target) {
   app.shownTarget = target;
-  const c = target?.center;
-  if (!c) return;
-  // built from the view (auto): don't move the map; opened from a link: show the field (view = field)
-  if (!app.request?.auto) explore.goTo(c.ra_deg, c.dec_deg, Math.max(0.25, target.size_arcmin / 60));
-  // a built field is blinked by its epochs: switch the source (its listener shows them)
-  if (passes.mode() !== "epochs") passes.setMode("epochs", { remember: false });
-  else showEpochLayers(target);
+  if (!target?.center) return;
+  autoField.ready = autoField.building;     // the tile it was built for (null: opened some other way)
+  autoField.building = null;
+  decideSource();
 }
 
 /** T55: Blink source changed: epochs = the shown field's layers (if any); passes = passes.js's. */
@@ -357,10 +363,10 @@ function onBlinkSource(m) {
   } else {
     $("#explore-epochs").hidden = true;
   }
-  updateExplorePos();
+  showBlinkStatus();
 }
 
-// T32: the field's epochs as map layers, with buttons + blink, so epochs can be compared in the map.
+// T32: the field's epochs as map layers, blinking by themselves, so epochs can be compared in the map.
 let epochTimer = null;
 let epochShown = 0;
 
@@ -396,50 +402,88 @@ async function showEpochLayers(target) {
   epochTimer = setInterval(() => { if (passes.sharp()) pick((epochShown + 1) % layers.length); }, 800);
 }
 
-/** Side of the square field built for the view: covers the whole view (its longer side), within 5–210′. */
-const blinkSize = (v) => clampSize(Math.ceil(Math.max(v.fovArcmin, v.heightArcmin)));
-
 /** How much the map shows (the mouse position is in the 📍 pill). */
 function updateExplorePos() {
   const v = explore.view();
   if (!v) return;
   const arc = (a) => (a >= 120 ? `${(a / 60).toFixed(1)}°` : `${Math.round(a)}′`);
-  const view = `view ${arc(v.fovArcmin)} × ${arc(v.heightArcmin)}`;
-  // T55: blinking only makes sense on the sharp map (level 7): coarser, nothing visibly moves between epochs
-  $("#explore-pos").textContent = passes.mode() === "epochs" && !passes.sharp() ? `${view} · zoom in to level 7 to blink` : view;
-  scheduleAutoBuild();
+  $("#explore-pos").textContent = `view ${arc(v.fovArcmin)} × ${arc(v.heightArcmin)}`;
+  decideSource();
 }
 
-// ---------- T55: "field epochs" source: build the view's field by itself once the map rests at level 7 ----------
+// ---------- T55: what blinks, decided by itself ----------
+// Survey passes by default. Resting at level 7 on one HiPS order-6 tile (~55′, about one screen) builds that
+// tile's field in the background (same grid for everyone: a tile is built once, then cached); once it is
+// ready and the view is still on that tile, its field epochs blink (aligned frames, traces, detections).
+// Moving out of the tile or zooming out goes back to the survey passes. No buttons, no outline, no popup.
 
+const FIELD_ORDER = 6;
 const AUTO_BUILD_MS = 2000;
-let autoTimer = null;
-let autoView = null;      // view of the last scheduled check (the mouse moving fires "change" too)
+const autoField = { tile: null, building: null, ready: null, progress: null, error: null, timer: null };
 
-/** True if the last field asked for already covers this view (centre inside, about the same size). */
-function covered(v) {
-  const r = app.request;
-  if (!r) return false;
-  const d = Math.PI / 180, ra = Number(r.ra), dec = Number(r.dec);
-  const c = Math.sin(dec * d) * Math.sin(v.dec * d) + Math.cos(dec * d) * Math.cos(v.dec * d) * Math.cos((ra - v.ra) * d);
-  const sepArcmin = (Math.acos(Math.min(1, c)) / d) * 60, size = blinkSize(v);
-  return sepArcmin < r.size / 4 && size <= r.size * 1.1 && size >= r.size / 2;
+/** Order-6 tile under the view centre (null when not at level 7 or no map). */
+function centreTile() {
+  const v = explore.view();
+  return v && passes.sharp() ? ang2pix(FIELD_ORDER, v.ra, v.dec) : null;
 }
 
-function scheduleAutoBuild() {
-  if (passes.mode() !== "epochs" || !passes.sharp()) { clearTimeout(autoTimer); autoView = null; return; }
-  const v = explore.view();
-  if (autoView && v.ra === autoView.ra && v.dec === autoView.dec && v.fovArcmin === autoView.fovArcmin) return;
-  autoView = v;
-  clearTimeout(autoTimer);
-  autoTimer = setTimeout(() => {
-    const now = explore.view();
-    if (!now || passes.mode() !== "epochs" || !passes.sharp() || covered(now)) return;
-    const req = { ra: now.ra.toFixed(4), dec: now.dec.toFixed(4), size: blinkSize(now), auto: true };
-    fillForm(req);
-    setPageUrl(req, false, true);          // replace, not push: no history entry per pan
-    loadField(req);
-  }, AUTO_BUILD_MS);
+/** Square field around tile pix that covers all of it: centre + side (arcmin), within the API's limits. */
+function tileField(pix) {
+  const g = tileGrid(FIELD_ORDER, pix, 4);
+  const c = tileGrid(FIELD_ORDER, pix, 2).slice(8, 10);        // middle point of the 3 x 3 grid
+  const cos = Math.cos((c[1] * Math.PI) / 180) || 1e-6;
+  let half = 0;
+  for (let i = 0; i < g.length; i += 2) {
+    const dra = ((g[i] - c[0] + 540) % 360) - 180;
+    half = Math.max(half, Math.abs(dra * cos), Math.abs(g[i + 1] - c[1]));
+  }
+  return { ra: c[0].toFixed(4), dec: c[1].toFixed(4), size: clampSize(Math.ceil(2 * half * 60 * 1.02)) };
+}
+
+/** Called on every view change and when a field is ready: pick the source, start a build after a rest. */
+function decideSource() {
+  const tile = centreTile();
+  const moved = tile !== autoField.tile;
+  autoField.tile = tile;
+  const want = tile !== null && autoField.ready === tile && app.shownTarget ? "epochs" : "passes";
+  if (passes.mode() !== want) passes.setMode(want, { remember: false });
+  if (moved) {
+    clearTimeout(autoField.timer);
+    autoField.error = null;
+    if (tile !== null && autoField.ready !== tile && autoField.building !== tile) {
+      autoField.timer = setTimeout(() => buildTile(tile), AUTO_BUILD_MS);
+    }
+  }
+  showBlinkStatus();
+}
+
+function buildTile(pix) {
+  if (centreTile() !== pix) return;
+  const req = { ...tileField(pix), auto: true };
+  autoField.building = pix;
+  autoField.progress = null;
+  loadField(req, { quiet: true });
+  showBlinkStatus();
+}
+
+/** The text indicator next to the switches: what is blinking right now, and what is on its way. */
+function showBlinkStatus() {
+  const out = $("#blink-status");
+  if (!out) return;
+  const tile = autoField.tile;
+  let text;
+  if (tile === null) text = "Blink: zoom in to level 7";
+  else if (passes.mode() === "epochs") text = "Blink: field epochs";
+  else {
+    text = "Blink: survey passes";
+    if (autoField.building === tile) {
+      const p = autoField.progress;
+      const step = p?.step ? STEP_LABELS[p.step] ?? p.step : "building";
+      const n = Number.isFinite(p?.done) && Number.isFinite(p?.total) && p.total ? ` ${p.done}/${p.total}` : "";
+      text += ` · field epochs: ${step.toLowerCase()}${n}…`;
+    } else if (autoField.error) text += ` · field epochs failed: ${autoField.error}`;
+  }
+  out.textContent = text;
 }
 
 function setupBand(layer) {
@@ -476,8 +520,8 @@ async function startExplore() {
     setupBand(sky.base);
     passes.onModeChange(onBlinkSource);
     await passes.initPasses();
-    let lastSharp = null;                     // the Blink button follows the zoom level (level 7 or not)
-    explore.onTiles(() => { const s = passes.sharp(); if (s !== lastSharp) { lastSharp = s; updateExplorePos(); } });
+    let lastSharp = null;                     // the source follows the zoom level (level 7 or not)
+    explore.onTiles(() => { const s = passes.sharp(); if (s !== lastSharp) { lastSharp = s; decideSource(); } });
     if (app.goalPending) { app.goalPending = false; showGoal(); }   // Go asked before the map existed
     if (app.shownTarget) syncExplore(app.shownTarget);   // a field loaded before the map was ready
     updateExplorePos();
@@ -596,7 +640,7 @@ async function main() {
   await loadPresets();
   startExplore();   // not awaited: the map loads in the background
   if (!loadFromUrl()) fillDefaults();
-  await warnIfApiDown(p.get("blink") === "1");   // a Go needs no API; a build reports its own error
+  await warnIfApiDown(false);
 }
 
 main();
