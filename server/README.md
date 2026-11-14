@@ -5,8 +5,8 @@ it to the frontend. API spec: `docs/CONTRACTS.md` → "Live API".
 
 ```
 pip install -r requirements.lock   # from the repo root; exact pinned versions
-python -m server --fixture          # until pipeline.build (T02-T04) exists: synthetic fixture only
-python -m server                    # live: pipeline.query + pipeline.build (+ detect.run if present)
+python -m server                    # live: real SPHEREx data, cache in data/targets/
+python -m server --fixture          # tests / offline: the synthetic demo field for every request (own cache)
 python -m pytest server -q
 ```
 
@@ -23,7 +23,11 @@ Notes for other tracks:
 - **A:** the server calls `build_target(id, ra, dec, size_arcmin, out_root=<tmp>)` exactly as in
   CONTRACTS. If `build_target` also accepts `progress=callable(step, done=None, total=None,
   message="")`, the server forwards it to the UI's progress bar. Optional, but users wait 1-2 min.
-- **B:** `detect.run.detect(target_dir)` runs after the build when the module is importable.
+- **B:** `detect.run.detect_target(target)` runs when the viewer asks `GET /api/targets/<id>/objects`
+  (T51), in the background; same for catalogue labels via `GET /api/targets/<id>/labels` (T37).
+- Also served: photometry (`/api/targets/<id>/photometry`, T49), per-epoch HiPS (`/api/hips/…`, T32),
+  sky-map tiles (`/api/sky/…`, T41/T42), tile settings (`/api/settings`, T47), `/api/health`.
+  All in `docs/CONTRACTS.md` → "Live API".
 - **C:** fetch `/api/target`, poll `poll_url` while 202, then load `target_url`; frame image paths
   are relative to it. In fixture mode every answer is `"synthetic": true` — show the badge.
 - Builds run in a background thread, one per target id; a second request for the same id joins the

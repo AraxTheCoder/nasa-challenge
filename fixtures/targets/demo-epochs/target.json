@@ -1,0 +1,591 @@
+{
+  "schema_version": "0.2",
+  "id": "demo-epochs",
+  "name": "Synthetic multi-epoch demo field (NOT SPHEREx data)",
+  "synthetic": true,
+  "center": {
+    "ra_deg": 150.0,
+    "dec_deg": 2.2
+  },
+  "size_arcmin": 9.84,
+  "image": {
+    "width": 96,
+    "height": 96,
+    "pixel_scale_arcsec": 6.15
+  },
+  "provenance": [
+    {
+      "service": "fixtures/make_demo_epochs.py (synthetic, NOT SPHEREx data)",
+      "query": "seeded random stars, a proper-motion star, a variable, two known and one unknown asteroid, a hot pixel; labels, known objects and detection tracks are made up too",
+      "retrieved_utc": "2026-11-14T00:00:00Z"
+    },
+    {
+      "service": "Synthetic small bodies (stand-in for the SkyBoT / JPL SB Identification lookup, T07)",
+      "query": "two made-up asteroids written by fixtures/make_demo_epochs.py; no service was asked",
+      "retrieved_utc": "2026-11-14T00:00:00Z"
+    },
+    {
+      "service": "detect.classify (T08)",
+      "query": "rules v1: match <= 2.0 px median over shared frames, still < 0.5 px, line RMS <= 1.0 px, rate <= 7200\"/h; 2 known objects, 3 labels; result {'known': 1, 'unknown': 1, 'artifact': 1}",
+      "retrieved_utc": "2026-11-14T00:00:00Z"
+    }
+  ],
+  "frames": [
+    {
+      "id": "f000",
+      "time_utc": "2025-04-25T00:00:00Z",
+      "mjd": 60790.0,
+      "epoch": 1,
+      "detector": 2,
+      "wavelength_um": 1.2,
+      "bandwidth_um": 0.0293,
+      "image": "frames/f000.png",
+      "obs_id": null,
+      "source_url": null
+    },
+    {
+      "id": "f001",
+      "time_utc": "2025-04-25T01:40:48Z",
+      "mjd": 60790.07,
+      "epoch": 1,
+      "detector": 2,
+      "wavelength_um": 1.23,
+      "bandwidth_um": 0.03,
+      "image": "frames/f001.png",
+      "obs_id": null,
+      "source_url": null
+    },
+    {
+      "id": "f002",
+      "time_utc": "2025-04-25T03:21:36Z",
+      "mjd": 60790.14,
+      "epoch": 1,
+      "detector": 3,
+      "wavelength_um": 1.8,
+      "bandwidth_um": 0.0439,
+      "image": "frames/f002.png",
+      "obs_id": null,
+      "source_url": null
+    },
+    {
+      "id": "f003",
+      "time_utc": "2025-04-25T05:02:24Z",
+      "mjd": 60790.21,
+      "epoch": 1,
+      "detector": 3,
+      "wavelength_um": 1.83,
+      "bandwidth_um": 0.0446,
+      "image": "frames/f003.png",
+      "obs_id": null,
+      "source_url": null
+    },
+    {
+      "id": "f004",
+      "time_utc": "2025-10-22T00:00:00Z",
+      "mjd": 60970.0,
+      "epoch": 2,
+      "detector": 2,
+      "wavelength_um": 1.21,
+      "bandwidth_um": 0.0295,
+      "image": "frames/f004.png",
+      "obs_id": null,
+      "source_url": null
+    },
+    {
+      "id": "f005",
+      "time_utc": "2025-10-22T01:40:48Z",
+      "mjd": 60970.07,
+      "epoch": 2,
+      "detector": 2,
+      "wavelength_um": 1.3,
+      "bandwidth_um": 0.0317,
+      "image": "frames/f005.png",
+      "obs_id": null,
+      "source_url": null
+    },
+    {
+      "id": "f006",
+      "time_utc": "2025-10-22T03:21:36Z",
+      "mjd": 60970.14,
+      "epoch": 2,
+      "detector": 3,
+      "wavelength_um": 1.82,
+      "bandwidth_um": 0.0444,
+      "image": "frames/f006.png",
+      "obs_id": null,
+      "source_url": null
+    },
+    {
+      "id": "f007",
+      "time_utc": "2026-04-20T00:00:00Z",
+      "mjd": 61150.0,
+      "epoch": 3,
+      "detector": 2,
+      "wavelength_um": 1.235,
+      "bandwidth_um": 0.0301,
+      "image": "frames/f007.png",
+      "obs_id": null,
+      "source_url": null
+    },
+    {
+      "id": "f008",
+      "time_utc": "2026-04-20T01:40:48Z",
+      "mjd": 61150.07,
+      "epoch": 3,
+      "detector": 3,
+      "wavelength_um": 2.1,
+      "bandwidth_um": 0.0512,
+      "image": "frames/f008.png",
+      "obs_id": null,
+      "source_url": null
+    }
+  ],
+  "pairs": [
+    {
+      "a": "f000",
+      "b": "f004",
+      "detector": 2,
+      "dwave_um": 0.01,
+      "dt_days": 180.0
+    },
+    {
+      "a": "f001",
+      "b": "f007",
+      "detector": 2,
+      "dwave_um": 0.005,
+      "dt_days": 359.93
+    },
+    {
+      "a": "f003",
+      "b": "f006",
+      "detector": 3,
+      "dwave_um": 0.01,
+      "dt_days": 179.93
+    }
+  ],
+  "labels": [
+    {
+      "id": "l000",
+      "name": "Synthetic star PM-1 (not real)",
+      "kind": "high proper-motion star (synthetic)",
+      "otype": "PM*",
+      "source": "synthetic",
+      "named": true,
+      "mag": 9.8,
+      "pm_mas_yr": 12480.0,
+      "importance": 1,
+      "positions": [
+        {
+          "frame_id": "f000",
+          "ra_deg": 150.029918,
+          "dec_deg": 2.171813,
+          "x": 30.0,
+          "y": 64.0
+        },
+        {
+          "frame_id": "f001",
+          "ra_deg": 150.029918,
+          "dec_deg": 2.171813,
+          "x": 30.0,
+          "y": 64.0
+        },
+        {
+          "frame_id": "f002",
+          "ra_deg": 150.029919,
+          "dec_deg": 2.171814,
+          "x": 30.0,
+          "y": 64.0
+        },
+        {
+          "frame_id": "f003",
+          "ra_deg": 150.029919,
+          "dec_deg": 2.171814,
+          "x": 30.0,
+          "y": 64.0
+        },
+        {
+          "frame_id": "f004",
+          "ra_deg": 150.030944,
+          "dec_deg": 2.173179,
+          "x": 29.4,
+          "y": 63.2
+        },
+        {
+          "frame_id": "f005",
+          "ra_deg": 150.030944,
+          "dec_deg": 2.17318,
+          "x": 29.4,
+          "y": 63.2
+        },
+        {
+          "frame_id": "f006",
+          "ra_deg": 150.030944,
+          "dec_deg": 2.17318,
+          "x": 29.4,
+          "y": 63.2
+        },
+        {
+          "frame_id": "f007",
+          "ra_deg": 150.031969,
+          "dec_deg": 2.174546,
+          "x": 28.8,
+          "y": 62.4
+        },
+        {
+          "frame_id": "f008",
+          "ra_deg": 150.03197,
+          "dec_deg": 2.174546,
+          "x": 28.8,
+          "y": 62.4
+        }
+      ],
+      "motion": {
+        "shift_arcsec": 12.3,
+        "shift_px": 2.0,
+        "reach_arcsec": 12.3,
+        "days": 360.07,
+        "rate_arcsec_per_yr": 12.48,
+        "max_rate_within_epoch_arcsec_per_hr": 0.0,
+        "pa_deg": 36.9,
+        "direction": "NE",
+        "class": "proper motion",
+        "note": "steady slow motion: a nearby star or brown dwarf"
+      }
+    },
+    {
+      "id": "l001",
+      "name": "Synthetic variable V-1 (not real)",
+      "kind": "variable star (synthetic)",
+      "otype": "V*",
+      "source": "synthetic",
+      "named": true,
+      "mag": 10.5,
+      "pm_mas_yr": 0.0,
+      "importance": 2,
+      "positions": [
+        {
+          "frame_id": "f000",
+          "ra_deg": 149.961534,
+          "dec_deg": 2.238438,
+          "x": 70.0,
+          "y": 25.0
+        },
+        {
+          "frame_id": "f001",
+          "ra_deg": 149.961534,
+          "dec_deg": 2.238438,
+          "x": 70.0,
+          "y": 25.0
+        },
+        {
+          "frame_id": "f002",
+          "ra_deg": 149.961534,
+          "dec_deg": 2.238438,
+          "x": 70.0,
+          "y": 25.0
+        },
+        {
+          "frame_id": "f003",
+          "ra_deg": 149.961534,
+          "dec_deg": 2.238438,
+          "x": 70.0,
+          "y": 25.0
+        },
+        {
+          "frame_id": "f004",
+          "ra_deg": 149.961534,
+          "dec_deg": 2.238438,
+          "x": 70.0,
+          "y": 25.0
+        },
+        {
+          "frame_id": "f005",
+          "ra_deg": 149.961534,
+          "dec_deg": 2.238438,
+          "x": 70.0,
+          "y": 25.0
+        },
+        {
+          "frame_id": "f006",
+          "ra_deg": 149.961534,
+          "dec_deg": 2.238438,
+          "x": 70.0,
+          "y": 25.0
+        },
+        {
+          "frame_id": "f007",
+          "ra_deg": 149.961534,
+          "dec_deg": 2.238438,
+          "x": 70.0,
+          "y": 25.0
+        },
+        {
+          "frame_id": "f008",
+          "ra_deg": 149.961534,
+          "dec_deg": 2.238438,
+          "x": 70.0,
+          "y": 25.0
+        }
+      ],
+      "motion": {
+        "shift_arcsec": 0.0,
+        "shift_px": 0.0,
+        "reach_arcsec": 0.0,
+        "days": 360.07,
+        "rate_arcsec_per_yr": 0.0,
+        "max_rate_within_epoch_arcsec_per_hr": 0.0,
+        "pa_deg": null,
+        "direction": null,
+        "class": "still",
+        "note": "doesn't move visibly in this series"
+      }
+    },
+    {
+      "id": "l002",
+      "name": "Synthetic 0001 (not real)",
+      "kind": "star (synthetic)",
+      "otype": "*",
+      "source": "synthetic",
+      "named": false,
+      "mag": 12.1,
+      "pm_mas_yr": 0.0,
+      "importance": 3,
+      "aliases": [
+        "Synthetic 0001 B (not real)"
+      ],
+      "positions": [
+        {
+          "frame_id": "f000",
+          "ra_deg": 149.930451,
+          "dec_deg": 2.263072,
+          "x": 88.18,
+          "y": 10.58
+        },
+        {
+          "frame_id": "f001",
+          "ra_deg": 149.930451,
+          "dec_deg": 2.263072,
+          "x": 88.18,
+          "y": 10.58
+        },
+        {
+          "frame_id": "f002",
+          "ra_deg": 149.930451,
+          "dec_deg": 2.263072,
+          "x": 88.18,
+          "y": 10.58
+        },
+        {
+          "frame_id": "f003",
+          "ra_deg": 149.930451,
+          "dec_deg": 2.263072,
+          "x": 88.18,
+          "y": 10.58
+        },
+        {
+          "frame_id": "f004",
+          "ra_deg": 149.930451,
+          "dec_deg": 2.263072,
+          "x": 88.18,
+          "y": 10.58
+        },
+        {
+          "frame_id": "f005",
+          "ra_deg": 149.930451,
+          "dec_deg": 2.263072,
+          "x": 88.18,
+          "y": 10.58
+        },
+        {
+          "frame_id": "f006",
+          "ra_deg": 149.930451,
+          "dec_deg": 2.263072,
+          "x": 88.18,
+          "y": 10.58
+        },
+        {
+          "frame_id": "f007",
+          "ra_deg": 149.930451,
+          "dec_deg": 2.263072,
+          "x": 88.18,
+          "y": 10.58
+        },
+        {
+          "frame_id": "f008",
+          "ra_deg": 149.930451,
+          "dec_deg": 2.263072,
+          "x": 88.18,
+          "y": 10.58
+        }
+      ],
+      "motion": {
+        "shift_arcsec": 0.0,
+        "shift_px": 0.0,
+        "reach_arcsec": 0.0,
+        "days": 360.07,
+        "rate_arcsec_per_yr": 0.0,
+        "max_rate_within_epoch_arcsec_per_hr": 0.0,
+        "pa_deg": null,
+        "direction": null,
+        "class": "still",
+        "note": "doesn't move visibly in this series"
+      }
+    }
+  ],
+  "labels_requested": true,
+  "known_objects": [
+    {
+      "name": "Synthetic asteroid A (not real)",
+      "source": "synthetic",
+      "synthetic": true,
+      "positions": [
+        {
+          "frame_id": "f000",
+          "ra_deg": 149.97863,
+          "dec_deg": 2.246979,
+          "x": 60.0,
+          "y": 20.0
+        },
+        {
+          "frame_id": "f001",
+          "ra_deg": 149.981194,
+          "dec_deg": 2.240146,
+          "x": 58.5,
+          "y": 24.0
+        },
+        {
+          "frame_id": "f002",
+          "ra_deg": 149.983759,
+          "dec_deg": 2.233313,
+          "x": 57.0,
+          "y": 28.0
+        },
+        {
+          "frame_id": "f003",
+          "ra_deg": 149.986323,
+          "dec_deg": 2.226479,
+          "x": 55.5,
+          "y": 32.0
+        }
+      ]
+    },
+    {
+      "name": "Synthetic asteroid B (not real)",
+      "source": "synthetic",
+      "synthetic": true,
+      "positions": [
+        {
+          "frame_id": "f007",
+          "ra_deg": 150.047014,
+          "dec_deg": 2.161563,
+          "x": 20.0,
+          "y": 70.0
+        },
+        {
+          "frame_id": "f008",
+          "ra_deg": 150.041885,
+          "dec_deg": 2.158146,
+          "x": 23.0,
+          "y": 72.0
+        }
+      ]
+    }
+  ],
+  "detections": [
+    {
+      "id": "d001",
+      "status": "unknown",
+      "matched_object": null,
+      "synthetic": true,
+      "score": 0.71,
+      "track": [
+        {
+          "frame_id": "f004",
+          "ra_deg": 150.012912,
+          "dec_deg": 2.230075,
+          "x": 39.95,
+          "y": 29.9
+        },
+        {
+          "frame_id": "f005",
+          "ra_deg": 150.004197,
+          "dec_deg": 2.22909,
+          "x": 45.05,
+          "y": 30.47
+        },
+        {
+          "frame_id": "f006",
+          "ra_deg": 149.995708,
+          "dec_deg": 2.227915,
+          "x": 50.01,
+          "y": 31.16
+        }
+      ],
+      "motion": {
+        "rate_arcsec_per_hr": 18.557,
+        "pa_deg": 262.8
+      },
+      "reason": "moves (fast mover) and matches no known object"
+    },
+    {
+      "id": "d002",
+      "status": "artifact",
+      "matched_object": null,
+      "synthetic": true,
+      "score": 0.15,
+      "track": [
+        {
+          "frame_id": "f000",
+          "ra_deg": 150.06411,
+          "dec_deg": 2.264063,
+          "x": 10.0,
+          "y": 10.0
+        }
+      ],
+      "reason": "seen in one frame only: nothing to confirm motion with"
+    },
+    {
+      "id": "d003",
+      "status": "known",
+      "matched_object": "Synthetic asteroid A (not real)",
+      "synthetic": true,
+      "score": 0.98,
+      "track": [
+        {
+          "frame_id": "f000",
+          "ra_deg": 149.978857,
+          "dec_deg": 2.246975,
+          "x": 59.87,
+          "y": 20.0
+        },
+        {
+          "frame_id": "f001",
+          "ra_deg": 149.981432,
+          "dec_deg": 2.24018,
+          "x": 58.36,
+          "y": 23.98
+        },
+        {
+          "frame_id": "f002",
+          "ra_deg": 149.983979,
+          "dec_deg": 2.233522,
+          "x": 56.87,
+          "y": 27.88
+        },
+        {
+          "frame_id": "f003",
+          "ra_deg": 149.986362,
+          "dec_deg": 2.226312,
+          "x": 55.48,
+          "y": 32.1
+        }
+      ],
+      "motion": {
+        "rate_arcsec_per_hr": 15.707,
+        "pa_deg": 160.1
+      },
+      "reason": "follows Synthetic asteroid A (not real) (synthetic) within 0.1 px on 4 frame(s)"
+    }
+  ],
+  "objects_requested": true
+}

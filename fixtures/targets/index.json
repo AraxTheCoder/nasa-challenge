@@ -8,6 +8,14 @@
       "ra_deg": 150.0,
       "dec_deg": 2.2,
       "n_frames": 4
+    },
+    {
+      "id": "demo-epochs",
+      "name": "Synthetic multi-epoch demo field (NOT SPHEREx data)",
+      "synthetic": true,
+      "ra_deg": 150.0,
+      "dec_deg": 2.2,
+      "n_frames": 9
     }
   ]
 }
