@@ -13,6 +13,7 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `stack.js`, `stackview.js` | stacks (T59): the shown frame's epoch (all detectors) or detector (all epochs) added together, background removed per frame; blinkable; shift-and-stack (T69) along a clicked object or a guessed motion; display only |
 | `lambda.js`, `lampick.js` | type an exact wavelength (T78): "Frames at λ" picks A/B closest to it, the map's µm box picks the closest of 102 channels; `?lam=` in links |
 | `spectrum.js` | spectrum context (T63): star-like baseline per epoch, points that leave it, plain-words hints, feature list; pure, checked by `tests/spectrum_check.mjs` |
+| `discoveries.js`, `discoverview.js` | Candidates (T76): the discovery index from `/api/discoveries` under the map: filter by class, sort, markers on the map, "Show me something interesting"; a click opens the field with the reason (and the map band at the candidate's `lam_um`). Until the survey delivers, a hand-made sample, labelled. Pure part checked by `tests/discoveries_check.mjs` |
 | `trail.js` | trail view: brightest pixel over the frames, movers leave a row of dots (T23) |
 | `paths.js`, `paths.css` | names and motion paths on the image, label priority + hover (T22, T34) |
 | `inspector.js` | side panel for a clicked object: what it is, how it moves, frame by frame (T23) |

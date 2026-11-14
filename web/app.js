@@ -17,6 +17,8 @@ import "./passes.js";    // T82: blink SPHEREx's six-month survey passes anywher
 import { initLamPick, lamFromUrl, setLamUrl } from "./lampick.js";
 import { initStack } from "./stackview.js";
 import { nearestBand, parseLam } from "./lambda.js";
+import { initDiscoveries, markShown } from "./discoverview.js";
+import { candidateAt, displayName, whyLine } from "./discoveries.js";
 import * as explore from "./explore.js";
 
 const SIZE_MIN = 5;
@@ -48,6 +50,8 @@ const app = {
   index: null,       // offline mode: parsed index.json
   request: null,     // live mode: last {ra, dec, size} asked for
   presets: [],
+  candidates: [],    // T76: discovery index (discoverview.js), for the reason under the form
+  candSynthetic: false,
   loadToken: 0,      // bumps on every new load; stale async results check it and bail out
   abort: null,
   jobStart: 0,
@@ -125,15 +129,42 @@ function fillForm(req) {
   syncPresetSelect();
 }
 
-/** Show the matching quick pick in the dropdown (and why it is interesting), or none once the user typed
- *  other coordinates. */
-function syncPresetSelect() {
+/** Show the matching quick pick in the dropdown, and why the field is interesting (the quick pick's reason,
+ *  else a T76 candidate's; the candidate's first when it was opened from the list), or nothing once the user
+ *  typed other coordinates. */
+function syncPresetSelect({ candidateFirst = false } = {}) {
   const { ra, dec } = readForm();
   const i = app.presets.findIndex((p) => String(p.ra_deg) === ra && String(p.dec_deg) === dec);
   $("#preset").value = i >= 0 ? String(i) : "";
-  const why = i >= 0 ? app.presets[i].why : null;
-  $("#pick-why").hidden = !why;
-  $("#pick-why").replaceChildren(...(why ? [el("strong", {}, `${app.presets[i].name}: `), why] : []));
+  const cand = candidateAt(app.candidates, ra, dec);
+  markShown(cand?.id ?? null);
+  if (cand && (candidateFirst || i < 0)) {
+    const w = whyLine(cand, app.candSynthetic);
+    showWhy(`${displayName(cand)} · ${w.head}`, w.text);
+  } else {
+    showWhy(i >= 0 ? app.presets[i].name : "", i >= 0 ? app.presets[i].why : null);
+  }
+}
+
+function showWhy(title, text) {
+  $("#pick-why").hidden = !text;
+  $("#pick-why").replaceChildren(...(text ? [el("strong", {}, `${title}: `), text] : []));
+}
+
+/** T76: a candidate from the list opens like a quick pick; the map band goes to its wavelength if it has one. */
+function openCandidate(c) {
+  hideTip();
+  if (Number.isFinite(c.lam_um)) {
+    const lamBox = $("#explore-band-lam");
+    if (!$("#explore-band-box").hidden && lamBox.onchange) { lamBox.value = String(c.lam_um); lamBox.onchange(); }
+    else setLamUrl(c.lam_um);
+  }
+  const req = { ra: String(c.ra_deg), dec: String(c.dec_deg), size: clampSize(c.size_arcmin ?? SIZE_DEFAULT) };
+  fillForm(req);
+  syncPresetSelect({ candidateFirst: true });
+  setPageUrl(req, true);
+  loadField(req);
+  window.scrollTo({ top: 0, behavior: "smooth" });   // the list sits below the map: show the reason and the map
 }
 
 const presetRequest = (f) => ({ ra: String(f.ra_deg), dec: String(f.dec_deg), size: clampSize(f.size_arcmin ?? SIZE_DEFAULT) });
@@ -391,6 +422,12 @@ function bindPage() {
   });
   $("#preset").addEventListener("change", () => { hideTip(); onPresetPicked(); });
   $("#surprise").addEventListener("click", () => { hideTip(); surprise(); });
+  document.addEventListener("discoveries:open", (e) => { if (e.detail?.candidate) openCandidate(e.detail.candidate); });
+  document.addEventListener("discoveries:loaded", (e) => {
+    app.candidates = e.detail?.candidates ?? [];
+    app.candSynthetic = Boolean(e.detail?.synthetic);
+    syncPresetSelect();
+  });
   $("#field-form").addEventListener("focusin", (e) => {
     if (e.target.name === "ra" || e.target.name === "dec") showTip();
   });
@@ -700,6 +737,7 @@ async function main() {
     return;
   }
   await loadPresets();
+  initDiscoveries(app.api);   // T76: not awaited; the list appears when the Live API answers
   // ?explore=0 skips the sky map (embeds, slow connections, and the browser test, which must not
   // depend on external tile servers being up).
   if (p.get("explore") === "0") $("#explore").hidden = true;

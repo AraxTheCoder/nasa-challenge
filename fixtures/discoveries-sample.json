@@ -1,0 +1,126 @@
+{
+  "synthetic": true,
+  "survey": "hand-made sample (T76)",
+  "description": "A sample discovery index until the survey (T73–T75) delivers one: real, known objects at their real positions, with class, score and reason written by hand from our checks (T09, T63), not computed. They are the survey's validation set: a working survey must list them too.",
+  "generated_utc": "2026-11-14T00:00:00Z",
+  "method": "Positions from web/presets.json and web/discover.json (epoch 2026.0); class, score and reason by hand.",
+  "provenance": [
+    {
+      "service": "hand-made (fixtures/make_discoveries_sample.py)",
+      "query": "web/presets.json, web/discover.json",
+      "retrieved_utc": "2026-11-14T00:00:00Z"
+    }
+  ],
+  "candidates": [
+    {
+      "id": "sample-01",
+      "name": "WISE 0855-0714",
+      "ra_deg": 133.7598,
+      "dec_deg": -7.2422,
+      "size_arcmin": 15,
+      "class": "brown_dwarf",
+      "score": 0.95,
+      "reason": "The coldest brown dwarf known (about 250 K, colder than a freezer). Too faint to see at short wavelengths, it should only show at 4–5 µm, and it moves 8.1″ a year: about 1.3 pixels between the first and the last SPHEREx epoch here. The survey's first test: if it can't find this one, it can't find new ones.",
+      "known": "WISEA J085510.74-071442.5",
+      "tile": {
+        "order": 6,
+        "ipix": 40905
+      },
+      "lam_um": 4.5
+    },
+    {
+      "id": "sample-02",
+      "name": "Epsilon Indi B",
+      "ra_deg": 331.0966,
+      "dec_deg": -56.8007,
+      "size_arcmin": 15,
+      "class": "brown_dwarf",
+      "score": 0.9,
+      "reason": "A pair of brown dwarfs 12 light-years away. Our spectrum check (T63) finds no star shape in any epoch and 3.6–4.7 µm about 5× brighter than a star would be: the cool-atmosphere signature a new brown dwarf would show.",
+      "known": "* eps Ind B",
+      "tile": {
+        "order": 6,
+        "ipix": 45564
+      },
+      "lam_um": 4.0
+    },
+    {
+      "id": "sample-03",
+      "name": "RW Aurigae",
+      "ra_deg": 76.9566,
+      "dec_deg": 30.4013,
+      "size_arcmin": 15,
+      "class": "spectral",
+      "score": 0.85,
+      "reason": "A young star still surrounded by its disk. Its spectrum (T63) is about 15× brighter at 4.0–4.8 µm than the star alone: warm dust. It also varies: one epoch doesn't fit a single star shape at all.",
+      "known": "V* RW Aur",
+      "tile": {
+        "order": 6,
+        "ipix": 1111
+      },
+      "lam_um": 4.5
+    },
+    {
+      "id": "sample-04",
+      "name": "R Draconis",
+      "ra_deg": 248.1672,
+      "dec_deg": 66.755,
+      "size_arcmin": 15,
+      "class": "variable",
+      "score": 0.8,
+      "reason": "A Mira variable: it swells and shrinks over about 8 months, so at the same wavelength it should look clearly brighter or fainter between SPHEREx passes six months apart. Blink two epochs at the same wavelength. Known (variable-star catalogues), so the survey must flag it and then recognise it.",
+      "known": "V* R Dra",
+      "tile": {
+        "order": 6,
+        "ipix": 11712
+      },
+      "lam_um": 1.6
+    },
+    {
+      "id": "sample-05",
+      "name": "Barnard's Star",
+      "ra_deg": 269.4463,
+      "dec_deg": 4.7682,
+      "size_arcmin": 15,
+      "class": "mover",
+      "score": 0.75,
+      "reason": "The fastest-moving star in the sky (10.4″ a year), 6 light-years away: about 1.8 SPHEREx pixels between the first and the last epoch here. It is so bright that its core saturates: a gap that moves with it.",
+      "known": "NAME Barnard's star",
+      "tile": {
+        "order": 6,
+        "ipix": 31781
+      }
+    },
+    {
+      "id": "sample-06",
+      "name": "Kapteyn's star",
+      "ra_deg": 77.9855,
+      "dec_deg": -45.0597,
+      "size_arcmin": 10,
+      "class": "mover",
+      "score": 0.6,
+      "reason": "A star from the Milky Way's halo passing close by (13 light-years), moving 8.6″ a year: about 1.5 pixels across SPHEREx's coverage here. Blink the first against the last epoch.",
+      "known": "HD 33793",
+      "tile": {
+        "order": 6,
+        "ipix": 34095
+      }
+    },
+    {
+      "id": "sample-07",
+      "name": "SSSPM J1444-2019",
+      "ra_deg": 221.0623,
+      "dec_deg": -20.3379,
+      "size_arcmin": 10,
+      "class": "brown_dwarf",
+      "score": 0.55,
+      "reason": "A brown dwarf 56 light-years away moving 3.5″ a year, still only 0.6 px in SPHEREx's coverage here: too little to see in a blink. The spectrum is the test: a brown dwarf is dim at 1–2 µm and bright at 4–5 µm.",
+      "known": "SSSPM J1444-2019",
+      "tile": {
+        "order": 6,
+        "ipix": 44632
+      },
+      "lam_um": 4.5
+    }
+  ]
+}

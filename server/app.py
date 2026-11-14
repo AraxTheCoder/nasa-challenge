@@ -18,6 +18,7 @@ from . import hips
 from .skycache import SkyCache
 from .builder import REPO, Builder
 from .photometry import router as photometry_router  # T49
+from .discoveries import router as discoveries_router  # T76
 from .coords import CoordError, parse_dec, parse_ra, parse_size, target_id
 
 _ID = re.compile(r"^[a-z0-9-]+$")
@@ -37,6 +38,7 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
                        allow_headers=["*"])
     app.state.builder = builder
     app.include_router(photometry_router)  # T49: /api/targets/<id>/photometry
+    app.include_router(discoveries_router)  # T76: /api/discoveries
 
     def reply(job) -> JSONResponse:
         return JSONResponse(job.body(), status_code=_HTTP[job.status])

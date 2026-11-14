@@ -62,3 +62,17 @@ def test_discover():
     for f in d["fields"]:
         assert 0 <= f["ra_deg"] < 360 and -90 <= f["dec_deg"] <= 90 and 5 <= f["size_arcmin"] <= 60, f["name"]
         assert f["group"] and f["why"] and f["coverage"]["epochs"] >= 2, f["name"]
+
+
+def test_discoveries_sample():
+    """T76: the hand-made discovery index validates, is marked synthetic and is what its generator writes."""
+    import subprocess
+    import sys
+    schema = json.loads((REPO / "docs" / "discoveries.schema.json").read_text(encoding="utf-8"))
+    path = REPO / "fixtures" / "discoveries-sample.json"
+    before = path.read_bytes()
+    d = json.loads(before)
+    jsonschema.validate(d, schema)
+    assert d["synthetic"] is True and len({c["id"] for c in d["candidates"]}) == len(d["candidates"])
+    subprocess.run([sys.executable, str(REPO / "fixtures" / "make_discoveries_sample.py")], check=True, capture_output=True)
+    assert path.read_bytes() == before, "fixtures/discoveries-sample.json differs from its generator's output"
