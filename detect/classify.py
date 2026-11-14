@@ -32,6 +32,7 @@ from pipeline.motion import summarize
 RULES_VERSION = "1"
 MATCH_PX = 2.0                   # ~12": JPL positions (~1") + SPHEREx PSF/centroid + trailing
 STILL_PX = 0.5                   # less than this over the whole track = not a mover
+LOOKUP_SERVICES = ("SB Identification", "SkyBoT")  # provenance services of the known-object lookup (T07, T51)
 LINE_RMS_PX = 1.0                # straight-line residual inside one visit
 VISIT_GAP_DAYS = 0.25            # same visit grouping as detect.known_objects
 MAX_RATE_ARCSEC_PER_HR = 7200.0  # 2 deg/h: faster than practically any asteroid seen by SPHEREx
@@ -106,6 +107,11 @@ def _visit_rate(points: list[dict], mjd: dict[str, float], scale: float) -> floa
     return best
 
 
+def known_objects_looked_up(target: dict) -> bool:
+    """True if detect.known_objects (T07) asked for candidates: JPL sb_ident or, since T51, IMCCE SkyBoT."""
+    return any(any(k in (p.get("service") or "") for k in LOOKUP_SERVICES) for p in target.get("provenance", []))
+
+
 def classify_one(det: dict, target: dict) -> dict:
     """Return a copy of one detection with status, matched_object, score, motion and reason set."""
     frames = target["frames"]
@@ -161,7 +167,7 @@ def classify_one(det: dict, target: dict) -> dict:
     n_visits = len(_visits(points, mjd))
     score = 0.45 + 0.08 * min(len(points) - 1, 4) + 0.1 * min(n_visits - 1, 2) + 0.1 * (1 - worst / LINE_RMS_PX)
     cls = "fast mover" if within >= 1.0 else (summary or {}).get("class")
-    looked_up = any("SB Identification" in (p.get("service") or "") for p in target.get("provenance", []))
+    looked_up = known_objects_looked_up(target)
     return result("unknown", f"moves ({cls or 'mover'}) and matches no known object" +
                   ("" if looked_up else " (known asteroids were not looked up for this field: run detect.known_objects)"),
                   score if looked_up else min(score, 0.6))
