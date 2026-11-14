@@ -106,7 +106,11 @@ def build(src: Path = ROOT / "MPCORB.DAT.gz", out: Path = ROOT / "orbits.npz") -
     arrays = {k: np.asarray(v, dtype=np.float64) for k, v in cols.items()}
     arrays["G"][~np.isfinite(arrays["G"])] = 0.15
     retrieved = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(src.stat().st_mtime))
-    np.savez(out, name=np.asarray(names, dtype="S"), retrieved_utc=np.asarray(retrieved), **arrays)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_name(out.stem + ".part.npz")   # replaced atomically: a running server may be reading
+    np.savez(tmp, name=np.asarray(names, dtype="S"), retrieved_utc=np.asarray(retrieved), **arrays)
+    tmp.replace(out)
+    reload()
     return len(names)
 
 
@@ -134,7 +138,10 @@ def build_comets(src: Path = ROOT / "CometEls.txt", out: Path = ROOT / "comets.n
         for k, v in zip(cols, row):
             cols[k].append(v)
         names.append(line[102:158].strip())
-    np.savez(out, name=np.asarray(names, dtype="S"), **{k: np.asarray(v, float) for k, v in cols.items()})
+    tmp = out.with_name(out.stem + ".part.npz")
+    np.savez(tmp, name=np.asarray(names, dtype="S"), **{k: np.asarray(v, float) for k, v in cols.items()})
+    tmp.replace(out)
+    reload()
     return len(names)
 
 
@@ -184,6 +191,26 @@ def comet_state(c: dict, idx, jd_tt: float, velocity: bool = False):
         vx[hyp], vy[hyp] = -a * np.sinh(H) * hdot, b * np.cosh(H) * hdot
     r = P * x + Q * y
     return (r, P * vx + Q * vy) if velocity else r
+
+
+def reload() -> None:
+    """Forget the in-memory catalogues; the next lookup loads the files again (after a refresh)."""
+    global _cache, _comets
+    _cache = _comets = None
+
+
+def fetch(root: Path = ROOT) -> None:
+    """Download MPCORB.DAT.gz and CometEls.txt into root (each replaced atomically)."""
+    root.mkdir(parents=True, exist_ok=True)
+    for url, name in ((MPCORB_URL, "MPCORB.DAT.gz"), (COMETS_URL, "CometEls.txt")):
+        part = root / (name + ".part")
+        urllib.request.urlretrieve(url, part)
+        part.replace(root / name)
+
+
+def age_days(root: Path = ROOT) -> float | None:
+    f = root / "orbits.npz"
+    return (time.time() - f.stat().st_mtime) / 86400 if f.is_file() else None
 
 
 def available(root: Path = ROOT) -> bool:
@@ -484,10 +511,8 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     ROOT.mkdir(parents=True, exist_ok=True)
     if args.cmd == "fetch":
-        for url, name in ((MPCORB_URL, "MPCORB.DAT.gz"), (COMETS_URL, "CometEls.txt")):
-            part = ROOT / (name + ".part")
-            urllib.request.urlretrieve(url, part)
-            part.replace(ROOT / name)
+        fetch()
+        for name in ("MPCORB.DAT.gz", "CometEls.txt"):
             print(f"downloaded {name}: {(ROOT / name).stat().st_size / 1e6:.1f} MB")
     elif args.cmd == "build":
         t0 = time.time()

@@ -27,9 +27,14 @@ def main() -> None:
                          f"(default: $SPHEREX_TILES_REMOTE or {TEAM_TILEGEN}; 'none' to disable). "
                          "In local mode it also stands in while the local index is being built.")
     ap.add_argument("--use-remote", action="store_true", help="start with the remote tile generator")
+    ap.add_argument("--no-data-setup", action="store_true",
+                    help="don't fetch/build the orbit catalogue and image index in the background (T71)")
     args = ap.parse_args()
     if str(args.tiles_remote).lower() in ("none", ""):
         args.tiles_remote = None
+    if not args.fixture and not args.no_data_setup:
+        from . import data_setup
+        data_setup.start(REPO / "data")     # T71: background; the fallbacks serve until it is done
     uvicorn.run(create_app(args.cache, fixture=args.fixture, tiles_remote=args.tiles_remote,
                            use_remote=args.use_remote), host=args.host, port=args.port)
 

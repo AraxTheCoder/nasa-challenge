@@ -57,6 +57,12 @@ python web/dev.py
 <http://localhost:8080/web/> in your browser and stops both on Ctrl+C. Type RA/Dec or pick one of the
 official test fields. Each time you come back: `cd nasa-challenge`, activate the venv, `python web/dev.py`.
 
+On the first start the Live API also fetches its local data in the background (T71): the MPC orbit
+catalogue for known asteroids and comets (~95 MB, refreshed weekly) and the SPHEREx image index (a few
+minutes). Everything works from the first second; until these are ready, known objects and image
+searches use slower online services. Its progress shows in the terminal as `[data setup] ...`;
+`python -m server --no-data-setup` skips it.
+
 | Option | What |
 |---|---|
 | `--fixture` / `--live` | synthetic demo field for every request / real SPHEREx data (default) |
