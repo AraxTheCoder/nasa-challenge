@@ -15,8 +15,8 @@ distant body would look across epochs, demonstrated on a real dwarf planet.
 
 | Track | Area | Folder | Human |
 |---|---|---|---|
-| A | Data pipeline | `pipeline/` | TBD |
-| B | Detection & science | `detect/` | TBD |
+| A | Data pipeline | `pipeline/` | Joerg |
+| B | Detection & science | `detect/` | Jonathan |
 | C | Frontend & submission | `web/` | Mati |
 
 ## Timeline
@@ -64,6 +64,8 @@ Dated, one line each, with why.
   Why: three tracks can work in parallel against a fixture, and the demo doesn't depend on live APIs.
 - 2026-11-14 **PROPOSED** (not agreed yet): `docs/CONTRACTS.md` v0.1 (per-target JSON schema,
   folder layout, entry points). Why: gives all tracks a fixed interface from the first hour.
+- 2026-11-14 Tracks for now: Joerg = A (pipeline), Jonathan = B (detection), Mati = C (frontend
+  & submission). Why: agreed at kickoff; may change later.
 
 ## Ideas
 
@@ -79,6 +81,7 @@ Things waiting on a human.
   text, resources and judging criteria.
 - 2026-11-14 Do we all agree on the PROPOSED architecture and CONTRACTS v0.1? If yes, append a
   Decisions line "AGREED".
+- 2026-11-14 RESOLVED: tracks assigned, see Members & roles (A = Joerg, B = Jonathan, C = Mati).
 
 ## Log
 
