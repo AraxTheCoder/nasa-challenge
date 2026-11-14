@@ -1,5 +1,7 @@
 """T91: a star's motion measured from SPHEREx alone (CONTRACTS v0.23).
 
+    GET /api/targets/<id>/motion?ra=&dec=[&start=0]      the same for the moving catalogued star at that spot
+                                                         (within 8″; 404 {"status": "none"} if there is none)
     GET /api/targets/<id>/motion?name=<label name or id>[&start=0]   cached result, else starts measuring
         (start=0: only the cached result, or {"status": "not_started"}):
         202 {"status": "building", "done", "total"} (poll), then 200 {"status": "ready" | "not_found" | ...}
@@ -67,14 +69,40 @@ def _is_new(target: dict, name: str) -> bool:
     return bool(star) and (target["id"], star["id"]) not in _jobs and astrometry.cached(target, star["id"]) is None
 
 
+MIN_PM_MAS_YR = 300
+NEAR_ARCSEC = 8.0
+
+
+def _moving_label_at(target: dict, ra: float, dec: float) -> str | None:
+    """Id of the catalogued star moving >= 0.3″/yr nearest to (ra, dec) within 8″ (any of its frame positions)."""
+    import math
+    best, bd = None, NEAR_ARCSEC
+    for lab in target.get("labels", []):
+        if (lab.get("pm_mas_yr") or 0) < MIN_PM_MAS_YR or (lab.get("kind") or "").lower() in ("asteroid", "comet", "planet", "moon"):
+            continue
+        for p in lab.get("positions", []):
+            d = 3600 * math.hypot(((p["ra_deg"] - ra + 180) % 360 - 180) * math.cos(math.radians(dec)), p["dec_deg"] - dec)
+            if d < bd:
+                best, bd = lab.get("id"), d
+    return best
+
+
 @router.get("/api/targets/{tid}/motion")
-async def motion(tid: str, name: str, request: Request, start: int = 1):
+async def motion(tid: str, request: Request, name: str | None = None, ra: float | None = None,
+                 dec: float | None = None, start: int = 1):
     path = request.app.state.builder.target_dir(tid) / "target.json" if _ID.match(tid) else None
     if path is None or not path.is_file():
         return JSONResponse({"status": "error", "message": "target not built"}, status_code=404)
     target = json.loads(path.read_text(encoding="utf-8"))
     if target.get("synthetic"):
         return {"status": "no_data", "id": tid, "message": "synthetic target: there are no SPHEREx images to measure"}
+    if name is None:                                 # by position: the spectrum panel's "is this a moving star?"
+        if ra is None or dec is None:
+            return JSONResponse({"status": "error", "message": "name or ra + dec needed"}, status_code=400)
+        name = _moving_label_at(target, ra, dec)
+        if name is None:
+            return JSONResponse({"target_id": tid, "status": "none",
+                                 "message": "no catalogued star moving ≥ 0.3″/yr at this position"}, status_code=404)
     if start and await run_in_threadpool(_is_new, target, name):
         deny = limits.new_job(request)
         if deny is not None:

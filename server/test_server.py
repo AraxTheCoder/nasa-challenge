@@ -521,3 +521,7 @@ def test_motion_endpoint(tmp_path, monkeypatch):
         r = client.get(url, params={"name": "l0", "start": 0})
     assert r.status_code == 200 and r.json()["pm_total_arcsec_yr"] == 5.01 and r.json()["target_id"] == tid
     assert client.get(url, params={"name": "Nobody"}).status_code == 404
+    by_pos = client.get(url, params={"ra": 10.0 + 3 / 3600, "dec": 20.0, "start": 0}).json()
+    assert by_pos["status"] == "ready" and by_pos["name"] == "Fast Star"          # the moving star at that spot
+    r = client.get(url, params={"ra": 10.1, "dec": 20.0, "start": 0})
+    assert r.status_code == 404 and r.json()["status"] == "none"

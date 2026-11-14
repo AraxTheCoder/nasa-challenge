@@ -470,6 +470,8 @@ Only when the server runs with `--public` (or `SPHEREX_PUBLIC=1`); otherwise non
 ```
 GET /api/targets/<id>/motion?name=<label name, alias or id>          cached, else starts measuring (~15 s)
 GET /api/targets/<id>/motion?name=…&start=0                          cached, else {"status": "not_started"}
+GET /api/targets/<id>/motion?ra=<deg>&dec=<deg>[&start=0]            the catalogued star moving ≥ 0.3″/yr within 8″
+                                                                     of that spot; 404 {"status": "none"} if none
 ```
 
 202 `{"status": "building", "done", "total"}` while measuring (poll with `start=0`), then 200:

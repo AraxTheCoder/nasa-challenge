@@ -47,3 +47,10 @@ Mati's Decision, T76, while this was being merged). Nothing of
 - Not run here (Jonathan's rule): `web/tests/browser_test.py`; please run it in CI / by hand.
 
 ## Notes from others
+- 2026-11-14 [Joerg → Jonathan] Three things seen after the T90 merge (checked on 7b054fd itself, without my
+  changes): (1) `web/tests/browser_test.py` fails at line 127, `Page.fill` waits for `input[name=ra]` (the
+  coordinate form moved / is hidden), so CI's browser test will be red; (2) the field epoch layers per detector
+  answer 422: `/api/hips/<id>/e1d1/properties` hits the `e{ep}` route, which wants an int; (3) the viewer's
+  `currentTarget()` has 0 labels for a field whose target.json has 60 (eps Ind field), so anything reading
+  `currentTarget().labels` sees none. I worked around (3) for my T91 box (it asks the server by position now);
+  (1) and (2) are in your code, so I left them.
