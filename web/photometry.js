@@ -77,6 +77,8 @@ export function matchedChanges(frames) {
 }
 
 function spectrumChart(frames, width, ana) {
+  // T84: exposures in a spike/dip event (server: pipeline/anomaly.py) get a red ring
+  const anomalous = new Set((st.data?.anomalies?.items ?? []).flatMap((a) => a.frames ?? (a.frame_id ? [a.frame_id] : [])));
   const epochs = [...new Set(frames.map((f) => f.epoch))].sort((a, b) => a - b);
   const good = frames.filter((f) => !f.masked && Number.isFinite(f.flux_ujy));
   const H = 150, top = 22, bottom = 26, left = 52, gap = 10;
@@ -137,6 +139,7 @@ function spectrumChart(frames, width, ana) {
       g.append(svg("circle", { class: "ph-dot", cx, cy: yOf(f.flux_ujy), r: 4 }));
       const off = st.context && e?.regions.some((r) => r.points.some((p) => p.frame_id === f.frame_id));
       if (off) g.append(svg("circle", { class: "ph-flag", cx, cy: yOf(f.flux_ujy), r: 7 }));
+      if (anomalous.has(f.frame_id)) g.append(svg("circle", { class: "ph-anom", cx, cy: yOf(f.flux_ujy), r: 9 }));
       root.append(g);
     }
   });
@@ -195,6 +198,7 @@ function render() {
         FEATURES.map((f) => `${f.name} ${f.um}`).join(" · ") + " µm"));
     }
     if (st.context) parts.push(contextBox(ana));
+    if (d.anomalies) parts.push(anomalyBox(d.anomalies));
     const legend = [...new Set(changes.map((c) => c.transition))].map((k) => {
       const c = changes.find((x) => x.transition === k);
       const sub = changes.filter((x) => x.transition === k).map((x) => x.pct);
@@ -226,6 +230,19 @@ function spectrumToggles() {
 }
 
 /** "What this spectrum says": the baseline, the regions that leave it, and why they could be interesting. */
+/** T84: what changed in a non-continuous way (server-side, all exposures only). */
+function anomalyBox(an) {
+  const items = an.items ?? [];
+  const kindWord = { spike: "Spike", dip: "Dip", level: "Brightness change", shape: "Shape change" };
+  return el("div", { class: "ph-context ph-anomalies" },
+    el("h4", {}, "What changed in a non-continuous way"),
+    el("p", { class: items.length ? "" : "muted" }, an.summary ?? ""),
+    items.length ? el("ul", { class: "ph-anom-list" }, ...items.slice(0, 8).map((a) =>
+      el("li", {}, el("strong", { class: a.known?.length ? "ph-anom-known" : "" }, `${kindWord[a.type] ?? a.type}: `), a.reason))) : null,
+    items.length > 8 ? el("p", { class: "muted small" }, `${items.length - 8} more.`) : null,
+    el("p", { class: "muted small" }, "Red rings in the spectrum: the exposures of a spike or dip. " + (an.method ?? "")));
+}
+
 function contextBox(ana) {
   const out = [el("h4", {}, "What this spectrum says")];
   const eps = (list) => (list.length === 1 ? `epoch ${list[0]}` : `epochs ${list.join(", ")}`);

@@ -200,6 +200,22 @@ def _pool():
         return _proc_pool
 
 
+def _anomalies(out: dict) -> dict:
+    from .anomaly import find_anomalies       # T84
+    try:
+        return find_anomalies(out)
+    except Exception as e:  # noqa: BLE001 - the spectrum stands without it
+        return {"items": [], "summary": f"anomaly check failed: {e}", "counts": {}}
+
+
+def _write_spectrum(path: Path, out: dict) -> None:
+    with _spectra_lock:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(f".{threading.get_ident()}.part")
+        tmp.write_text(json.dumps(out), encoding="utf-8")
+        tmp.replace(path)
+
+
 def measure_all(ra: float, dec: float, progress=None, threads: int = SPECTRUM_THREADS,
                 processes: int | None = None) -> dict:
     """T66: photometry at (ra, dec) on every exposure that covers it. progress(done, total) while running.
@@ -208,7 +224,11 @@ def measure_all(ra: float, dec: float, progress=None, threads: int = SPECTRUM_TH
     ra, dec = round(ra % 360, 4), round(dec, 4)
     cached = spectrum_cache(ra, dec)
     if cached.is_file():
-        return json.loads(cached.read_text(encoding="utf-8"))
+        out = json.loads(cached.read_text(encoding="utf-8"))
+        if "anomalies" not in out:                     # cached before T84
+            out["anomalies"] = _anomalies(out)
+            _write_spectrum(cached, out)
+        return out
     t0 = time.time()
     exposures, _ = build.cached_exposures(ra, dec)
     total = len(exposures)
@@ -258,11 +278,8 @@ def measure_all(ra: float, dec: float, progress=None, threads: int = SPECTRUM_TH
     out = {"ra_deg": ra, "dec_deg": dec, "aperture_px": APERTURE_PX, "annulus_px": list(ANNULUS_PX),
            "unit": "uJy", "frames": rows, "missing": missing, "all_exposures": True, "n_exposures": total,
            "seconds": round(time.time() - t0, 1), "note": NOTE}
-    with _spectra_lock:
-        cached.parent.mkdir(parents=True, exist_ok=True)
-        tmp = cached.with_suffix(f".{threading.get_ident()}.part")
-        tmp.write_text(json.dumps(out), encoding="utf-8")
-        tmp.replace(cached)
+    out["anomalies"] = _anomalies(out)                 # T84
+    _write_spectrum(cached, out)
     return out
 
 

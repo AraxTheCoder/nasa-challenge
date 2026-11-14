@@ -348,3 +348,8 @@ button.link:hover { text-decoration: underline; }
    ?frames=1 shows the frame image again. */
 body.map-only #empty, body.map-only #stage, body.map-only #paths-controls, body.map-only #trail-controls,
 body.map-only #ph-measure { display: none !important; }
+
+/* T84: spectral anomalies */
+.ph-anom { fill: none; stroke: #e5484d; stroke-width: 2; }
+.ph-anomalies .ph-anom-list { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.ph-anomalies .ph-anom-known { color: #e5484d; }
