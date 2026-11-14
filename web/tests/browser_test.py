@@ -57,8 +57,9 @@ _t = dict(_fixture, id="multi-epoch", name="Synthetic multi-epoch test field (NO
                  {"a": "f003", "b": "f006", "detector": 3, "dwave_um": 0.01, "dt_days": 179.0}])
 (MULTI / "multi-epoch" / "target.json").write_text(json.dumps(_t))
 # Same frames, no detection run, provenance worded like a real build ("per epoch+detector").
-_nd = dict(_t, id="no-detect", detections=[], known_objects=[], provenance=[
-    {"service": "IRSA SPHEREx cutouts", "query": "2 per epoch+detector of 358 images; 0 failed", "retrieved_utc": "2026-11-14T00:00:00Z"}])
+_nd = dict(_t, id="no-detect", detections=[], known_objects=[k for k in _t["known_objects"] if k["name"] == "(77) Missedia"], provenance=[
+    {"service": "IRSA SPHEREx cutouts", "query": "2 per epoch+detector of 358 images; 0 failed", "retrieved_utc": "2026-11-14T00:00:00Z"},
+    {"service": "JPL SB Identification (sb_ident, first pass)", "query": "q", "retrieved_utc": "2026-11-14T00:00:01Z"}])
 shutil.copytree(MULTI / "multi-epoch" / "frames", MULTI / "no-detect" / "frames")
 (MULTI / "no-detect" / "target.json").write_text(json.dumps(_nd))
 (MULTI / "index.json").write_text(json.dumps({"schema_version": "0.1", "targets": [
@@ -347,6 +348,9 @@ try:
         q.wait_for_function("document.querySelector('#objects-summary').textContent.length > 0")
         check("has not run" in q.text_content("#objects-summary"),
               f"no detection run: headline says so, 'detector' in provenance doesn't fool it ({q.text_content('#objects-summary')})")
+        check("1 known solar-system object" in q.text_content("#objects-summary")
+              and "catalogued" in q.text_content("#objects-list") and "not detected" not in q.text_content("#objects-list"),
+              "JPL known objects without detection: listed as catalogued, not as missed")
         check(not qerr, f"T13: no page errors {qerr}")
 
         # 9. phone width
