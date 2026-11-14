@@ -9,8 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
 import json
+import threading
 
 from . import hips
+from .skycache import SkyCache
 from .builder import REPO, Builder
 from .coords import CoordError, parse_dec, parse_ra, parse_size, target_id
 
@@ -86,6 +88,8 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
     @app.get("/api/hips/{tid}")
     def hips_layers(tid: str):
         t = _target(tid)
+        # T41: render the field's tiles now, in the background, so the map finds them ready
+        threading.Thread(target=hips.prerender, args=(builder.target_dir(tid),), daemon=True).start()
         return {"id": tid, "synthetic": bool(t.get("synthetic")), "layers": hips.layers(tid, t)}
 
     @app.get("/api/hips/{tid}/e{ep}/properties")
@@ -108,6 +112,29 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
         if png is None:
             return Response(status_code=404, headers={"Cache-Control": "public, max-age=3600"})
         return Response(png, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
+
+    # -- T41: cached all-sky HiPS maps (IRSA/CDS) for the sky map -----------------------------
+
+    sky = SkyCache(cache_root.parent / "hips_cache")
+    if not fixture:
+        sky.warm()
+    _MEDIA = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}
+
+    @app.get("/api/sky/{survey}/{path:path}")
+    def sky_file(survey: str, path: str):
+        if not SkyCache.valid(survey, path):
+            raise HTTPException(404)
+        try:
+            data = sky.get(survey, path)
+        except Exception as e:  # noqa: BLE001 - upstream down
+            return Response(str(e), status_code=502)
+        if data is None:
+            return Response(status_code=404, headers={"Cache-Control": "public, max-age=86400"})
+        if path == "properties":
+            return PlainTextResponse(data.decode("utf-8", "replace"))
+        sky.prefetch_around(survey, path)
+        return Response(data, media_type=_MEDIA[path.rsplit(".", 1)[-1]],
+                        headers={"Cache-Control": "public, max-age=604800, immutable"})
 
     @app.get("/api/health")
     def health():

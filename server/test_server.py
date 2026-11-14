@@ -133,3 +133,33 @@ def test_labels_on_request(client):
     t = client.get(body["target_url"]).json()
     assert t["labels_requested"] is True and t["labels"] == []
     assert client.get("/api/targets/c9999999-p000000-s5/labels").status_code == 404
+
+
+def test_sky_cache_serves_from_disk(tmp_path, monkeypatch):
+    from server.skycache import SkyCache
+
+    calls = []
+    c = SkyCache(tmp_path)
+    monkeypatch.setattr(c, "_fetch", lambda s, p: calls.append(p) or (None if "Npix9." in p else b"\x89PNGdata"))
+    monkeypatch.setattr(c, "prefetch_around", lambda s, p: None)
+    assert SkyCache.valid("spherex-cube", "Norder5/Dir0/Npix1600_1.png")
+    assert not SkyCache.valid("spherex-cube", "../secret") and not SkyCache.valid("nope", "properties")
+    assert c.get("spherex-cube", "Norder5/Dir0/Npix1600_1.png") == b"\x89PNGdata"
+    assert c.get("spherex-cube", "Norder5/Dir0/Npix1600_1.png") == b"\x89PNGdata"
+    assert c.get("spherex-cube", "Norder5/Dir0/Npix9.png") is None
+    assert c.get("spherex-cube", "Norder5/Dir0/Npix9.png") is None
+    assert calls == ["Norder5/Dir0/Npix1600_1.png", "Norder5/Dir0/Npix9.png"]      # each fetched once
+
+
+def test_epoch_tiles_prerendered(client):
+    from server import hips
+
+    body = _wait_ready(client, client.get("/api/target", params={"ra": "150", "dec": "2.2", "size": "6"}).json())
+    d = client.app.state.builder.target_dir(body["id"])
+    t = client.get(body["target_url"]).json()
+    assert hips.tiles_touching(t, 7)
+    hips.prerender(d)
+    before = hips._tile_cached.cache_info().hits
+    n = hips.tiles_touching(t, 7)[0]
+    client.get(f"/api/hips/{body['id']}/e1/Norder7/Dir{(n // 10000) * 10000}/Npix{n}.png")
+    assert hips._tile_cached.cache_info().hits > before

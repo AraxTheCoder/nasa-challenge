@@ -19,6 +19,7 @@ export const SURVEYS = [
 export const DEFAULT_SURVEY = "spherex-cube";
 
 let sky = null;
+let apiBase = null;        // T41: our server caches + prefetches the map tiles (/api/sky/<id>)
 let field = null;          // {ra, dec, size} of the blink field, drawn as an outline
 let epochLayers = [];
 
@@ -26,6 +27,7 @@ export const getSky = () => sky;
 
 /** Create the map. opts: {ra, dec, fovDeg} */
 export async function initExplore(container, opts = {}) {
+  apiBase = opts.api ?? null;
   sky = createSky(container, { ra: opts.ra ?? 269.4463, dec: opts.dec ?? 4.7682, fov: opts.fovDeg ?? 2 });
   sky.addDrawHook(drawField);
   await setSurvey(DEFAULT_SURVEY);
@@ -37,7 +39,8 @@ export async function setSurvey(id) {
   const s = SURVEYS.find((x) => x.id === id);
   if (!s || !sky) return null;
   let last;
-  for (const url of s.urls) {
+  const urls = apiBase ? [`${apiBase.replace(/\/$/, "")}/api/sky/${s.id}`, ...s.urls] : s.urls;
+  for (const url of urls) {
     try {
       const layer = await sky.setBase(url, { label: s.label });
       document.dispatchEvent(new CustomEvent("explore:survey", { detail: { id, layer } }));

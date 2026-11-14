@@ -512,6 +512,7 @@ async function startExplore() {
   try {
     const sky = await explore.initExplore($("#sky"), {
       ra: Number(f.ra) || undefined, dec: Number(f.dec) || undefined, fovDeg: 2,
+      api: app.dataRoot ? null : app.api,
     });
     sky.on("change", updateExplorePos);
     setupBand(sky.base);
