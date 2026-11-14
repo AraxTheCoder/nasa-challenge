@@ -1,7 +1,7 @@
 # T65: A/C: Auto target selection: propose interesting fields (high proper-motion stars, brown dwarfs, asteroids passing through, fields with unknown movers, "surprise me")
 
-- **Owner:** –  ·  **Status:** open
-- **Branch:** –
+- **Owner:** Mati  ·  **Status:** doing
+- **Branch:** `mati/T65-auto-targets`
 - **Depends on / feeds:** T31, T51, T06
 
 ## Goal
