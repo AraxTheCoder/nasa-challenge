@@ -1,7 +1,7 @@
 # T76: C: Discovery index in the viewer: candidates per tile from the survey served by the Live API; "Show me something interesting" + candidate list, each opening its field with blink, spectrum and reason
 
-- **Owner:** –  ·  **Status:** open
-- **Branch:** –
+- **Owner:** Mati  ·  **Status:** doing
+- **Branch:** `mati/T76-discovery-index`
 - **Depends on / feeds:** T75 (data), T62, T65
 
 ## Goal
