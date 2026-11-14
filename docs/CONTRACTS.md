@@ -1,4 +1,8 @@
-# Contracts (v0.14)
+# Contracts (v0.15)
+
+v0.15 (T85, T86): `GET /api/targets/<id>/spectral-outliers`: spectra of every catalogue source of a field and
+the sources whose spectral shape is out of distribution for that field. New endpoint and cache only; nothing
+existing changes. See "Spectral outliers".
 
 v0.14 (T55, T82): survey passes on the sky map: `spherex-live-p<n>` layers documented, `x_survey_passes`
 in the live properties, and `GET /api/pass-dates` (when each pass imaged a point). New fields / endpoint
@@ -359,6 +363,42 @@ VARIANCE or the annulus scatter (S3 cutouts have no VARIANCE). Answer (200):
 - `masked`: more than 20 % of the aperture flagged (saturation, bad pixels); `flux_ujy` may be `null`.
 - `missing`: frames without a cached cutout or where the position is off the image.
 - Synthetic targets: 200 with `{"status": "no_data", "message": ...}`. Unknown target: 404. Bad ra/dec: 400.
+
+### Spectral outliers (v0.15, T85, T86)
+
+```
+GET /api/targets/<id>/spectral-outliers            cached result, else {"status": "not_started"}
+GET /api/targets/<id>/spectral-outliers?start=1    start measuring; 202 {"status": "building", "done", "total"}
+                                                   while it runs (poll without start), then 200 as below
+```
+
+T85 (`pipeline.fieldspectra`) reads every SPHEREx exposure of the field once (a field-sized cutout each) and
+measures every catalogue label (no solar-system objects, no X-ray / radio positions) with the T49 photometry,
+each source moved along its own track. Cached as `data/field_spectra/<id>.json` (sources × exposures arrays);
+each source's spectrum is also written to the T66 per-position cache, so `/api/photometry` at a source
+answers at once. T86 (`pipeline.spectral_outliers`) ranks them. Answer (200):
+
+```json
+{ "status": "ready", "id": "...", "version": 1, "summary": "9 of 137 sources stand out ...",
+  "n_sources": 172, "n_judged": 137, "n_reference": 80, "components": 2, "epochs": [1, 2, 3],
+  "method": "...", "scatter_pct": [3.0, ...],
+  "field": { "target_id": "...", "n_sources": 172, "n_exposures": 237, "missing": 0, "seconds": 21.2 },
+  "scores": { "<label id>": 23.3 },
+  "not_judged": [ { "id": "l000", "name": "RW Aur", "why": "saturated / flagged in most exposures", "bands": 3 } ],
+  "items": [ { "id": "l111", "name": "Gaia DR3 ...", "source": "gaia_dr3", "otype": "*", "mag": 15.18,
+               "ra_deg": 77.00062, "dec_deg": 30.33474, "score": 23.3, "chi2": 10.1,
+               "reason": "Redder than ordinary sources here: ...", "caveats": ["blended: ..."],
+               "deviations": [ { "um_min": 1.249, "um_max": 1.363, "sign": -1, "pct": -35.1, "z": 8.2,
+                                 "n_bands": 1, "epochs_agree": 2, "epochs_seen": 3, "meaning": "..." } ],
+               "bands_um": [0.77, ...], "residual_pct": [12.0, null, ...], "z": [1.2, null, ...] } ] }
+```
+
+- Shape only: each (source, epoch) is scaled to its own level; "ordinary" is learned from the field's own
+  unblended, non-variable, non-galaxy sources (mean shape + `components` principal shapes).
+- `items` are sorted by `score` (summed significance of consistent deviations; halved for blends, ×0.3 for
+  jagged residuals). `scores` has every judged source, for colouring.
+- `items[].ra_deg/dec_deg` open the source's spectrum with `GET /api/photometry?ra=&dec=`.
+- Synthetic targets: 200 `{"status": "no_data"}`. Unknown target: 404.
 
 ### Target id and cache
 

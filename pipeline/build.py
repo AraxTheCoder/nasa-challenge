@@ -226,17 +226,23 @@ def wavelength_at(hdul, x0: float, y0: float) -> tuple[float, float]:
 
     The table is a grid on 1-based detector pixels; cutout -> detector via CRPIXnW (WAVE-TAB):
     detector_1based = (x0 + 1 - CRPIX1W) + CRVAL1W."""
+    w, b = wavelengths_at(hdul, [x0], [y0])
+    return float(w[0]), float(b[0])
+
+
+def wavelengths_at(hdul, xs, ys) -> tuple[np.ndarray, np.ndarray]:
+    """wavelength_at for many pixels at once (T85: every source of a field in one cutout)."""
     from scipy.interpolate import RegularGridInterpolator
 
     h = hdul["IMAGE"].header
     t = hdul["WCS-WAVE"].data
     gx, gy = np.asarray(t["X"][0], float), np.asarray(t["Y"][0], float)
     vals = np.asarray(t["VALUES"][0], float)          # (ny, nx, 2): wavelength, bandwidth
-    dx = x0 + 1 - h.get("CRPIX1W", h.get("CRPIX1A")) + h.get("CRVAL1W", 1)
-    dy = y0 + 1 - h.get("CRPIX2W", h.get("CRPIX2A")) + h.get("CRVAL2W", 1)
-    dx, dy = float(np.clip(dx, gx.min(), gx.max())), float(np.clip(dy, gy.min(), gy.max()))
-    out = [RegularGridInterpolator((gy, gx), vals[..., k])((dy, dx)) for k in (0, 1)]
-    return float(out[0]), float(out[1])
+    dx = np.asarray(xs, float) + 1 - h.get("CRPIX1W", h.get("CRPIX1A")) + h.get("CRVAL1W", 1)
+    dy = np.asarray(ys, float) + 1 - h.get("CRPIX2W", h.get("CRPIX2A")) + h.get("CRVAL2W", 1)
+    pts = np.c_[np.clip(dy, gy.min(), gy.max()), np.clip(dx, gx.min(), gx.max())]
+    w, b = (RegularGridInterpolator((gy, gx), vals[..., k])(pts) for k in (0, 1))
+    return w, b
 
 
 def resample(path: Path, out_w, npix: int, ra: float, dec: float):

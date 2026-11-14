@@ -11,6 +11,8 @@ continuum temperature, IR excess (disk / dust), ice absorption (H2O 3.0, CO2 4.2
 spectra (T66/T85). Later, maps of a feature (e.g. ice depth over a cloud) are a note to the tile owner (Jonathan).
 
 ## Plan
+- [ ] Second opinion for T86 (idea I23, Mati): predicted 0.75–5 µm spectrum from Gaia + 2MASS + WISE per source,
+      compared with the measured one
 
 ## Findings
 
