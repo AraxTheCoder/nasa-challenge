@@ -47,7 +47,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T08 | B: Classify detections as known / unknown / artifact and write them into `target.json` | | open | | Needs T06, T07 |
 | T09 | B: Sanity check on a known bright asteroid in real SPHEREx data: do we recover it at the JPL position? | | open | | Needs T04, T08 |
 | T10 | B: "Planet X mode": pick a slow distant body (dwarf planet), check it's detectable across epochs, propose the demo target list | | open | | Feeds T05 |
-| T11 | C: Static viewer skeleton: load `index.json` + `target.json` from the fixture, show frames, blink between two | Mati | doing | `mati/T11-viewer-skeleton` | No build step if possible |
+| T11 | C: Static viewer skeleton: load `index.json` + `target.json` from the fixture, show frames, blink between two | Mati | review | `mati/T11-viewer-skeleton` | Works on fixture; waiting for Mati's look before merge. Run: see `web/README.md` |
 | T12 | C: Epoch timeline and band/wavelength filter | | open | | Needs T11 |
 | T13 | C: Overlay detections and known objects, with a clear "synthetic" badge where it applies | | open | | Needs T11 |
 | T14 | C: Deploy to GitHub Pages with pre-baked targets, target picker, no live API calls | | open | | Needs T11; real targets arrive with T05 |
@@ -82,6 +82,9 @@ Things waiting on a human.
 - 2026-11-14 Do we all agree on the PROPOSED architecture and CONTRACTS v0.1? If yes, append a
   Decisions line "AGREED".
 - 2026-11-14 RESOLVED: tracks assigned, see Members & roles (A = Joerg, B = Jonathan, C = Mati).
+- 2026-11-14 [Mati → A/Joerg] For T04: can no-data pixels (grid corners outside a rotated frame)
+  be written as fully transparent (alpha 0) in the PNG/WebP? The viewer shows transparent pixels
+  as hatched "no data"; black would look like empty sky.
 
 ## Log
 
