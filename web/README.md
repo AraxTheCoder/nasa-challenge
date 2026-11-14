@@ -10,6 +10,7 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `viewer.js` | frame viewer: stacks the frames of one `target.json`, A/B blink, play as video, pairs + wavelength filter, frame table |
 | `timeline.js` | epoch timeline: one panel per epoch, y = wavelength (T12) |
 | `diff.js` | difference view A − B (T43) |
+| `stack.js`, `stackview.js` | stacks (T59): the shown frame's epoch (all detectors) or detector (all epochs) added together, background removed per frame; blinkable; display only |
 | `lambda.js`, `lampick.js` | type an exact wavelength (T78): "Frames at λ" picks A/B closest to it, the map's µm box picks the closest of 102 channels; `?lam=` in links |
 | `spectrum.js` | spectrum context (T63): star-like baseline per epoch, points that leave it, plain-words hints, feature list; pure, checked by `tests/spectrum_check.mjs` |
 | `trail.js` | trail view: brightest pixel over the frames, movers leave a row of dots (T23) |
