@@ -7,13 +7,17 @@
 //    match (|dλ| <= half the bandwidth), the brightness change in %. A constant star scatters around 0.
 // Colours: epoch transitions use the first three categorical slots (validated, dark, all pairs);
 // facets instead of a fourth colour (palette check fails for 4 on the dark surface).
+// T63: on the spectrum, a baseline "what a plain star would give" (spectrum.js), rings on the points
+// that leave it, optional feature markers, and plain-words hints below the chart.
 
 import { $, el, fmtNum, fmtTime } from "./util.js";
 import { currentTarget, targetBase } from "./viewer.js";
+import { analyse, FEATURES, FIT_MAX_UM, fmtT } from "./spectrum.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const TRANSITION_COLOURS = ["#3987e5", "#d95926", "#199e70"]; // categorical slots 1-3, dark mode, validated
-const st = { target: null, measuring: false, token: 0, pos: null, data: null };
+const st = { target: null, measuring: false, token: 0, pos: null, data: null, context: true, features: false };
+let chartId = 0;
 
 function svg(tag, attrs = {}, ...children) {
   const n = document.createElementNS(NS, tag);
@@ -69,7 +73,7 @@ export function matchedChanges(frames) {
   return out;
 }
 
-function spectrumChart(frames, width) {
+function spectrumChart(frames, width, ana) {
   const epochs = [...new Set(frames.map((f) => f.epoch))].sort((a, b) => a - b);
   const good = frames.filter((f) => !f.masked && Number.isFinite(f.flux_ujy));
   const H = 150, top = 22, bottom = 26, left = 52, gap = 10;
@@ -83,6 +87,7 @@ function spectrumChart(frames, width) {
     root.append(svg("line", { class: "ph-grid", x1: left, x2: width, y1: yOf(t), y2: yOf(t) }),
       svg("text", { class: "ph-axis", x: left - 6, y: yOf(t) + 3.5, "text-anchor": "end" }, fmtFlux(t)));
   }
+  const cid = `ph-clip-${++chartId}`;
   epochs.forEach((ep, i) => {
     const x0 = left + i * (pw + gap);
     const xOf = (w) => x0 + 6 + (pw - 12) * ((w - 0.7) / (5.1 - 0.7));
@@ -92,6 +97,27 @@ function spectrumChart(frames, width) {
       svg("text", { class: "ph-axis", x: x0 + 2, y: H - 6 }, "0.7"),
       svg("text", { class: "ph-axis", x: x0 + pw - 2, y: H - 6, "text-anchor": "end" }, "5 µm"),
     );
+    if (st.features) {
+      for (const f of FEATURES) {
+        const x = xOf(f.um);
+        root.append(svg("g", { class: "ph-feature-g" }, svg("title", {}, `${f.name} · ${f.um} µm: ${f.what}`),
+          svg("line", { class: "ph-feature", x1: x, x2: x, y1: top - 2, y2: H - bottom + 2 }),
+          svg("line", { class: "ph-feature-hit", x1: x, x2: x, y1: top - 2, y2: H - bottom + 2 })));
+      }
+    }
+    const e = ana?.perEpoch.get(ep);
+    if (st.context && e?.fit) {
+      // the baseline, clipped to the panel: solid where it was fitted, dashed where extrapolated
+      const clip = `${cid}-${ep}`;
+      root.append(svg("clipPath", { id: clip }, svg("rect", { x: x0, y: top - 4, width: pw, height: H - top - bottom + 8 })));
+      const line = (a, b) => Array.from({ length: 40 }, (_, k) => a + (b - a) * k / 39)
+        .map((w) => `${xOf(w).toFixed(1)},${yOf(Math.min(e.fit.model(w), hi * 3)).toFixed(1)}`).join(" ");
+      const tip = `Baseline: ${fmtT(e.fit)} star fitted to ${e.fit.n} points below ${FIT_MAX_UM} µm` +
+        (e.fit.poor ? " (poor fit: the points don't follow one star shape)" : "");
+      root.append(svg("g", { "clip-path": `url(#${clip})`, class: e.fit.poor ? "ph-base-poor" : "" }, svg("title", {}, tip),
+        svg("polyline", { class: "ph-base", points: line(0.7, e.fit.umMax) }),
+        svg("polyline", { class: "ph-base ph-base-x", points: line(e.fit.umMax, 5.1) })));
+    }
     for (const f of good.filter((g) => g.epoch !== ep)) { // ghosts: the other epochs
       root.append(svg("circle", { class: "ph-ghost", cx: xOf(f.wavelength_um), cy: yOf(f.flux_ujy), r: 2.5 }));
     }
@@ -106,6 +132,8 @@ function spectrumChart(frames, width) {
         `${fmtFlux(f.flux_ujy)} ± ${fmtFlux(f.err_ujy ?? 0)} · ${fmtTime(f.time_utc)}`));
       if (f.err_ujy) g.append(svg("line", { class: "ph-err", x1: cx, x2: cx, y1: yOf(f.flux_ujy - f.err_ujy), y2: yOf(f.flux_ujy + f.err_ujy) }));
       g.append(svg("circle", { class: "ph-dot", cx, cy: yOf(f.flux_ujy), r: 4 }));
+      const off = st.context && e?.regions.some((r) => r.points.some((p) => p.frame_id === f.frame_id));
+      if (off) g.append(svg("circle", { class: "ph-flag", cx, cy: yOf(f.flux_ujy), r: 7 }));
       root.append(g);
     }
   });
@@ -153,8 +181,15 @@ function render() {
       "(too bright for SPHEREx) or sits on bad pixels, so aperture photometry can't measure it."));
   }
   if (good.length) {
-    parts.push(el("h4", {}, "Spectrum (brightness vs. wavelength)"), spectrumChart(frames, w),
-      el("p", { class: "muted small" }, "One panel per epoch; grey dots are the other epochs, × marks flagged frames."));
+    const ana = analyse(frames);
+    parts.push(el("h4", {}, "Spectrum (brightness vs. wavelength)"), spectrumToggles(), spectrumChart(frames, w, ana),
+      el("p", { class: "muted small" }, "One panel per epoch; grey dots are the other epochs, × marks flagged frames." +
+        (st.context ? " Line: what a plain star would give (dashed where extrapolated); ringed points leave it." : "")));
+    if (st.features) {
+      parts.push(el("p", { class: "muted small ph-features-key" }, "Feature markers (hover a dotted line): " +
+        FEATURES.map((f) => `${f.name} ${f.um}`).join(" · ") + " µm"));
+    }
+    if (st.context) parts.push(contextBox(ana));
     const legend = [...new Set(changes.map((c) => c.transition))].map((k) => {
       const c = changes.find((x) => x.transition === k);
       const sub = changes.filter((x) => x.transition === k).map((x) => x.pct);
@@ -173,6 +208,50 @@ function render() {
   parts.push(el("p", { class: "muted small" }, d.note ?? ""));
   body.replaceChildren(...parts);
   box.hidden = false;
+}
+
+function spectrumToggles() {
+  const box = (key, label) => {
+    const input = el("input", { type: "checkbox" });
+    input.checked = st[key];
+    input.addEventListener("change", () => { st[key] = input.checked; render(); });
+    return el("label", { class: "ph-toggle small" }, input, ` ${label}`);
+  };
+  return el("div", { class: "ph-toggles" }, box("context", "Expected + hints"), box("features", "Feature markers"));
+}
+
+/** "What this spectrum says": the baseline, the regions that leave it, and why they could be interesting. */
+function contextBox(ana) {
+  const out = [el("h4", {}, "What this spectrum says")];
+  const eps = (list) => (list.length === 1 ? `epoch ${list[0]}` : `epochs ${list.join(", ")}`);
+  if (ana.saturated) {
+    out.push(el("p", { class: "small" }, `No baseline: the points below ${FIT_MAX_UM} µm are flagged (saturated or bad pixels), ` +
+      "so there is nothing to tell what a plain star of this colour would give."));
+    return el("div", { class: "ph-context" }, ...out);
+  }
+  if (ana.noFit) {
+    out.push(el("p", { class: "small" }, `No baseline: no epoch has 3 or more good points below ${FIT_MAX_UM} µm.`));
+    return el("div", { class: "ph-context" }, ...out);
+  }
+  const fitted = [...ana.perEpoch.entries()].filter(([, e]) => e.fit);
+  out.push(el("p", { class: "small" }, `Baseline: a blackbody fitted to each epoch's points below ${FIT_MAX_UM} µm, i.e. what a ` +
+    "plain star of that colour would give (" + fitted.map(([ep, e]) => `epoch ${ep}: ${e.fit.poor ? "no good fit" : fmtT(e.fit).replace(/^a /, "")}`).join("; ") + ")."));
+  if (ana.poorEpochs.length) {
+    out.push(el("p", { class: "small ph-hint" }, el("strong", {}, `In ${eps(ana.poorEpochs)} the short-wavelength points don't follow one star shape. `),
+      "Absorption bands (water, methane: a cool atmosphere such as a brown dwarf's), two sources blended in one aperture, " +
+      "or the source changed while it was observed?"));
+  }
+  for (const r of ana.regions) {
+    out.push(el("p", { class: "small ph-hint" }, el("span", { class: "ph-hint-mark", "aria-hidden": "true" }, r.sign > 0 ? "▲ " : "▼ "),
+      el("strong", {}, `${r.hint.title}. `), r.hint.text, el("span", { class: "muted" }, ` (${eps(r.epochs)}, ${r.n} points)`)));
+  }
+  if (!ana.regions.length && !ana.poorEpochs.length) {
+    out.push(el("p", { class: "small" }, "No group of points leaves the baseline by more than 3σ and 30 %: up to 5 µm this looks " +
+      "like a plain star (within the ~10 % calibration)."));
+  }
+  out.push(el("p", { class: "muted small" }, "Hints, not results: they say what usually causes such a shape, not what this source is. " +
+    "Each SPHEREx point is a different exposure, so a variable source can bend the spectrum too."));
+  return el("div", { class: "ph-context" }, ...out);
 }
 
 function drawMarker() {

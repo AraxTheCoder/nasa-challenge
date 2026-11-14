@@ -10,6 +10,7 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `viewer.js` | frame viewer: stacks the frames of one `target.json`, A/B blink, play as video, pairs + wavelength filter, frame table |
 | `timeline.js` | epoch timeline: one panel per epoch, y = wavelength (T12) |
 | `diff.js` | difference view A − B (T43) |
+| `spectrum.js` | spectrum context (T63): star-like baseline per epoch, points that leave it, plain-words hints, feature list; pure, checked by `tests/spectrum_check.mjs` |
 | `trail.js` | trail view: brightest pixel over the frames, movers leave a row of dots (T23) |
 | `paths.js`, `paths.css` | names and motion paths on the image, label priority + hover (T22, T34) |
 | `inspector.js` | side panel for a clicked object: what it is, how it moves, frame by frame (T23) |
