@@ -56,6 +56,9 @@ export async function initExplore(container, opts) {
   return aladin;
 }
 
+/** T35 (traces.js): the Aladin namespace and instance, for extra overlays. Null until initExplore. */
+export const getAladin = () => (aladin ? { A, aladin } : null);
+
 export function setSurvey(id) {
   aladin?.setBaseImageLayer(id);
 }
@@ -117,6 +120,8 @@ export function setEpochLayers(layers) {
 
 export function showEpoch(i) {
   epochLayers.forEach((l, j) => aladin?.getOverlayImageLayer(l.name)?.setOpacity(j === i ? 1 : 0));
+  // T35: traces.js highlights each object's position in the shown epoch
+  document.dispatchEvent(new CustomEvent("explore:epoch", { detail: { epoch: epochLayers[i]?.epoch ?? null } }));
 }
 
 export function hideEpochs() {

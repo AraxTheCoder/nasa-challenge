@@ -71,7 +71,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T32 | A: Per-epoch HiPS tiles (R2/R3): build HEALPix tiles per epoch x detector from full images for chosen regions (warm the 5 official fields first), served by `server/` as extra Aladin layers, epoch switch = blink | Jonathan | done | `jonathan/T32-epoch-hips` | Full images cover ~12 deg2 each, far less waste than 36 cutouts per 15' |
 | T33 | A: Read SPHEREx images from the AWS Open Data bucket (`nasa-irsa-spherex`, same paths as IRSA) with HTTP Range: only headers + the rows around the field of IMAGE/FLAGS + WCS-WAVE, no EPSF; IRSA cutouts as fallback | Jonathan | doing | `jonathan/T33-s3-range` | Measured S3 5-7 MB/s, 0 errors vs IRSA 0.31 MB/s, >50% 503 |
 | T34 | C: Label priority: always show only the most important names (field's object, movers, known asteroids, notable motion), the rest on hover; cap + "show all" toggle | Joerg | done | `joerg/T34-label-priority` | [tasks/T34](tasks/T34-label-priority.md). Mati: labels too crowded on real fields. Builds on T23 `paths.js` |
-| T35 | C: Tracing over the stitched sky: paths, per-epoch markers and names of moving / important objects drawn on the explore map (T30/T32), following the epoch blink | Joerg | doing | `joerg/T35-sky-traces` | [task file](tasks/T35-sky-traces.md). From Joerg's idea |
+| T35 | C: Tracing over the stitched sky: paths, per-epoch markers and names of moving / important objects drawn on the explore map (T30/T32), following the epoch blink | Joerg | review | `joerg/T35-sky-traces` | [task file](tasks/T35-sky-traces.md). From Joerg's idea |
 
 ## Decisions
 
@@ -355,3 +355,6 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   8 stays. Gotchas: alasky.cds.unistra.fr down today (CDS SPHEREx HiPS may not load; IRSA-hosted
   layers still work); mirror uses a 1.74 deg circle around image centres (corners skipped, ~17%
   fewer images than TAP); ~1% of images are `l2b_retry` paths, fixed by a TAP lookup on 404.
+- 2026-11-14 [Joerg → Jonathan] T35 adds two things to `web/explore.js`: `export const getAladin()`
+  and an `explore:epoch` event at the end of `showEpoch(i)`. `web/traces.js` uses them to draw traces,
+  per-epoch markers and names on the explore map. Shout in tasks/T35-sky-traces.md if that clashes.
