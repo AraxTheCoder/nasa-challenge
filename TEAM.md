@@ -82,7 +82,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T43 | C: Difference view A − B in the viewer (challenge: "subtract images taken at different times"): stars cancel for matched pairs, movers show as white/black pairs | Mati | done | `mati/T43-difference` | [tasks/T43](tasks/T43-difference-view.md). Button "A − B" / key `D`; best with a matched pair |
 | T45 | C: Play the series like a video (core Objective): Play/Pause through all frames in the filter or one per epoch at matched wavelength, speed + loop | Mati | done | `mati/T45-play` | [tasks/T45](tasks/T45-play-series.md). "▶ Play all" / key `P`; modes: all frames in the filter, 1 per epoch at A's λ |
 | T46 | All: tests on every push (GitHub Actions): pytest + browser test (fixture mode) + fixture schema check | Mati | done | `mati/T46-ci` | [tasks/T46](tasks/T46-ci.md). `.github/workflows/tests.yml`; first run: check the Actions tab |
-| T47 | All: Host Live API + viewer on Google Cloud `us-east4` next to the AWS SPHEREx bucket: VM, Docker/systemd, mirror + warm-up, HTTPS via Caddy on `<ip>.sslip.io` | Jonathan | doing | `jonathan/T47-gcp` | From Jonathan's idea. Measure S3 throughput on the VM first |
+| T47 | All: Live tile generator (`tilegen/`) on Google Cloud `us-east4` next to the AWS SPHEREx bucket; viewer/API/builds stay local (EU); Tiles switch local/US VM | Jonathan | done | `jonathan/T47-gcp` | From Jonathan's idea. Measure S3 throughput on the VM first |
 
 | T48 | C: Cached Allsky fallback at deep zoom so pending/failed live tiles never erase available overview imagery | Joerg | done | `joerg/T48-map-overview-fallback` | [tasks/T48](tasks/T48-map-overview-fallback.md). User approved implementation + push; investigate repeated tile errors |
 
@@ -528,3 +528,12 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   0.287 s). Running API now generates live tile Norder6/Npix31792_1: HTTP 200, 291,326 bytes,
   99.8% coverage, 45.1 s cold / 17.2 ms cached. No restart required; reload the browser to retry
   previously failed tiles. Catalogue and cache files stay gitignored under data/.
+- 2026-11-14 [Jonathan + Claude] Done: T47. `tilegen/` is its own subcomponent (render.py, service app.py,
+  client.py). It runs on GCP VM `instance-20261114-132040` (us-east4-a) behind Caddy at
+  https://136-107-125-170.sslip.io (only /health and /tiles/live/...). Everything else stays local:
+  `python -m server --tiles-remote https://136-107-125-170.sslip.io [--use-remote]`, viewer has a
+  "Tiles: local / US VM" switch (`/api/settings`). Deploy: `deploy/deploy.sh` (git archive, no GitHub
+  creds on the VM). Measured: S3 on the VM 38-95 MB/s; new live tile 2-5.5 s (3 images), cached 0.9 s;
+  before 20-60 s. Also applied Joerg's queue diagnosis: no live prefetch, slot wait stops when the
+  browser hangs up, single-flight S3 chunks. The mirror now learns every week folder's processing
+  version (tiles waited ~10 s per TAP lookup before). Stop the VM when not needed (costs credits).
