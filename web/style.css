@@ -239,3 +239,27 @@ button.link:hover { text-decoration: underline; }
 .tl-key-a { background: var(--slot-a); }
 .tl-key-b { background: var(--slot-b); }
 .tl-key-shown { border: 2px solid #fff; }
+
+/* ---------- T13: objects panel ---------- */
+.objects-summary { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.objects-summary:empty { display: none; }
+.obj-unknown-text { color: var(--warn); }
+.badge-small { font-size: 10px; padding: 1px 6px; vertical-align: 1px; }
+.objects-toggle { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.objects { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 280px; overflow: auto; }
+.obj-row {
+  display: grid; gap: 2px; width: 100%; text-align: left; padding: 6px 8px;
+  background: var(--panel-2); border: 1px solid transparent; border-radius: 6px;
+}
+.obj-row.is-focus { border-color: var(--warn); }
+.obj-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.obj-name { font-weight: 600; overflow-wrap: anywhere; }
+.obj-sub { overflow-wrap: anywhere; }
+.obj-chip { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+.obj-unknown { color: var(--warn); border-color: var(--warn); }
+.obj-known { color: var(--slot-a); border-color: var(--slot-a); }
+.obj-missed { color: var(--muted); border-color: var(--border); }
+.obj-artifact { color: var(--muted); border-color: var(--border); border-style: dashed; }
+.focus-ring { fill: none; stroke: var(--warn); stroke-width: 2.5; animation: focus-pulse 1.4s ease-in-out infinite; }
+@keyframes focus-pulse { 50% { stroke-opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .focus-ring { animation: none; } }

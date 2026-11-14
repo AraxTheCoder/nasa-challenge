@@ -37,7 +37,21 @@ for f in _frames:  # real-looking times from MJD
     from datetime import datetime, timedelta, timezone
     f["time_utc"] = (datetime(1858, 11, 17, tzinfo=timezone.utc) + timedelta(days=f["mjd"])).strftime("%Y-%m-%dT%H:%M:%SZ")
 _t = dict(_fixture, id="multi-epoch", name="Synthetic multi-epoch test field (NOT SPHEREx data)", schema_version="0.2",
-          frames=_frames, known_objects=[], detections=[], labels=[],
+          frames=_frames, labels=[],
+          detections=[
+              {"id": "d001", "status": "unknown", "matched_object": None, "synthetic": True, "score": 0.8,
+               "track": [{"frame_id": f, "ra_deg": 150.0, "dec_deg": 2.2, "x": x, "y": 30.0} for f, x in (("f004", 40.0), ("f005", 45.0), ("f006", 50.0))],
+               "motion": {"rate_arcsec_per_hr": 120.0, "pa_deg": 45.0}},
+              {"id": "d002", "status": "artifact", "matched_object": None, "synthetic": True, "score": 0.1,
+               "track": [{"frame_id": "f000", "ra_deg": 150.0, "dec_deg": 2.2, "x": 10.0, "y": 10.0}]},
+              {"id": "d003", "status": "known", "matched_object": "(99) Testia", "synthetic": True, "score": 0.9,
+               "track": [{"frame_id": f, "ra_deg": 150.0, "dec_deg": 2.2, "x": 60.0, "y": y} for f, y in (("f000", 60.0), ("f001", 62.0))],
+               "motion": {"rate_arcsec_per_hr": 30.0, "pa_deg": 270.0}}],
+          known_objects=[
+              {"name": "(99) Testia", "source": "synthetic", "synthetic": True,
+               "positions": [{"frame_id": f, "ra_deg": 150.0, "dec_deg": 2.2, "x": 60.0, "y": y} for f, y in (("f000", 60.0), ("f001", 62.0))]},
+              {"name": "(77) Missedia", "source": "synthetic", "synthetic": True,
+               "positions": [{"frame_id": f, "ra_deg": 150.0, "dec_deg": 2.2, "x": 20.0, "y": 70.0} for f in ("f007", "f008")]}],
           pairs=[{"a": "f000", "b": "f004", "detector": 2, "dwave_um": 0.01, "dt_days": 180.0},
                  {"a": "f001", "b": "f007", "detector": 2, "dwave_um": 0.005, "dt_days": 360.0},
                  {"a": "f003", "b": "f006", "detector": 3, "dwave_um": 0.01, "dt_days": 179.0}])
@@ -232,6 +246,16 @@ try:
             return document.querySelector('.table-wrap').scrollTop > 0 && row.bottom <= box.bottom + 1;
         }""")
         check(visible, "frame table scrolls inside its box to the shown frame")
+        # T13 objects panel on the fixture (one synthetic known asteroid, detected)
+        rows = o.locator("#objects-list .obj-row")
+        check(rows.count() == 1 and "Fake asteroid" in rows.first.text_content() and "synthetic" in rows.first.text_content(),
+              "objects panel: fixture asteroid listed once, with synthetic badge")
+        check("3.1″/h → W" in rows.first.text_content() and "score 0.95" in rows.first.text_content(), "objects panel: motion and score")
+        check("1 moving object" in o.text_content("#objects-summary") and "synthetic" in o.text_content("#objects-summary"),
+              f"headline count: {o.text_content('#objects-summary')}")
+        # T22 paths overlay (Joerg's agent cannot run a browser)
+        check(o.locator("#paths-layer").count() == 1 and "Fake asteroid · synthetic" in (o.text_content("#overlay") or ""),
+              "T22: paths layer drawn, synthetic object named as such")
         check(not oerr, f"offline: no page errors {oerr}")
 
         # 8b. timeline, wavelength filter, matched pairs (T12) on the multi-epoch target
@@ -282,6 +306,32 @@ try:
         check(sw <= 390 and zp.locator(".tl-panel").count() == 3, f"timeline fits on a phone (scrollWidth={sw})")
         zp.screenshot(path=str(out / "t12-phone.png"), full_page=True)
         check(not zerr, f"T12: no page errors {zerr}")
+
+        # 8c. objects panel (T13) on the multi-epoch target
+        q = b.new_page(viewport={"width": 1280, "height": 900})
+        qerr = []
+        q.on("pageerror", lambda x: qerr.append(str(x)))
+        q.goto(WEB + "?data=../data/test-targets/")
+        wait_loaded(q)
+        names = q.eval_on_selector_all("#objects-list .obj-name", "es => es.map(e => e.textContent)")
+        check(names == ["Unknown mover", "(99) Testia", "(77) Missedia"], f"objects: unknown first, artifact hidden, known listed once ({names})")
+        summ = q.text_content("#objects-summary")
+        check("2 moving objects" in summ and "1 unknown" in summ, f"headline: {summ}")
+        check("known · not detected" in q.locator("#objects-list .obj-row").nth(2).text_content(), "catalogued object we did not detect is marked so")
+        check("120″/h → NE" in q.locator("#objects-list .obj-row").first.text_content(), "unknown mover shows rate and direction")
+        q.check("#objects-show-artifacts")
+        check(q.locator("#objects-list .obj-row").count() == 4 and "Artifact d002" in q.text_content("#objects-list"), "artifacts appear on request")
+        q.uncheck("#objects-show-artifacts")
+        q.locator("#objects-list .obj-row").first.click()
+        check("f004" in q.text_content("#stage-label"), "clicking an object jumps to a frame where it is")
+        ring = q.locator("#focus-layer .focus-ring")
+        check(ring.count() == 1 and ring.get_attribute("cx") == "40" and ring.get_attribute("cy") == "30", "focus ring on the object in that frame")
+        q.keyboard.press("ArrowRight")
+        check(q.locator("#focus-layer .focus-ring").get_attribute("cx") == "45", "focus ring follows the object to the next frame")
+        q.locator("#objects-list .obj-row").first.click()
+        check(q.locator("#focus-layer .focus-ring").count() == 0, "clicking again clears the focus")
+        q.screenshot(path=str(out / "t13-objects.png"), full_page=True)
+        check(not qerr, f"T13: no page errors {qerr}")
 
         # 9. phone width
         m = b.new_page(viewport={"width": 390, "height": 844})
