@@ -1,6 +1,6 @@
 # Contracts (v0.11)
 
-v0.11 (T55) brings this file in line with the code: no pre-baked `web/targets/` and no `pipeline.publish`
+v0.11 (T56) brings this file in line with the code: no pre-baked `web/targets/` and no `pipeline.publish`
 (made obsolete by v0.3 live data); entry points and signatures as they are; the Live API routes the viewer
 already uses are written down (`/objects`, `/sky`, `/settings`, `/health`); `labels_requested` /
 `objects_requested` in target.json; label `source: "synthetic"` for made-up labels in fixtures; a second,
@@ -248,7 +248,7 @@ python -m detect.run <target_dir> [--vmag 20]            # T51: known objects + 
 python -m detect.known_objects <target_dir> [--vmag 20]  # T07: known asteroids/comets
 python -m detect.classify <target_dir>                   # T08: status/score/reason per detection
 python web/warm.py [--only <name>] [--refresh]           # T05: pre-build the official test fields
-python fixtures/make_demo_epochs.py                      # T55: regenerate the schema-0.2 fixture
+python fixtures/make_demo_epochs.py                      # T56: regenerate the schema-0.2 fixture
 ```
 
 ```python

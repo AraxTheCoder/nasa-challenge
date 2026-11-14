@@ -7,7 +7,7 @@ Tiny committed samples for tests and frontend development. Layout as in `docs/CO
   before the pipeline produces a real target.
 
 - `targets/demo-epochs/`: **fully synthetic** too, schema 0.2 with every optional field of the contract
-  (T55): 9 frames in 3 epochs on 2 detectors, `bandwidth_um`, a corner without data (alpha 0),
+  (T56): 9 frames in 3 epochs on 2 detectors, `bandwidth_um`, a corner without data (alpha 0),
   wavelength-matched `pairs`, `labels` (a proper-motion star, a variable, a star with an alias; source
   `synthetic`), two made-up known asteroids and three detections that `detect.classify` marks known /
   unknown / artifact. Use it to try every viewer feature offline

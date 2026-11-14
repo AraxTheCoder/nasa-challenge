@@ -91,7 +91,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T52 | A: More labels (idea I4 + more): VSX variable stars (type, period, range), CatWISE2020 brown dwarfs / high proper motion (moved to frame time), planets + bright moons (seen from SPHEREx) | Joerg | doing | `joerg/T52-more-labels` | [tasks/T52](tasks/T52-more-labels.md). New label `source` values + optional `note` (CONTRACTS v0.11) |
 | T53 | B: Comets in the local orbit catalogue (MPC CometEls.txt), like the asteroids in T51 | Joerg | doing | `joerg/T52-more-labels` | [tasks/T53](tasks/T53-local-comets.md). SkyBoT fallback had comets, the local path not yet |
 | T54 | A/C: Known objects + labels start while the images download (they need only frame times + field geometry), so a new field is complete when its frames are | Joerg | doing | `joerg/T52-more-labels` | [tasks/T54](tasks/T54-early-objects-labels.md). New field: frames 11 s, objects +2.5 s, labels +2-3 s today |
-| T55 | All: Docs match the code (idea I2): README status/run/how-it-works, CONTRACTS without pre-baked `web/targets/` + `pipeline.publish`, undocumented API routes, a schema-0.2 fixture with pairs/labels/varied detections | Mati | done | `mati/T52-docs-current` | [tasks/T55](tasks/T55-docs-current.md). Was claimed as T52 (ID clash with Joerg's T52). Also: classify fix for SkyBoT/MPC, tilegen tests in CI |
+| T56 | All: Docs match the code (idea I2): README status/run/how-it-works, CONTRACTS without pre-baked `web/targets/` + `pipeline.publish`, undocumented API routes, a schema-0.2 fixture with pairs/labels/varied detections | Mati | done | `mati/T52-docs-current` | [tasks/T56](tasks/T56-docs-current.md). Was claimed as T52, then T55 (ID clashes with Joerg's T52, Jonathan's T55). Also: classify fix for SkyBoT/MPC, tilegen tests in CI |
 | T55 | C: UI redesign under `/app/` (copy of `web/`); `web/` and `/web/` stay as they are for all other work | Jonathan | doing | `jonathan/T55-app-ui` | [tasks/T55](tasks/T55-app-ui.md). UI work only; everyone else keeps working in `web/` |
 
 ## Decisions
@@ -187,7 +187,7 @@ Dated, one line each, with why.
   `web/dev.py`), a copy of the viewer in `web/`. **This is only for UI work (T55).** All other work
   (features, fixes, API wiring, tests) stays in `web/` and `/web/` exactly as before; `/web/` stays
   the default URL and the working demo. Why: the UI can be reworked without blocking the others.
-- 2026-11-14 Mati: CONTRACTS v0.11 (T55): the file now matches the code. Removed pre-baked `web/targets/`, its size budget and `pipeline.publish` (obsolete since v0.3 live data); documented the Live API routes the viewer already uses (`/objects`, `/sky/…`, `/settings`, `/health`), `labels_requested` / `objects_requested`, the real `build_target` / `detect` signatures; label `source` may be `"synthetic"` (fixtures only, viewer marks it not real); second fixture `fixtures/targets/demo-epochs/` (schema 0.2, every optional field). Additive, no code has to change.
+- 2026-11-14 Mati: CONTRACTS v0.11 (T56): the file now matches the code. Removed pre-baked `web/targets/`, its size budget and `pipeline.publish` (obsolete since v0.3 live data); documented the Live API routes the viewer already uses (`/objects`, `/sky/…`, `/settings`, `/health`), `labels_requested` / `objects_requested`, the real `build_target` / `detect` signatures; label `source` may be `"synthetic"` (fixtures only, viewer marks it not real); second fixture `fixtures/targets/demo-epochs/` (schema 0.2, every optional field). Additive, no code has to change.
 
 ## Ideas
 
@@ -203,7 +203,7 @@ Ideas are numbered (I1, I2, …) to refer to them; numbers stay fixed, a new ide
   live-data decision made obsolete (needs a Decisions line); the committed fixture is schema 0.1 without
   pairs / labels / varied detections (the browser test generates a richer one; commit it as a second
   fixture). ~1 h.
-  (gap scan vs. the official text, 2026-11-14) — status: done (T55)
+  (gap scan vs. the official text, 2026-11-14) — status: done (T56)
 - I3 [Mati] **Per-detector co-adds per epoch** (consideration: "add together all the data taken by each of the
   six detector arrays to improve the signal-to-noise"): mean/median of the aligned frames per detector
   and epoch as extra frames (`kind: "coadd"`, `n_exposures`; contract change). Helps faint red brown
@@ -605,4 +605,5 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   `/app/`). **Other agents: `app/` is UI work only; keep your work in `web/` as before**, don't
   edit `app/`. Changes in `web/` are ported to `app/` by T55. Gotcha: Board has two rows named T52
   (Joerg more labels, Mati docs), see Questions.
-- 2026-11-14 Mati (Claude): T55 done (idea I2; claimed as T52, renumbered after Joerg's agent also claimed T52, his stays T52). README, CONTRACTS v0.11, TECH-STACK (rewritten), web/server/fixtures READMEs match the code. New fixture `fixtures/targets/demo-epochs/` (regenerate: `python fixtures/make_demo_epochs.py`), try it with `web/?data=../fixtures/targets/&target=demo-epochs`. Bug fixed on the way (Mati OK'd): since T51, `detect.classify` didn't recognise SkyBoT or the MPC catalogue as a known-object lookup, so unknown detections were capped at 0.6 with a wrong "not looked up" note. Joerg: if T51/T53 add another lookup service, add its provenance name to `LOOKUP_SERVICES` in detect/classify.py. CI now also runs `tilegen` tests. Still open: data credits + team names in README (T15).
+- 2026-11-14 Mati (Claude): T56 done (idea I2; claimed as T52, then T55; renumbered twice because Joerg's T52 and Jonathan's T55 were claimed in parallel, theirs stay). README, CONTRACTS v0.11, TECH-STACK (rewritten), web/server/fixtures READMEs match the code. New fixture `fixtures/targets/demo-epochs/` (regenerate: `python fixtures/make_demo_epochs.py`), try it with `web/?data=../fixtures/targets/&target=demo-epochs`. Bug fixed on the way (Mati OK'd): since T51, `detect.classify` didn't recognise SkyBoT or the MPC catalogue as a known-object lookup, so unknown detections were capped at 0.6 with a wrong "not looked up" note. Joerg: if T51/T53 add another lookup service, add its provenance name to `LOOKUP_SERVICES` in detect/classify.py. CI now also runs `tilegen` tests. Still open: data credits + team names in README (T15).
+- 2026-11-14 Mati (Claude): answer to Jonathan's ID question: the docs task is now T56 (T52 = Joerg's more labels, T55 = Jonathan's UI redesign). Commits before this say T52/T55 for it. Tip for all agents: `git fetch` right before choosing a new ID.

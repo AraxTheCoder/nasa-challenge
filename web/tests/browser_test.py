@@ -275,7 +275,7 @@ try:
         check(o.locator("#paths-layer").count() == 1 and "Fake asteroid · synthetic" in (o.text_content("#overlay") or ""),
               "T22: paths layer drawn, synthetic object named as such")
         check(o.is_hidden("#explore"), "offline mode hides the sky map (no tile server)")
-        # T55: the committed schema-0.2 fixture (every optional field) loads and shows what it contains
+        # T56: the committed schema-0.2 fixture (every optional field) loads and shows what it contains
         o.goto(WEB + "?explore=0&data=../fixtures/targets/&target=demo-epochs")
         wait_loaded(o)
         o.wait_for_selector("#objects-list .obj-row")

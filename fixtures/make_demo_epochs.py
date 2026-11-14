@@ -1,4 +1,4 @@
-"""Build the synthetic multi-epoch fixture `fixtures/targets/demo-epochs/` (T55). NOT SPHEREx data.
+"""Build the synthetic multi-epoch fixture `fixtures/targets/demo-epochs/` (T56). NOT SPHEREx data.
 
     python fixtures/make_demo_epochs.py            # from the repo root; deterministic, same bytes every run
 

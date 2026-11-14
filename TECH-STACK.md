@@ -1,6 +1,6 @@
 # Tech stack
 
-Overview of the technologies in this repo, as of 2026-11-14 (rewritten for T55; the first version
+Overview of the technologies in this repo, as of 2026-11-14 (rewritten for T56; the first version
 described the pre-baked plan that the live-data decision replaced). Interfaces and rules live in
 `docs/CONTRACTS.md`; this file only summarises.
 
