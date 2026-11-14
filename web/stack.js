@@ -59,22 +59,42 @@ export function frameScale(rgba) {
 /**
  * Stack RGBA frames of equal size. Returns {data (RGBA for a canvas), n (frames per pixel), frames (used)}.
  * Pixels with alpha 0 (no data) don't count; where no frame has data the stack shows NO_DATA.
+ * shifts (T69, optional, one {dx, dy} per frame, pixels): output pixel (x, y) takes frame k at
+ * (x + dx, y + dy), bilinear, so whatever moves by exactly those shifts stays put and adds up (shift-and-stack).
  */
-export function stackPixels(frames, width, height) {
+export function stackPixels(frames, width, height, shifts = null) {
   const N = width * height;
   const sum = new Float32Array(N), n = new Uint16Array(N);
   let used = 0;
-  for (const rgba of frames) {
+  frames.forEach((rgba, k) => {
     const s = frameScale(rgba);
-    if (!s) continue;
+    if (!s) return;
     used++;
     const bg = background(rgba, width, height);
-    for (let i = 0, p = 0; i < N; i++, p += 4) {
-      if (rgba[p + 3] === 0) continue;
-      sum[i] += (rgba[p] - bg[i]) / s.sigma;
-      n[i]++;
+    const sh = shifts?.[k];
+    if (!sh || (sh.dx === 0 && sh.dy === 0)) {
+      for (let i = 0, p = 0; i < N; i++, p += 4) {
+        if (rgba[p + 3] === 0) continue;
+        sum[i] += (rgba[p] - bg[i]) / s.sigma;
+        n[i]++;
+      }
+      return;
     }
-  }
+    const z = (i) => (rgba[i * 4 + 3] === 0 ? NaN : (rgba[i * 4] - bg[i]) / s.sigma);
+    for (let y = 0; y < height; y++) {
+      const sy = y + sh.dy, y0 = Math.floor(sy), ty = sy - y0;
+      if (y0 < 0 || y0 + 1 >= height) continue;
+      for (let x = 0; x < width; x++) {
+        const sx = x + sh.dx, x0 = Math.floor(sx), tx = sx - x0;
+        if (x0 < 0 || x0 + 1 >= width) continue;
+        const i0 = y0 * width + x0;
+        const v = (z(i0) * (1 - tx) + z(i0 + 1) * tx) * (1 - ty) + (z(i0 + width) * (1 - tx) + z(i0 + width + 1) * tx) * ty;
+        if (Number.isNaN(v)) continue;            // touches a no-data pixel
+        sum[y * width + x] += v;
+        n[y * width + x]++;
+      }
+    }
+  });
   const out = new Uint8ClampedArray(N * 4);
   const a0 = Math.asinh(LO / 3), a1 = Math.asinh(HI / 3);
   for (let i = 0, p = 0; i < N; i++, p += 4) {
@@ -85,6 +105,30 @@ export function stackPixels(frames, width, height) {
     out[p + 3] = 255;
   }
   return { data: out, n, frames: used };
+}
+
+/**
+ * Shifts for stacking along an object (T69): positions [{frame_id, x, y}] -> {frames, shifts} relative to the
+ * first position, for the frames that have a position.
+ */
+export function shiftsAlong(frames, positions) {
+  const byId = new Map(positions.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y)).map((p) => [p.frame_id, p]));
+  const use = frames.filter((f) => byId.has(f.id));
+  if (!use.length) return { frames: [], shifts: [] };
+  const ref = byId.get(use[0].id);
+  return { frames: use, shifts: use.map((f) => ({ dx: byId.get(f.id).x - ref.x, dy: byId.get(f.id).y - ref.y })) };
+}
+
+/**
+ * Shifts for a guessed motion (T69, synthetic tracking): rate in arcsec/hour toward position angle pa
+ * (degrees east of north), relative to frame `ref`. x grows to the west, y to the south (CONTRACTS).
+ */
+export function shiftsForMotion(frames, ref, rateArcsecPerHour, paDeg, pixelScaleArcsec) {
+  const east = rateArcsecPerHour * Math.sin(paDeg * Math.PI / 180), north = rateArcsecPerHour * Math.cos(paDeg * Math.PI / 180);
+  return frames.map((f) => {
+    const hours = (f.mjd - ref.mjd) * 24;
+    return { dx: -east * hours / pixelScaleArcsec, dy: -north * hours / pixelScaleArcsec };
+  });
 }
 
 /** Which frames go into the stack for `frame`: same epoch (all detectors) or same detector (all epochs). */
