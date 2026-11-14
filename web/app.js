@@ -28,7 +28,14 @@ const STEP_LABELS = {
 const FORM_TIP_ENABLED = false;
 const TIP_DISMISSED_KEY = "spherex-blink.formTipDismissed";
 
+// T40: catalogue labels default ON (fast since T38: 1-7 s, fetched in the background without
+// blocking the field). The choice is remembered per browser.
+function labelsPref() {
+  try { return localStorage.getItem("spherex.labels") !== "0"; } catch { return true; }
+}
+
 const app = {
+  labelsOn: labelsPref(),
   api: DEFAULT_API,
   dataRoot: null,    // offline mode: folder with index.json
   index: null,       // offline mode: parsed index.json
@@ -493,7 +500,6 @@ async function startExplore() {
     try { setupBand(await explore.setSurvey(sel.value)); }
     catch (err) { showMessage(err.message, "warn"); }
   });
-  $("#labels-toggle").addEventListener("change", (e) => setLabels(e.target.checked));
   $("#explore-blink").addEventListener("click", () => {
     const v = explore.view();
     if (!v) return;
@@ -520,6 +526,9 @@ async function startExplore() {
 
 async function setLabels(on) {
   app.labelsOn = on;
+  try { localStorage.setItem("spherex.labels", on ? "1" : "0"); } catch { /* private mode: not remembered */ }
+  $("#labels-toggle").checked = on;
+  document.dispatchEvent(new CustomEvent("labels:changed", { detail: { on } }));  // other switches follow
   const t = app.shownTarget;
   const note = $("#labels-note");
   note.textContent = "";
@@ -556,6 +565,12 @@ async function setLabels(on) {
 }
 
 async function main() {
+  // T40: the Labels switch works in every mode (live, offline ?data=, ?explore=0); other modules can
+  // flip it with a "labels:set" event and follow it via "labels:changed".
+  $("#labels-toggle").checked = app.labelsOn;
+  $("#labels-toggle").addEventListener("change", (e) => setLabels(e.target.checked));
+  document.addEventListener("labels:set", (e) => setLabels(Boolean(e.detail?.on)));
+  queueMicrotask(() => document.dispatchEvent(new CustomEvent("labels:changed", { detail: { on: app.labelsOn } })));
   initViewer();
   initObjects();
   bindPage();

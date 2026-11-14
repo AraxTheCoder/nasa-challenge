@@ -20,7 +20,7 @@ const ARROW_PX = 12;        // length of the exaggerated arrow in image pixels
 
 const opts = { names: true, catalogue: false, movers: true, paths: true, allNames: false };
 const NAME_CAP = 8; // T34: at most this many names on the image unless "all names" is on
-const st = { target: null, frames: [], order: new Map(), objects: [], frameId: null, unit: 1 };
+const st = { target: null, frames: [], order: new Map(), objects: [], frameId: null, unit: 1, labelsOn: true };
 
 const svg = (tag, attrs = {}, ...kids) => {
   const n = document.createElementNS(SVG, tag);
@@ -299,6 +299,10 @@ function controls() {
     ` ${label}`);
   box = el("div", { id: "paths-controls", class: "paths-controls" },
     el("div", { class: "paths-row" },
+      el("label", { class: "paths-check", title: "Catalogue names (SIMBAD, Gaia DR3); same switch as in the sky-map bar" },
+        el("input", { type: "checkbox", id: "paths-labels", checked: st.labelsOn,
+          onchange: (e) => document.dispatchEvent(new CustomEvent("labels:set", { detail: { on: e.target.checked } })) }),
+        " Labels"),
       cb("paths", "Paths"), cb("names", "Names"), cb("allNames", "All names"), cb("movers", "Known objects & detections"), cb("catalogue", "Catalogue stars")),
     el("div", { class: "paths-legend" },
       el("span", { id: "paths-t0", class: "muted small" }), el("span", { class: "paths-ramp", "aria-hidden": "true" }),
@@ -347,6 +351,13 @@ document.addEventListener("viewer:target", (e) => {
 document.addEventListener("viewer:frame", (e) => {
   st.frameId = e.detail?.frameId ?? null;
   draw();
+});
+
+// T40: mirror the app's Labels switch (labels feed names, paths, inspector and the sky-map traces)
+document.addEventListener("labels:changed", (e) => {
+  st.labelsOn = Boolean(e.detail?.on);
+  const box = $("#paths-labels");
+  if (box) box.checked = st.labelsOn;
 });
 
 new ResizeObserver(() => { if (st.target) { measure(); draw(); } }).observe(document.documentElement);

@@ -76,6 +76,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T37 | A/C: Catalogue labels only on request: builds skip labels; `GET /api/targets/<id>/labels` computes them in the background; viewer has a Labels switch | Jonathan | done | `jonathan/T36-sky-map` | SIMBAD labels cost 30 s in deep fields (labels.py untouched) |
 | T38 | A: Fast labels: vectorised tracks (all objects x frames at once), ranked cap of 400 SIMBAD + 400 Gaia per field, grid-based duplicate merge, SIMBAD + Gaia in parallel, 15 s per mirror | Joerg | done | (merged as e715788) | Deep field (COSMOS, 30,785 SIMBAD objects): 23 s -> 5.5 s, labels 50+ MB -> 1.2 MB. Official fields: same important labels |
 | T39 | A: Wide per-epoch stitch test (reference): full 3.5° images from AWS, one mosaic per epoch over ~6°, HiPS, page with region-wide labels + traces | Joerg | done | `joerg/T39-wide-stitch` | `pipeline/reference/wide_stitch/` (README, `run.sh`). Input for T32/T36 (Jonathan) |
+| T40 | C: Labels on by default + switch everywhere: default ON (remembered per browser), works in live/offline/`?explore=0`, second Labels switch next to the path controls | Joerg | done | `joerg/T40-labels-on` | Without labels the paths, names, inspector and sky-map traces had nothing to draw |
 
 ## Decisions
 
@@ -154,6 +155,10 @@ Dated, one line each, with why.
   wants the work to happen only when labels are switched on; SIMBAD labels took 30 s in deep fields.
   Also T36: the sky map is our own WebGL HiPS renderer (`web/sky.js`, `web/healpix.js`), Aladin Lite is
   gone. Joerg: `web/traces.js` now paints via a sky.js draw hook (only `draw()` changed, selection kept).
+- 2026-11-14 [Joerg] T40: catalogue labels are ON by default again (was OFF since T37). Why: T38 made
+  labelling 1-7 s and T37 already fetches them in the background without blocking the field; with
+  labels off the paths, names, inspector and sky-map traces (T22/T23/T35) showed nothing, so the
+  tracking looked missing. The choice is remembered per browser (localStorage `spherex.labels`).
 
 ## Ideas
 
@@ -404,3 +409,7 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   test uses it, so it no longer depends on external tile servers; runs in ~20 s). Gotchas: run the
   browser test with the project venv + `requirements-dev.lock` (server now imports numpy); the demo
   machine's cache must be warmed there. Mati's checkout stays on main; Claude works in a git worktree.
+- 2026-11-14 [Joerg → Jonathan, Mati] T40 touches `web/app.js`: the Labels switch is wired in `main()`
+  (was inside `startExplore`, so offline mode and `?explore=0` had no working switch), `setLabels`
+  remembers the choice and fires `labels:changed`; `labels:set` flips it from elsewhere (paths.js
+  has a second switch). Default is ON, see Decisions.
