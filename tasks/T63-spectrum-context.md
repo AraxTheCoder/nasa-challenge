@@ -1,7 +1,7 @@
 # T63: C/A: Spectrum context: what a normal source looks like, and why a deviation is interesting (expected baseline + feature markers on the T49 chart)
 
-- **Owner:** –  ·  **Status:** open
-- **Branch:** –
+- **Owner:** Mati  ·  **Status:** doing
+- **Branch:** `mati/T63-spectrum-context`
 - **Depends on / feeds:** T49
 
 ## Goal
