@@ -11,6 +11,7 @@ import { $, el, fmtElapsed } from "./util.js";
 import { checkTarget, clearTarget, initViewer, showTarget, stopBlink } from "./viewer.js";
 import { initObjects } from "./objects.js";
 import { initDiff } from "./diff.js";
+import { initPhotometry } from "./photometry.js";
 import * as explore from "./explore.js";
 
 const SIZE_MIN = 5;
@@ -607,6 +608,7 @@ async function main() {
   initViewer();
   initObjects();
   initDiff();
+  initPhotometry();
   bindPage();
   const p = params();
   if (p.get("api")) app.api = p.get("api");

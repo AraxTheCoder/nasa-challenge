@@ -140,6 +140,7 @@ try:
         check(all(s.startswith(API + "/api/targets/") and w == 96 for s, w in srcs), "frames load from API, relative to target_url")
         check(all("v=" in s for s, _ in srcs), "frame URLs carry a build stamp (rebuilds must not show cached old frames)")
         check(page.input_value("#preset") != "", "preset select marks the chosen field")
+        check(page.is_hidden("#photometry"), "synthetic field: no photometry panel, nothing real to measure (T49)")
         page.click("#btn-diff")
         page.wait_for_selector("#diff-canvas:not([hidden]), #diff-note:has-text('unavailable')", timeout=8000)
         check(page.is_visible("#diff-canvas"), f"difference view works on frames from the Live API (CORS) {page.text_content('#diff-note')}")
@@ -396,6 +397,42 @@ try:
         v.keyboard.press("ArrowRight")
         check(v.get_attribute("#btn-film", "aria-pressed") == "false", "stepping by hand stops the film")
         check(not verr, f"T45: no page errors {verr}")
+
+        # 8b4. light curves + spectra (T49): the API answer is stubbed (CI has no real FITS)
+        ph = b.new_page(viewport={"width": 1280, "height": 1000})
+        pherr, phreq = [], []
+        ph.on("pageerror", lambda x: pherr.append(str(x)))
+        def stub(route):
+            phreq.append(route.request.url)
+            rows = []
+            for fid, ep, lam, flux, masked in (("f000", 1, 1.200, 1000, False), ("f001", 1, 1.230, 1100, False), ("f002", 1, 1.800, 900, False),
+                                                ("f003", 1, 1.830, 0, True), ("f004", 2, 1.210, 1500, False), ("f005", 2, 1.300, 1200, False),
+                                                ("f006", 2, 1.820, 950, False), ("f007", 3, 1.235, 2000, False), ("f008", 3, 2.100, 800, False)):
+                rows.append({"frame_id": fid, "epoch": ep, "mjd": 60790 + 180 * (ep - 1), "time_utc": "2025-04-25T00:00:00Z", "detector": 2,
+                             "wavelength_um": lam, "bandwidth_um": 0.03, "flux_ujy": None if masked else flux, "err_ujy": None if masked else 30,
+                             "masked_fraction": 0.9 if masked else 0.0, "masked": masked})
+            route.fulfill(json={"status": "ready", "id": "multi-epoch", "ra_deg": 150.0, "dec_deg": 2.2, "aperture_px": 3,
+                                "annulus_px": [5, 8], "unit": "uJy", "frames": rows, "missing": [], "note": "stub note"})
+        ph.route(lambda url: url.split("?")[0].endswith("/photometry"), stub)  # the API path only, not photometry.js
+        ph.goto(WEB + "?explore=0&data=../data/test-targets/")
+        wait_loaded(ph)
+        ph.wait_for_selector("#photometry:not([hidden]) #ph-body svg", timeout=8000)
+        titles = ph.eval_on_selector_all("#ph-body .ph-title", "es => es.map(e => e.textContent)")
+        check(titles == ["Epoch 1", "Epoch 2", "Epoch 3"], f"spectrum: one panel per epoch ({titles})")
+        check("8 of 9 frames measured at the field centre" in ph.text_content(".ph-where") and ph.locator(".ph-masked").count() == 1,
+              f"counts measured frames, marks the flagged one ({ph.text_content('.ph-where')})")
+        legend = ph.text_content(".ph-legend")
+        # matches within half a channel (0.015 µm): f000↔f004 (+50%) and f001↔f007 (+82%)
+        check("epoch 1 → 2: median +50%" in legend and "epoch 1 → 3: median +82%" in legend and ph.locator(".ph-dot-c").count() == 2,
+              f"change at the same wavelength across epoch pairs ({legend})")
+        ph.click("#ph-measure")
+        cb = ph.locator("#ph-catcher").bounding_box()
+        ph.locator("#ph-catcher").click(position={"x": cb["width"] * 0.25, "y": cb["height"] * 0.5})
+        ph.wait_for_function("document.querySelector('.ph-where').textContent.includes('clicked star')")
+        check("x=" in phreq[-1] and "y=" in phreq[-1] and ph.locator("#ph-layer .ph-marker").count() == 3,
+              "Measure a star: click sends the pixel, marks the spot")
+        check(ph.get_attribute("#ph-measure", "aria-pressed") == "false" and ph.is_hidden("#ph-catcher"), "measure mode ends after one click")
+        check(not pherr, f"T49: no page errors {pherr}")
 
         # 8c. objects panel (T13) on the multi-epoch target
         q = b.new_page(viewport={"width": 1280, "height": 900})

@@ -31,6 +31,8 @@ const state = {
 };
 
 export const currentTarget = () => state.target;
+/** URL of the shown target's folder (ends with /); the API serves per-target endpoints next to it. */
+export const targetBase = () => state.base;
 
 /** A and B with their image URLs, for other modules (diff.js). null when no target is shown. */
 export function currentPair() {

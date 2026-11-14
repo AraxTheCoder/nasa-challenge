@@ -293,3 +293,27 @@ button.link:hover { text-decoration: underline; }
 
 /* ---------- T45: play the series ---------- */
 #film-mode { max-width: 15rem; }
+
+/* ---------- T49: photometry (spectrum + change at the same wavelength) ---------- */
+.photometry { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.ph-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ph-head h3 { margin: 0; }
+#ph-measure[aria-pressed="true"] { background: var(--accent); color: #04111f; border-color: var(--accent); }
+.photometry h4 { margin: 10px 0 4px; font-size: 13px; font-weight: 600; }
+.photometry p { margin: 4px 0; }
+.ph-svg { display: block; overflow: visible; }
+.ph-panel { fill: var(--panel); stroke: var(--border); }
+.ph-grid { stroke: var(--border); opacity: 0.6; }
+.ph-zero { stroke: var(--muted); stroke-width: 1.5; }
+.ph-axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.ph-title { fill: var(--text); font-size: 11px; font-weight: 600; }
+.ph-ghost { fill: var(--muted); opacity: 0.35; }
+.ph-dot { fill: #6da7ec; stroke: var(--panel); stroke-width: 2; paint-order: stroke; }
+.ph-dot-c { stroke: var(--panel); stroke-width: 2; paint-order: stroke; }
+.ph-err { stroke: var(--muted); stroke-width: 1.5; }
+.ph-masked { fill: var(--muted); font-size: 12px; }
+.ph-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.ph-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; }
+.ph-catcher { position: absolute; inset: 0; z-index: 3; cursor: crosshair; }
+.stage.is-measuring { outline: 2px dashed var(--accent); outline-offset: 2px; }
+.ph-marker { fill: none; stroke: var(--warn); stroke-width: 2; }
