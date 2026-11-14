@@ -4,7 +4,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+import asyncio
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
@@ -21,10 +24,11 @@ _FRAME = re.compile(r"^[A-Za-z0-9_-]+\.(png|webp)$")
 _HTTP = {"ready": 200, "building": 202, "no_data": 404, "error": 500}
 
 
-def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = False) -> FastAPI:
+def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = False,
+               tiles_remote: str | None = None, use_remote: bool = False) -> FastAPI:
     builder = Builder(cache_root, fixture=fixture)
     app = FastAPI(title="SPHEREx blink Live API", version="0.3")
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"],
+    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"],
                        allow_headers=["*"])
     app.state.builder = builder
 
@@ -115,19 +119,35 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
 
     # -- T41: cached all-sky HiPS maps (IRSA/CDS) for the sky map -----------------------------
 
-    sky = SkyCache(cache_root.parent / "hips_cache")
+    from tilegen.client import TileGenerator
+
+    sky = SkyCache(cache_root.parent / "hips_cache", TileGenerator(tiles_remote, use_remote))
     if not fixture:
         sky.warm()
     _MEDIA = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}
 
     @app.get("/api/sky/{survey}/{path:path}")
-    def sky_file(survey: str, path: str):
+    async def sky_file(survey: str, path: str, request: Request):
         if not SkyCache.valid(survey, path):
             raise HTTPException(404)
+        slot = False
         try:
-            data = sky.get(survey, path)
-        except Exception as e:  # noqa: BLE001 - upstream down
+            if sky.is_live_render(survey, path):
+                # Wait for a render slot, but give up as soon as the browser hangs up, so tiles that
+                # left the screen never block visible ones.
+                while not sky.live_slots.acquire(blocking=False):
+                    if await request.is_disconnected():
+                        return Response(status_code=499)
+                    await asyncio.sleep(0.05)
+                slot = True
+                if await request.is_disconnected():
+                    return Response(status_code=499)
+            data = await run_in_threadpool(sky.get, survey, path)
+        except Exception as e:  # noqa: BLE001 - upstream / tile generator down
             return Response(str(e), status_code=502)
+        finally:
+            if slot:
+                sky.live_slots.release()
         if data is None:
             return Response(status_code=404, headers={"Cache-Control": "public, max-age=86400"})
         if path == "properties":
@@ -135,6 +155,22 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
         sky.prefetch_around(survey, path)
         return Response(data, media_type=_MEDIA[path.rsplit(".", 1)[-1]],
                         headers={"Cache-Control": "public, max-age=604800, immutable"})
+
+    # -- T47: which tile generator renders the live deep-zoom tiles (local / remote US VM) --------
+
+    @app.get("/api/settings")
+    def get_settings():
+        return sky.tiles.info()
+
+    @app.post("/api/settings")
+    async def set_settings(request: Request):
+        body = await request.json()
+        if "tiles" in body:
+            try:
+                sky.tiles.use_remote(body["tiles"] == "remote")
+            except ValueError as e:
+                return JSONResponse({"error": str(e)}, status_code=400)
+        return sky.tiles.info()
 
     @app.get("/api/health")
     def health():

@@ -1,25 +1,35 @@
-# deploy/ — hosting on Google Cloud next to the SPHEREx bucket (T47)
+# deploy/ — tile generator on Google Cloud next to the SPHEREx bucket (T47)
 
 Why: the SPHEREx data is in AWS `us-east-1`. From Europe it came at 0.04-0.1 MB/s per connection on
 2026-11-14; from a VM in Google Cloud `us-east4` (N. Virginia) at 38-95 MB/s (measured on the VM).
-So the Live API runs there and the browser only gets finished tiles.
+
+Split: **only `tilegen` (live deep-zoom tiles) runs on the VM.** Viewer, Live API, builds and all
+caches stay in Europe / on your PC; the Live API asks the VM for tiles and caches what it gets.
+Switch between local and VM rendering in the viewer ("Tiles" in the map bar) or with
+`POST /api/settings {"tiles": "local"|"remote"}`.
 
 | What | Value |
 |---|---|
 | Project | `nasa-us-east-worker` |
-| VM | `instance-20261114-132040`, zone `us-east4-a`, e2-medium, Debian |
-| URL | `https://<ip-with-dashes>.sslip.io/` (Caddy gets a Let's Encrypt certificate; no own domain) |
-| App | `/opt/spherex/app` (from `git archive HEAD`, no GitHub credentials on the VM), venv `/opt/spherex/venv` |
-| Data | `/opt/spherex/data` (index mirror, caches, built fields), kept across updates |
-| Services | `spherex` (systemd, `python -m server` on 127.0.0.1:8000), `caddy` (443 → /api/* proxied, rest = `web/`) |
+| VM | `instance-20261114-132040`, zone `us-east4-a`, e2-medium, Debian 13 |
+| URL | `https://136-107-125-170.sslip.io/` — only `/health` and `/tiles/live/...` (Caddy, Let's Encrypt) |
+| Code | `/opt/spherex/app` (from `git archive HEAD`; no GitHub credentials on the VM), venv `/opt/spherex/venv` |
+| Data | `/opt/spherex/data`: image index mirror, S3 row chunks, rendered tiles; kept across updates |
+| Service | `spherex-tilegen` (systemd: `python -m tilegen --port 8100`, `TILEGEN_IMAGES=3`) |
 
-First time (once):
+Local side (your PC):
+
+    python -m server --tiles-remote https://136-107-125-170.sslip.io            # starts with local tiles
+    python -m server --tiles-remote https://136-107-125-170.sslip.io --use-remote
+
+First time on the VM (done 2026-11-14):
 
     gcloud compute scp deploy/setup-vm.sh <instance>:/tmp/ --zone us-east4-a
-    gcloud compute ssh <instance> --zone us-east4-a --command "sudo bash /tmp/setup-vm.sh <ip-with-dashes>.sslip.io"
+    gcloud compute ssh <instance> --zone us-east4-a --command "sudo bash /tmp/setup-vm.sh 136-107-125-170.sslip.io"
 
-Every update (from the repo root, committed state):
+Every update (repo root, committed state; `GCLOUD=` path to gcloud if it is not on PATH):
 
     deploy/deploy.sh
 
-Logs: `gcloud compute ssh <instance> --zone us-east4-a --command "sudo journalctl -u spherex -n 100"`.
+Logs: `gcloud compute ssh <instance> --zone us-east4-a --command "sudo journalctl -u spherex-tilegen -n 100"`.
+Stop paying when not needed: `gcloud compute instances stop <instance> --zone us-east4-a`.

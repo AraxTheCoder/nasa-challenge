@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import uvicorn
@@ -17,8 +18,13 @@ def main() -> None:
     ap.add_argument("--fixture", action="store_true",
                     help="answer every request with the synthetic fixture (until pipeline.build exists)")
     ap.add_argument("--cache", type=Path, default=REPO / "data" / "targets")
+    ap.add_argument("--tiles-remote", default=os.environ.get("SPHEREX_TILES_REMOTE"),
+                    help="URL of a tilegen service, e.g. the US VM next to the S3 bucket "
+                         "(default: $SPHEREX_TILES_REMOTE)")
+    ap.add_argument("--use-remote", action="store_true", help="start with the remote tile generator")
     args = ap.parse_args()
-    uvicorn.run(create_app(args.cache, fixture=args.fixture), host=args.host, port=args.port)
+    uvicorn.run(create_app(args.cache, fixture=args.fixture, tiles_remote=args.tiles_remote,
+                           use_remote=args.use_remote), host=args.host, port=args.port)
 
 
 if __name__ == "__main__":

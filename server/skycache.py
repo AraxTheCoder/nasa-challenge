@@ -34,14 +34,19 @@ TIMEOUT_S = 30
 
 
 class SkyCache:
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, tiles=None):
+        from tilegen.client import TileGenerator
+
         self.root = Path(root)
+        self.tiles = tiles or TileGenerator()
         self._session = None
         self._inflight: dict[str, threading.Event] = {}
         self._lock = threading.Lock()
         self._prefetch = ThreadPoolExecutor(16, thread_name_prefix="sky-prefetch")
         self._props: dict[str, dict] = {}
-        self._live_slots = threading.BoundedSemaphore(6)     # live tiles rendered at once
+        # Live tiles rendered (or asked of the remote generator) at once. Taken by the API endpoint,
+        # which stops waiting when the browser hangs up (it aborts tiles that left the screen).
+        self.live_slots = threading.BoundedSemaphore(6)
 
     def _http(self):
         if self._session is None:
@@ -91,33 +96,30 @@ class SkyCache:
 
     def _live_route(self, path: str):
         """spherex-live: properties and orders <= 5 come from the cube, 6-7 are rendered by us."""
-        from . import livetiles
+        from tilegen.render import LIVE_ORDERS
 
         if path == "properties":
             def props():
                 cube = (self.get("spherex-cube", "properties") or b"").decode("utf-8", "replace")
                 lines = [l for l in cube.splitlines() if not l.startswith(("hips_order ", "obs_title", "creator_did"))]
-                lines += [f"hips_order           = {max(livetiles.LIVE_ORDERS)}",
+                lines += [f"hips_order           = {max(LIVE_ORDERS)}",
                           "obs_title            = SPHEREx DR1: IRSA cube to order 5, live tiles from AWS level-2 images above",
                           "creator_did          = ivo://spherex-blink/live",
-                          "x_live_orders        = " + " ".join(map(str, livetiles.LIVE_ORDERS))]
+                          "x_live_orders        = " + " ".join(map(str, LIVE_ORDERS))]
                 return ("\n".join(lines) + "\n").encode()
             return props
         if ALLSKY_RE.match(path):
             return lambda: self.get("spherex-cube", path)
         m = TILE_RE.match(path)
-        if m and int(m.group(1)) not in livetiles.LIVE_ORDERS:
+        if m and int(m.group(1)) not in LIVE_ORDERS:
             return lambda: self.get("spherex-cube", path)
         return None                                   # live order: cached on disk like any tile
 
     def _fetch(self, survey: str, path: str) -> bytes | None:
-        if survey == "spherex-live":
-            from . import livetiles
-
+        if survey == "spherex-live":                  # live order: tile generator (local or remote)
             m = TILE_RE.match(path)
             slice_ = int(m.group(4)[1:]) if m.group(4) else 0
-            with self._live_slots:
-                return livetiles.render(slice_, int(m.group(1)), int(m.group(3)))
+            return self.tiles.get(slice_, int(m.group(1)), int(m.group(3)))
         last = None
         for base in SURVEYS[survey]:
             try:
@@ -134,10 +136,26 @@ class SkyCache:
 
     # -- prefetch ----------------------------------------------------------------------------------
 
+    def is_live_render(self, survey: str, path: str) -> bool:
+        """True if this request would run the (slow) tile generator: live order, not cached yet."""
+        if survey != "spherex-live":
+            return False
+        from tilegen.render import LIVE_ORDERS
+
+        m = TILE_RE.match(path)
+        return bool(m) and int(m.group(1)) in LIVE_ORDERS and not (self.root / survey / path).exists()
+
     def prefetch_around(self, survey: str, path: str) -> None:
         m = TILE_RE.match(path)
         if not m:
             return
+        if survey == "spherex-live":
+            # Never prefetch into live orders: each is a slow render that would take a slot from a
+            # visible tile (Joerg's diagnosis, TEAM.md 2026-11-14). Below them the cube does the work.
+            from tilegen.render import LIVE_ORDERS
+            if int(m.group(1)) in LIVE_ORDERS or int(m.group(1)) + 1 in LIVE_ORDERS:
+                return
+            survey = "spherex-cube"
         order, pix, sl, ext = int(m.group(1)), int(m.group(3)), m.group(4) or "", m.group(5)
         max_order = self._max_order(survey)
         want = []

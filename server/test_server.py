@@ -167,14 +167,13 @@ def test_epoch_tiles_prerendered(client):
 
 def test_live_layer_routes_low_orders_to_cube(tmp_path, monkeypatch):
     from server.skycache import SkyCache
-    from server import livetiles
 
     c = SkyCache(tmp_path)
     seen = []
     real_fetch = c._fetch
     monkeypatch.setattr(c, "_fetch", lambda s, p: real_fetch(s, p) if s == "spherex-live" else (
         seen.append((s, p)) or (b"hips_order = 5\nhips_cube_depth = 102\n" if p == "properties" else b"\x89PNG")))
-    monkeypatch.setattr(livetiles, "render", lambda sl, o, n: seen.append(("live", sl, o, n)) or b"\x89PNGlive")
+    monkeypatch.setattr(c.tiles, "get", lambda sl, o, n: seen.append(("live", sl, o, n)) or b"\x89PNGlive")
     assert b"hips_order           = 7" in c.get("spherex-live", "properties")
     assert c.get("spherex-live", "Norder5/Dir0/Npix12_20.png") == b"\x89PNG"
     assert c.get("spherex-live", "Norder3/Allsky_20.png") == b"\x89PNG"

@@ -521,12 +521,38 @@ async function startExplore() {
     dbg.checked = params().get("debug") === "1";
     explore.setDebug(dbg.checked);
     dbg.addEventListener("change", () => explore.setDebug(dbg.checked));
+    setupTilesSwitch(sel);
     setupBand(sky.base);
     if (app.shownTarget) syncExplore(app.shownTarget);   // a field loaded before the map was ready
     updateExplorePos();
   } catch (err) {
     showMessage(`Sky map unavailable: ${err.message}`, "warn");
   }
+}
+
+// ---------- T47: live tiles from here or from the US VM next to the S3 bucket ----------
+
+async function setupTilesSwitch(surveySelect) {
+  if (app.dataRoot) return;
+  let info;
+  try { info = await (await fetch(`${app.api}/api/settings`)).json(); } catch { return; }
+  if (!info.remote_available) return;
+  const box = $("#tiles-box"), mode = $("#tiles-mode");
+  box.hidden = false;
+  mode.value = info.tiles;
+  mode.title = `remote: ${info.remote_url}`;
+  mode.addEventListener("change", async () => {
+    try {
+      const res = await fetch(`${app.api}/api/settings`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tiles: mode.value }) });
+      const now = await res.json();
+      if (!res.ok) throw new Error(now.error ?? `HTTP ${res.status}`);
+      mode.value = now.tiles;
+      setupBand(await explore.setSurvey(surveySelect.value));   // fresh layer: re-asks failed tiles
+    } catch (err) {
+      showMessage(`Could not switch tiles: ${err.message}`, "warn");
+    }
+  });
 }
 
 // ---------- T37: catalogue labels only on request ----------
