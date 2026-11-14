@@ -46,6 +46,7 @@ official test fields. Each time you come back: `cd nasa-challenge`, activate the
 | `--fixture` / `--live` | synthetic demo field for every request / real SPHEREx data from IRSA. Default: live once `pipeline.build` exists, fixture until then |
 | `--api-port N`, `--web-port N` | other ports if 8000 / 8080 are taken |
 | `--lan` | others on your network can open the printed URL too |
+| `--host ADDR` | listen on one address only, e.g. `--host 10.0.0.2` for the WireGuard network (overrides `--lan`) |
 | `--no-browser` | just print the URL |
 | `--warm` | also pre-build the five official test fields (first time: tens of minutes; `web/warm.py`) |
 

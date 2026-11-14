@@ -86,6 +86,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 
 | T48 | C: Cached Allsky fallback at deep zoom so pending/failed live tiles never erase available overview imagery | Joerg | done | `joerg/T48-map-overview-fallback` | [tasks/T48](tasks/T48-map-overview-fallback.md). User approved implementation + push; investigate repeated tile errors |
 | T49 | A/C: Light curves + spectra on the fly at any position: aperture photometry on the cached SPHEREx FITS (pipeline + `/api/targets/<id>/photometry` + viewer charts); for the variable test stars RW Aur / R Dra | Mati | doing | `mati/T49-photometry` | [tasks/T49](tasks/T49-photometry.md). Gap-scan ideas #2 + #3 |
+| T50 | All: `web/dev.py --host ADDR`: serve viewer + Live API on one address only (e.g. WireGuard 10.0.0.2) instead of all interfaces (`--lan`) | Joerg | done | `joerg/T50-dev-host` | [tasks/T50](tasks/T50-dev-host.md). Joerg's new host serves the team over WireGuard 10.0.0.0/24 |
 
 ## Decisions
 
@@ -542,3 +543,7 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   before 20-60 s. Also applied Joerg's queue diagnosis: no live prefetch, slot wait stops when the
   browser hangs up, single-flight S3 chunks. The mirror now learns every week folder's processing
   version (tiles waited ~10 s per TAP lookup before). Stop the VM when not needed (costs credits).
+- 2026-11-14 [Jonathan + Claude → Joerg] Fixed: `data/mirror/index.npz` (gitignored) missing on a fresh
+  checkout made local live tiles fail with 502. Now the index is built by itself in the background on
+  first use (~3 min); meanwhile the team tile VM stands in (it is now the default `--tiles-remote`;
+  `--tiles-remote none` to disable), else the API answers 503 + Retry-After and the map retries.

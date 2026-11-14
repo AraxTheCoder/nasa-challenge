@@ -23,7 +23,10 @@ const MAX_TEXTURES = 200;           // 1 MB of GPU memory each
 const MAX_PARALLEL_LOADS = 6;             // = what a browser opens per host over HTTP/1.1
 const MAX_SLOW_LOADS = 2;                 // live-rendered tiles: leave connections for the rest
 const PRELOAD = 1e6;                      // prio >= PRELOAD: preload (other epochs, parent tiles)
-const MAX_PRELOADS = 2;                   // preloads in flight at once, and only when nothing visible waits
+const MAX_PRELOADS = 3;                   // preloads in flight at once, and only when nothing visible waits
+// Preload tiers, in this order after every visible tile: parent (zoom out), ring around the view
+// (pan), children of the centre (zoom in), other epochs (blink).
+const PRE_PARENT = PRELOAD, PRE_RING = PRELOAD + 1e4, PRE_CHILD = PRELOAD + 2e4, PRE_EPOCH = PRELOAD + 3e4;
 
 // ---------- HiPS layer ------------------------------------------------------------------------
 
@@ -296,6 +299,13 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     try {
       const res = await fetch(job.url ?? job.layer.tileUrl(job.order, job.pix), { signal: job.ctrl.signal });
       if (res.status === 404) { t.state = "missing"; return; }
+      if (res.status === 503) {                 // server not ready yet (e.g. index being built)
+        const wait = Math.min(60, Number(res.headers.get("Retry-After")) || 20);
+        t.state = "retry";
+        setTimeout(() => { if (t.state === "retry") { t.state = "queued"; st.queue.push(job); pump(); markDirty(); } },
+          wait * 1000);
+        return;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const bmp = await createImageBitmap(await res.blob());
       const tex = gl.createTexture();
@@ -350,7 +360,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   /** Texture to draw for a tile: its own, or the nearest loaded ancestor with a sub-rectangle. */
   function textureFor(layer, order, pix, prio) {
     const own = request(layer, order, pix, prio);
-    if (order - 1 >= layer.minOrder) request(layer, order - 1, Math.floor(pix / 4), PRELOAD + prio);
+    if (order - 1 >= layer.minOrder) request(layer, order - 1, Math.floor(pix / 4), PRE_PARENT + prio);
     if (own.state === "ok") return { tex: own.tex, d: 0, aOff: 0, bOff: 0 };
     const { ix, iy } = nest2xyf(order, pix);
     for (let d = 1; order - d >= layer.minOrder; d++) {
@@ -375,11 +385,13 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     const isBase = layer === st.base;
     const stats = isBase ? { order, wanted: wantedOrder(), maxOrder: layer.maxOrder, visible: 0, sharp: 0,
       blurry: 0, empty: 0, outlines: [] } : null;
+    const shownTiles = [];
     for (const pix of tilesFor(layer, order)) {
       const g = tileGrid(order, pix, n);
       const sp = [];
       for (let i = 0; i < g.length; i += 2) sp.push(toScreen(g[i], g[i + 1]));
       const mid = sp[Math.floor(sp.length / 2)];
+      shownTiles.push([pix, Math.hypot(mid.x - st.w / 2, mid.y - st.h / 2)]);
       // At deep zoom an order-3 tile's coarse mesh can miss the entire viewport. Use the
       // detailed tile's mesh and the matching sub-rectangle of its order-3 Allsky atlas cell.
       let overview = null;
@@ -415,6 +427,37 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       drawTile(tx, sp, n);
     }
     if (stats) st.stats = stats;
+    if (layer === st.base) preloadAround(layer, order, shownTiles);
+  }
+
+  /** Preload what the next move will need: a ring of tiles just outside the view (pan) and the
+   *  children of the central tiles (zoom in). Lower priority than anything visible. */
+  function preloadAround(layer, order, shown) {
+    const seen = new Set(shown.map(([p]) => p));
+    for (const [pix, d] of ringTiles(order, seen)) request(layer, order, pix, PRE_RING + d);
+    if (order + 1 <= layer.maxOrder) {
+      const central = [...shown].sort((a, b) => a[1] - b[1]).slice(0, 4);
+      for (const [pix, d] of central) {
+        for (let c = 0; c < 4; c++) request(layer, order + 1, pix * 4 + c, PRE_CHILD + d);
+      }
+    }
+  }
+
+  /** Tiles in a band one tile wide just outside the screen, with their distance from the centre. */
+  function ringTiles(order, exclude) {
+    const out = new Map();
+    const tilePx = Math.max(64, Math.min(600, (58.6323 / 2 ** order) * DEG * R()));
+    const step = 40;
+    for (let y = -tilePx; y <= st.h + tilePx; y += step) {
+      for (let x = -tilePx; x <= st.w + tilePx; x += step) {
+        if (x >= 0 && x <= st.w && y >= 0 && y <= st.h) continue;       // inside: visible already
+        const sky = fromScreen(x, y);
+        if (!sky) continue;
+        const pix = ang2pix(order, sky[0], sky[1]);
+        if (!exclude.has(pix) && !out.has(pix)) out.set(pix, Math.hypot(x - st.w / 2, y - st.h / 2));
+      }
+    }
+    return out;
   }
 
   function ancestorFor(layer, order, pix) {
@@ -524,7 +567,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   /** Other epochs (blink): their tiles on screen inside their field, after the shown ones. */
   function prefetch(layer) {
     const order = pickOrder(layer);
-    for (const pix of tilesFor(layer, order)) request(layer, order, pix, PRELOAD + 1000);
+    for (const pix of tilesFor(layer, order)) request(layer, order, pix, PRE_EPOCH);
   }
 
   /** Visible tiles of a layer; a layer with a known region (our per-epoch field HiPS) only those

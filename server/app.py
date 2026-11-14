@@ -146,6 +146,9 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
                     return Response(status_code=499)
             data = await run_in_threadpool(sky.get, survey, path)
         except Exception as e:  # noqa: BLE001 - upstream / tile generator down
+            from pipeline.mirror import IndexNotReady
+            if isinstance(e, IndexNotReady):        # fresh checkout: index being built, ask again
+                return Response(str(e), status_code=503, headers={"Retry-After": "20"})
             return Response(str(e), status_code=502)
         finally:
             if slot:
