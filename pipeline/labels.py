@@ -120,7 +120,11 @@ GAIA_CAP = 400               # T38: brightest Gaia stars kept per field
 SKIP_OTYPES = {"Pl", "Pl?"}  # exoplanets are not separately visible
 # Catalogue-number names; everything else counts as a "real" name the UI shows by default.
 SURVEY_PREFIXES = ("Gaia", "2MASS", "TYC", "UCAC", "WISE", "[", "SDSS", "GALEX", "LAMOST", "ATO ", "GES ",
-                   "USNO", "LEDA", "GAT ", "1RXS", "Z ", "ZTF", "PM ", "UGCA", "NVSS", "FIRST", "APOP", "CRTS")
+                   "USNO", "LEDA", "GAT ", "1RXS", "Z ", "ZTF", "PM ", "UGCA", "NVSS", "FIRST", "APOP", "CRTS",
+                   # T72: more survey numbers that crowded the map
+                   "2dFGRS", "6dFGS", "2MASX", "GALEX", "SSS_", "4FGL", "3FGL", "2E ", "1E ", "PMN ", "SUMSS",
+                   "WISEA", "CWISE", "UCAC4", "UCAC2", "GSC", "NSV ", "2XMM", "4XMM", "XMMU", "CXOU", "RX J",
+                   "PS1", "Pan-STARRS", "DES ", "SSTSL2", "IRAS ", "AKARI", "MCG", "ESO ", "APMUKS", "HIPASS")
 
 
 def _tap(url: str, adql: str) -> dict:
@@ -658,8 +662,9 @@ def sky_labels(ra: float, dec: float, radius: float) -> dict:
         # Drawing order on the map (the client names the first ones that fit): famous objects and fast
         # movers, then other real names, then catalogue numbers; brighter first within each.
         name = " ".join(l["name"].split())              # SIMBAD pads: "M  31"
-        notable = (l["otype"] in NOTABLE_OTYPES or (l.get("pm_mas_yr") or 0) >= 100
-                   or name.startswith("* ") or l["source"] == "catwise2020")
+        pm = l.get("pm_mas_yr") or 0
+        notable = ((l["otype"] in NOTABLE_OTYPES or pm >= 100) and l["named"]) or pm >= 1000 \
+            or name.startswith("* ") or l["source"] == "catwise2020"
         tier = 0 if name.startswith(("M ", "NGC ", "IC ")) else 1 if notable else 2 if l["named"] else 3
         rows.append({k: v for k, v in {
             "name": name, "kind": l["kind"], "otype": l["otype"], "source": l["source"],
