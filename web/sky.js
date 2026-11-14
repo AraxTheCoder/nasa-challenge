@@ -117,32 +117,51 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   const G = makeGl(canvas);
   const { gl } = G;
 
-  const st = { ra, dec, fov, w: 1, h: 1, dpr: 1, base: null, overlays: [], shown: -1,
+  const st = { ra, dec, fov, cam: null, w: 1, h: 1, dpr: 1, base: null, overlays: [], shown: -1,
     dirty: true, loads: 0, queue: [], inflight: new Set(), rendering: false, hooks: [], frame: 0, errors: 0, debug: false, stats: null, listeners: { change: [], tiles: [] } };
 
-  // ----- projection (stereographic, north up, east left) -----
+  // ----- camera + projection -----
+  // The camera is a rotation of the sphere, kept as an orthonormal frame: C (view centre), E
+  // (screen left; "east" when north is up) and N (screen up). Dragging and zooming turn the whole
+  // frame, so the grabbed sky point stays exactly under the cursor anywhere, also over the poles
+  // (like Google Earth); the picture may roll there. northUp() / goTo() level it again.
+  // Projection: stereographic around C (conformal).
+  const vec = ([ra, dec]) => [Math.cos(dec * DEG) * Math.cos(ra * DEG), Math.cos(dec * DEG) * Math.sin(ra * DEG), Math.sin(dec * DEG)];
+  const radec = ([x, y, z]) => [((Math.atan2(y, x) / DEG) % 360 + 360) % 360, Math.asin(Math.max(-1, Math.min(1, z))) / DEG];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = (a) => { const l = Math.hypot(...a) || 1; return a.map((c) => c / l); };
+
+  function setFrame(raDeg, decDeg) {                  // north up, east left
+    const C = vec([raDeg, decDeg]);
+    let N = [-Math.sin(decDeg * DEG) * Math.cos(raDeg * DEG), -Math.sin(decDeg * DEG) * Math.sin(raDeg * DEG), Math.cos(decDeg * DEG)];
+    N = norm(N);
+    st.cam = { C, N, E: cross(N, C) };
+    syncCentre();
+  }
+  function syncCentre() { [st.ra, st.dec] = radec(st.cam.C); }
+
   // Screen px per unit of the projection plane: the view's half width covers fov/2.
   const R = () => (st.w / 2) / (2 * Math.tan((Math.min(st.fov, MAX_FOV) * DEG) / 4));
   function toScreen(raDeg, decDeg) {
-    const d0 = st.dec * DEG, a = decDeg * DEG, dl = (raDeg - st.ra) * DEG;
-    const cosc = Math.sin(d0) * Math.sin(a) + Math.cos(d0) * Math.cos(a) * Math.cos(dl);
+    const p = vec([raDeg, decDeg]);
+    const { C, E, N } = st.cam;
+    const cosc = dot(p, C);
     const k = 2 / Math.max(1e-6, 1 + cosc);
-    const x = k * Math.cos(a) * Math.sin(dl);
-    const y = k * (Math.cos(d0) * Math.sin(a) - Math.sin(d0) * Math.cos(a) * Math.cos(dl));
     const r = R();
-    return { x: st.w / 2 - x * r, y: st.h / 2 - y * r, front: cosc > BACK_COSC, cosc };
+    return { x: st.w / 2 - k * dot(p, E) * r, y: st.h / 2 - k * dot(p, N) * r, front: cosc > BACK_COSC, cosc };
   }
   function fromScreen(px, py) {
     const r = R();
     const x = -(px - st.w / 2) / r, y = -(py - st.h / 2) / r;
     const rho = Math.hypot(x, y);
     if (rho < 1e-12) return [st.ra, st.dec];
-    const c = 2 * Math.atan(rho / 2), d0 = st.dec * DEG;
+    const c = 2 * Math.atan(rho / 2);
     if (Math.cos(c) <= BACK_COSC) return null;
-    const dec = Math.asin(Math.cos(c) * Math.sin(d0) + (y * Math.sin(c) * Math.cos(d0)) / rho) / DEG;
-    const ra = st.ra + Math.atan2(x * Math.sin(c), rho * Math.cos(d0) * Math.cos(c) - y * Math.sin(d0) * Math.sin(c)) / DEG;
-    return [((ra % 360) + 360) % 360, dec];
+    const { C, E, N } = st.cam, s = Math.sin(c) / rho;
+    return radec(C.map((ci, i) => Math.cos(c) * ci + s * (x * E[i] + y * N[i])));
   }
+  setFrame(ra, dec);
   const proj = { toScreen, fromScreen, view: () => api.view() };
 
   // ----- tiles -----
@@ -620,20 +639,40 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   let pinch = null;
   const rel = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
 
-  function panBy(dx, dy) {
-    const k = 1 / R() / DEG;                         // deg per px at the centre
-    st.dec = Math.max(-90, Math.min(90, st.dec + dy * k));
-    st.ra = (((st.ra + (dx * k) / Math.max(0.05, Math.cos(st.dec * DEG))) % 360) + 360) % 360;
+  // ----- navigation = turning the camera frame (no RA/Dec steps: poles behave like anywhere) -----
+
+  /** Turn the camera by the rotation that carries sky point b onto sky point a. Then what was
+   *  under b's screen position shows a. */
+  function rotateCentre(a, b) {
+    const k = cross(b, a);
+    const sin = Math.hypot(...k), cos = dot(a, b);
+    if (sin < 1e-12) return;
+    const u = k.map((c) => c / sin);
+    const rot = (v) => { const ud = dot(u, v), uxv = cross(u, v); return v.map((vi, i) => vi * cos + uxv[i] * sin + u[i] * ud * (1 - cos)); };
+    const C = norm(rot(st.cam.C));
+    let N = rot(st.cam.N);
+    N = norm(N.map((ni, i) => ni - dot(N, C) * C[i]));              // keep the frame orthonormal
+    st.cam = { C, N, E: cross(N, C) };
+    syncCentre();
+  }
+
+  /** Drag: the sky point under `from` ends up under `to` (grab-and-turn, works over the poles). */
+  function dragTo(from, to) {
+    const a = fromScreen(from[0], from[1]), b = fromScreen(to[0], to[1]);
+    if (!a || !b) return;
+    rotateCentre(vec(a), vec(b));
     changed();
   }
 
+  /** Move the content by (dx, dy) px, anchored at the screen centre (keys). */
+  function panBy(dx, dy) { dragTo([st.w / 2, st.h / 2], [st.w / 2 + dx, st.h / 2 + dy]); }
+
+  /** Zoom by factor, keeping the sky point under (px, py) in place. */
   function zoomAt(factor, px, py) {
     const before = fromScreen(px, py);
     st.fov = Math.max(MIN_FOV, Math.min(MAX_FOV, st.fov * factor));
-    if (before) {
-      const s = toScreen(before[0], before[1]);
-      if (s.front) panBy(px - s.x, py - s.y);        // keep the point under the cursor in place
-    }
+    const after = fromScreen(px, py);
+    if (before && after) rotateCentre(vec(before), vec(after));
     changed();
   }
 
@@ -655,12 +694,15 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     }
     const prev = pointers.get(e.pointerId), now = rel(e);
     pointers.set(e.pointerId, now);
-    if (pointers.size === 1) panBy(now[0] - prev[0], now[1] - prev[1]);
+    if (pointers.size === 1) dragTo(prev, now);
     else if (pinch && pointers.size === 2) {
       const [a, b] = [...pointers.values()];
       const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
-      if (d > 0) zoomAt(pinch.d / d, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+      const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      if (pinch.mid) dragTo(pinch.mid, mid);           // two fingers move the map as well
+      if (d > 0) zoomAt(pinch.d / d, mid[0], mid[1]);
       pinch.d = d;
+      pinch.mid = mid;
     }
   });
   const up = (e) => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch = null; };
@@ -677,7 +719,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     const step = 60;
     const keys = { ArrowLeft: () => panBy(step, 0), ArrowRight: () => panBy(-step, 0), ArrowUp: () => panBy(0, step),
       ArrowDown: () => panBy(0, -step), "+": () => zoomAt(0.7, st.w / 2, st.h / 2), "=": () => zoomAt(0.7, st.w / 2, st.h / 2),
-      "-": () => zoomAt(1 / 0.7, st.w / 2, st.h / 2) };
+      "-": () => zoomAt(1 / 0.7, st.w / 2, st.h / 2), n: () => api.northUp() };
     if (keys[e.key]) { e.preventDefault(); e.stopPropagation(); keys[e.key](); }
   });
 
@@ -719,17 +761,25 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
         allSharp: s.visible > 0 && s.sharp + s.empty === s.visible, loads: st.loads, queued: st.queue.length, errors: st.errors };
     },
     goTo(ra, dec, fov) {
-      st.ra = ((Number(ra) % 360) + 360) % 360;
-      st.dec = Math.max(-90, Math.min(90, Number(dec)));
+      setFrame(((Number(ra) % 360) + 360) % 360, Math.max(-90, Math.min(90, Number(dec))));
       if (fov) st.fov = Math.max(MIN_FOV, Math.min(MAX_FOV, fov));
       changed();
     },
-    view: () => ({ ra: st.ra, dec: st.dec, fov: st.fov, width: st.w, height: st.h }),
+    /** Level the picture again: north up, east left, same centre and zoom. */
+    northUp() { setFrame(st.ra, st.dec); changed(); },
+    view: () => {
+      // roll: angle of true north from screen-up (0 = north up), for a compass / reset button
+      const P = [0, 0, 1], C = st.cam.C;
+      const n = P.map((pi, i) => pi - dot(P, C) * C[i]);
+      const roll = Math.hypot(...n) < 1e-9 ? 0 : Math.atan2(dot(n, st.cam.E), dot(n, st.cam.N)) / DEG;
+      return { ra: st.ra, dec: st.dec, fov: st.fov, width: st.w, height: st.h, roll };
+    },
     on(ev, fn) { st.listeners[ev]?.push(fn); },
     addDrawHook(fn) { st.hooks.push(fn); markDirty(); },
     redraw: markDirty,
     get base() { return st.base; },
     proj,
+    _dragTo: dragTo, _zoomAt: zoomAt,       // for web/tests/projection_check.mjs
   };
   resize();
   return api;
