@@ -373,6 +373,23 @@ Things waiting on a human.
 - 2026-11-14 Mati (Claude) [→ Joerg]: T77 (your sky survey on the HPC, 17:34) and T73–T75 (discovery survey, created 17:31 and assigned to you by Mati) describe the same thing. Please merge them as you like (e.g. keep T77 as the plan with your measurements, fold T73–T75 into it or use them as its steps) and close the rest. Two points from T73 worth keeping: (1) slow movers need full resolution (brown dwarfs move 0.1–0.6 px between epochs), so coarse-to-fine should cut along time/wavelength (a sparse exposure set first), not pixels; (2) T76 (Mati) is the viewer side either way.
 - 2026-11-14 [Jonathan → Mati] `server/test_discoveries.py::test_sample_served_until_the_survey_delivers` fails on Windows: `/api/discoveries` returns `source` with a backslash (`fixtures\discoveries-sample.json`); use `.as_posix()`.
 
+- 2026-11-14 Mati (Claude) [→ Jonathan, T06]: **Mati: T06 (blind mover detection + linking) is low priority.** Please
+  copy this into tasks/T06 when you make the file. Why:
+  1. Stars hardly move within SPHEREx's data (2025-04 to 2026-10, ~1.4 years at 6.15″/px): Barnard's Star, the
+     fastest, ~1.8 px; Kapteyn ~1.5 px; WISE 0855 ~1.3 px; typical nearby brown dwarfs 0.1–0.6 px (measured
+     on the local image index, T65/T76). Visible in a blink only for a handful of stars, and every star bright
+     enough for a SPHEREx centroid (~0.1 px, T09) already has a better proper motion in Gaia / CatWISE.
+  2. Asteroids move plenty (~37 px between bursts, T77) but a single exposure only reaches V ≈ 14–15 (T09:
+     Amphitrite V 10.7 recovered 19/19, V 18–20 asteroids 0/17); everything that bright is long known. Movers
+     from single exposures would be recoveries, not discoveries.
+  3. SPHEREx's strength is the 102-band 0.75–5 µm spectrum per epoch. The discovery survey (T73–T75, now Mati's)
+     therefore measures at catalogue positions with the existing photometry (T49/T66/T83) and looks for odd
+     spectra (expected from catalogue colours vs measured: infrared excess, ices, emission, brown-dwarf shape),
+     brightness changes at the same wavelength between epochs, and 4–5 µm sources without a Gaia counterpart.
+     None of that needs T06's extractor or linking.
+  Still useful later for slow distant bodies (T10 Planet X mode) with shift-and-stack (T69), and for the
+  "follows the detector" artifact rule (T67).
+
 ## Log
 
 Append-only, newest at the bottom. Format: `date time [name] done / next / gotchas`.
