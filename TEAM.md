@@ -38,9 +38,9 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
 | T01 | A: IRSA query: list all SPHEREx exposures covering an RA/Dec (SIA/TAP), with time, detector, access URL | Joerg | done | `joerg/T01-irsa-query` | `python -m pipeline.query --ra .. --dec ..`; COSMOS: 214 images, 3 epochs |
-| T02 | A: Download cutouts for one target into `data/`, with a cache so re-runs don't re-download | | open | | Needs T01 |
-| T03 | A: Align cutouts to one common WCS grid (north up) and get the wavelength at the target position per frame | | open | | Needs T02. Wavelength varies across a SPHEREx image |
-| T04 | A: Render frames to PNG/WebP and write `target.json` per CONTRACTS, validated against the schema | | open | | Needs T03. First real target = end-to-end milestone |
+| T02 | A: Download cutouts for one target into `data/`, with a cache so re-runs don't re-download | Jonathan | doing | `jonathan/T02-T04-build` | Needs T01 |
+| T03 | A: Align cutouts to one common WCS grid (north up) and get the wavelength at the target position per frame | Jonathan | doing | `jonathan/T02-T04-build` | Needs T02. Wavelength varies across a SPHEREx image |
+| T04 | A: Render frames to PNG/WebP and write `target.json` per CONTRACTS, validated against the schema | Jonathan | doing | `jonathan/T02-T04-build` | Needs T03. First real target = end-to-end milestone |
 | T05 | A: Batch-bake 3–5 demo targets and publish them to `web/targets/` (size budget in CONTRACTS) | | open | | Needs T04 and the target list from T10 |
 | T06 | B: Mover detection v0 on the fixture: source extraction per frame, match across frames, keep what moves | Jonathan | doing | `jonathan/T06-mover-detection` | Start on `fixtures/`, switch to real data after T04 |
 | T07 | B: JPL SB Identification cross-match: known small bodies in the field per frame time → `known_objects` | | open | | Needs SPHEREx position from Horizons (-163182) as observer |
@@ -53,11 +53,11 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T14 | C: Deploy: static viewer (e.g. GitHub Pages) + Live API on a host that runs Python, viewer pointed at it (contracts v0.3) | | open | | Needs T11, T18, T20. Reworded 2026-11-14 for live data (was: pre-baked targets, no live API calls) |
 | T15 | C: Submission text, data credits and AI-use disclosure | | open | | Needs official text in `docs/CHALLENGE.md` |
 | T16 | C: Demo video and slides | | open | | After feature freeze |
-| T17 | A: Compute wavelength-matched `pairs` across epochs (+ `bandwidth_um`) in `target.json` (contracts v0.2) | Joerg | open | | Part of T03/T04 output. Rule in CONTRACTS "Pair" |
+| T17 | A: Compute wavelength-matched `pairs` across epochs (+ `bandwidth_um`) in `target.json` (contracts v0.2) | | open | | Handed over by Joerg: best done inside T03/T04 (Jonathan). Working code: `pipeline/reference/align_render.py` |
 | T18 | C: Live API service: `GET /api/target?ra=&dec=&size=` builds (pipeline + detect) or serves from cache, progress while building, CORS (contracts v0.3) | Jonathan | done | `jonathan/T18-live-api` | `python -m server [--fixture]`, see `server/README.md`. Live mode works once `pipeline.build` (T02–T04) exists; until then `--fixture` |
 | T19 | A: Labels on the images: catalogue names/positions (SIMBAD, Gaia DR3 with proper motion) into `target.json` | Joerg | done | `joerg/T19-labels` | [task file](tasks/T19-labels.md). `pipeline/labels.py`; viewer side is T13 |
 | T20 | C: Viewer ↔ Live API: RA/Dec/size input, `?ra=&dec=&size=` in the page URL, request + poll with progress, load from `target_url`, quick picks for the official test fields (contracts v0.3) | Mati | done | `mati/T20-live-api-client` | [tasks/T20](tasks/T20-live-api-client.md). Run: `web/README.md` (API :8000, viewer :8080). Test fields in `web/presets.json` |
-| T21 | C: Everyone can run the viewer locally: one-command launcher (API + viewer), README run steps for Linux/macOS/Windows | Mati | doing | `mati/T21-run-kit` | [tasks/T21](tasks/T21-run-kit.md) |
+| T21 | C: Everyone can run the viewer locally: one-command launcher (API + viewer), README run steps for Linux/macOS/Windows | Mati | done | `mati/T21-run-kit` | [tasks/T21](tasks/T21-run-kit.md). `python web/dev.py`, setup in README "How to run" |
 | T22 | C: Movement paths in the viewer: line + tick per frame, early→late colour, current position + name, labelled exaggerated arrow for slow movers | Joerg | review | `joerg/T22-movement-paths` | [task file](tasks/T22-movement-paths.md). From the "Draw paths" idea |
 
 ## Decisions
@@ -147,6 +147,11 @@ Things waiting on a human.
   overlay, spectra, flag display. Resources tab and judging criteria still missing.
 - 2026-11-14 [Joerg → Mati] `labels` is in CONTRACTS v0.4 for T13 (overlay). Drawing suggestion
   and a working reference are in tasks/T19-labels.md, "Questions / needs from others".
+- 2026-11-14 [Joerg → Jonathan] Since you build T02-T04: (1) T17 (matched pairs + `bandwidth_um`)
+  is yours if you want it, it falls out of T03/T04; I released it. (2) Working exploration code for
+  cutouts, alignment, flags, wavelength/bandwidth, alpha PNGs and pairs is in `pipeline/reference/`
+  (README there). (3) After `target.json` is written, call `pipeline.labels.add_labels(target)`
+  (T19). (4) CLAUDE.md asks for a task file per task: T02-T04, T06, T10 don't have one yet.
 
 ## Log
 
@@ -202,3 +207,9 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   moved to epoch 2026.0 (Barnard's Star moved 4.5' since J2000; WISE 0855's position in the challenge
   text is its ~2010 one); T05 should warm the cache with exactly those. Fast stars move < 1 px
   (6.15"/px) per 6-month pass. Requests for Jonathan (fixture `center`) and T14 (https) in tasks/T20.
+- 2026-11-14 [Mati + Claude] Done: T21 merged. Everyone can run it: README "How to run" (venv, install,
+  `python web/dev.py`), checked from a fresh clone. `web/dev.py` starts API + viewer, opens the browser
+  (WSL-aware), serves only `web/` + `fixtures/`, stops both on Ctrl+C/SIGTERM, `--lan` for demos in the
+  room. The viewer now looks for the API on port 8000 of the page's host. Gotchas: plain
+  `python -m http.server` shares the whole repo with your network, use `--bind 127.0.0.1`; `pytest`/
+  `httpx` (server tests) are not in any requirements file (question for Jonathan in tasks/T21).
