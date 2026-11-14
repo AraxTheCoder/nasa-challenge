@@ -19,13 +19,12 @@ visible without blinking: a trail image and, later, shift-and-stack along a moti
 - [x] Catalogue labels that follow their object frame by frame, with proper motion (T19)
 - [~] Paths in the viewer: line, tick per frame, early→late colour, exaggerated arrow for slow
       movers (T22, waiting for a visual check)
-- [ ] Motion summary per label: total shift over the series in px and ″, rate (″/yr or ″/h),
-      direction (PA east of north). Additive field in `target.json` (CONTRACTS change + Decisions line)
-- [ ] Motion class per object, rule-based (rough numbers in TEAM.md Ideas): still (< 0.3 px over the
+- [x] Motion summary per label: `pipeline/motion.py`, `labels[].motion` (CONTRACTS v0.5)
+- [x] Motion class per label (`still`, `proper motion`, `fast mover`, `distant body?`), rule-based (rough numbers in TEAM.md Ideas): still (< 0.3 px over the
       series), nearby star / brown dwarf (moves between epochs only, ≲ 10″/yr), asteroid-like (fast,
       seen in one burst only, ~150 px/day for the main belt), distant solar-system body (big jump
       between epochs, slow drift within one). For detections: agree the rule with Jonathan (T06/T08)
-- [ ] Show the class next to the name in the viewer (with T22's layer)
+- [x] Show the class next to the name in the viewer + in the hover info
 - [ ] Object inspector: click an object → side panel with coordinates, catalogue matches (SIMBAD,
       Gaia), observation history per frame (time, epoch, wavelength, position, and brightness at
       that spot), motion data; Barnard's Star as the demo object. Grows out of T22's pinned tooltip;
@@ -38,6 +37,11 @@ visible without blinking: a trail image and, later, shift-and-stack along a moti
 - [ ] Try it on the official test targets once `build_target` produces real frames (T02–T04)
 
 ## Findings
+- Motion classes on the real Barnard's Star field: Barnard's Star (SIMBAD and its Gaia twin) =
+  `proper motion`, 10.39″/yr toward N (catalogue: 10.39); the other 105 objects `still`. The
+  fixture's fake asteroid = `fast mover`, 3.1″/h. 5 unit tests in `pipeline/test_motion.py`.
+- A unit test caught that a body jumping away and back would have counted as `still` (first and
+  last position close together); `still` now uses the farthest excursion (`reach_arcsec`).
 - From T19: label accuracy 0.4″ (0.07 px) on stationary stars; Barnard's Star moves 10.4″/yr
   = 1.7 px over our year of data, so its path is short and needs the exaggerated arrow.
 - Rough motion scales (my own estimates, not yet measured): main-belt asteroid ~0.25°/day;

@@ -1,4 +1,7 @@
-# Contracts (v0.4)
+# Contracts (v0.5)
+
+v0.5 adds an optional `motion` summary to each label (see "Label"), from `pipeline.motion`.
+Additive; `schema_version` stays `"0.2"`. See TEAM.md Decisions, 2026-11-14.
 
 v0.4 adds optional `labels` to `target.json`: catalogue names and positions (SIMBAD, Gaia DR3),
 moved to each frame's time. Additive: `schema_version` stays `"0.2"`, old readers ignore the field.
@@ -138,6 +141,14 @@ view (C) should prefer pairs over arbitrary frame combinations.
 - A label marks a **catalogued** object, not a detection. Detections stay in `detections` (B).
 - The same object can appear twice (SIMBAD and Gaia). The UI may hide a Gaia label within 2 px
   of a named SIMBAD label.
+- `motion` (v0.5, optional, may be `null` with < 2 positions): summary over the whole series,
+  written by `pipeline.motion.summarize(positions, frames, pixel_scale_arcsec)`:
+  `{shift_arcsec, shift_px, reach_arcsec, days, rate_arcsec_per_yr, max_rate_within_epoch_arcsec_per_hr, pa_deg,
+  direction, class, note}`. `pa_deg` is east of north, `direction` its compass point. `class` is one
+  of `still`, `proper motion`, `fast mover`, `distant body?`; `note` says why in plain words. The
+  `shift_*` is first → last position; `reach_arcsec` is the farthest it ever gets from the first
+  one (a looping body can end near its start). The
+  same function works for `known_objects[].positions` and `detections[].track` (B may use it).
 
 ### Image and coordinate conventions
 

@@ -32,7 +32,7 @@ function collect(t) {
   for (const l of t.labels ?? []) {
     out.push({
       group: l.named ? "names" : "catalogue", name: l.name, info: l.kind, source: l.source, mag: l.mag,
-      otype: l.otype, pm: l.pm_mas_yr, positions: l.positions ?? [], synthetic: false,
+      otype: l.otype, pm: l.pm_mas_yr, motion: l.motion, positions: l.positions ?? [], synthetic: false,
     });
   }
   for (const k of t.known_objects ?? []) {
@@ -128,7 +128,8 @@ function draw() {
     hits.push(svg("circle", { cx: cur.x, cy: cur.y, r: px(Math.max(ring + 3, 8)), class: "path-hit", "data-obj": st.objects.indexOf(o) }));
     if (o.group !== "catalogue") {
       const right = cur.x < (st.target.image?.width ?? 1) * 0.7;
-      const text = o.name + (o.synthetic ? " · synthetic" : "");
+      const cls = o.motion?.class && o.motion.class !== "still" ? ` · ${o.motion.class}` : "";
+      const text = o.name + cls + (o.synthetic ? " · synthetic" : "");
       names.push(svg("text", {
         x: cur.x + (right ? 1 : -1) * px(ring + 5), y: cur.y + px(4), "text-anchor": right ? "start" : "end",
         class: `path-name is-${o.group}`, "font-size": px(12),
@@ -176,6 +177,12 @@ function fillTip(o) {
   if (o.pm != null) {
     const pa = o.extent > 0 ? paDeg(last.x - first.x, last.y - first.y) : null;
     rows.push(["Proper motion", `${(o.pm / 1000).toFixed(o.pm >= 1000 ? 2 : 3)}″/yr` + (pa != null && o.pm > 20 ? ` toward ${compass(pa)} (${pa.toFixed(0)}°)` : "")]);
+  }
+  if (o.motion?.class) {
+    const m = o.motion, rate = m.class === "fast mover" ? `${m.max_rate_within_epoch_arcsec_per_hr.toFixed(1)}″/h`
+      : m.rate_arcsec_per_yr != null && m.class !== "still" ? `${m.rate_arcsec_per_yr.toFixed(2)}″/yr` : "";
+    rows.push(["Motion", `${m.class}${rate ? ` · ${rate}` : ""}${m.direction && m.class !== "still" ? ` toward ${m.direction}` : ""}`]);
+    rows.push(["", m.note]);
   }
   if (o.rate != null) rows.push(["Rate", `${o.rate.toFixed(1)}″/h`]);
   if (o.score != null) rows.push(["Score", o.score.toFixed(2)]);
