@@ -35,7 +35,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import build
+from . import build, s3
 from .s3 import IBE_PREFIX, S3_ROOT
 
 APERTURE_PX = 3.0
@@ -133,7 +133,10 @@ def measure(target: dict, ra: float, dec: float, raw_root: Path | None = None) -
 
 SPECTRUM_CUT_DEG = 0.05      # 3': room for the annulus (8 px) around the star, little over-read
 SPECTRA_ROOT = Path("data/spectra")
-SPECTRUM_THREADS = 24        # S3 from Europe: ~4 MB/s per connection, ~40 MB/s with 32 in parallel
+# T83: a 3' cutout is ~0.6 MB in 7 dependent range requests (~2 s from Europe, all latency), so many
+# images at once. Read the bucket directly: the cutout VM adds a hop and was answering 502s, and the
+# IRSA cutout fallback takes seconds per image; a few missing points don't matter for a spectrum.
+SPECTRUM_THREADS = 64
 _spectra_lock = threading.Lock()
 
 
@@ -141,9 +144,67 @@ def spectrum_cache(ra: float, dec: float) -> Path:
     return SPECTRA_ROOT / f"{ra:.4f}_{dec:+.4f}.json"
 
 
-def measure_all(ra: float, dec: float, progress=None, threads: int = SPECTRUM_THREADS) -> dict:
+SPECTRUM_PROCESSES = 16      # T83: the cutouts' CPU part (FITS headers, WCS, RICE) holds the GIL; spread it
+SPECTRUM_BATCH = 8           # images per task: 16 processes x 8 threads = 128 requests in flight (latency-bound)
+_proc_pool = None
+_proc_lock = threading.Lock()
+
+
+def _spectrum_cutout(url: str, ra: float, dec: float) -> Path:
+    hit = build.cached_cutout(url, ra, dec, SPECTRUM_CUT_DEG)
+    if hit:
+        return hit
+    d = build._cutout_dir(url, ra, dec, build.RAW_ROOT)
+    d.mkdir(parents=True, exist_ok=True)
+    dest = d / f"{SPECTRUM_CUT_DEG:.4f}.fits"
+    try:
+        return s3.fetch_cutout(url, ra, dec, SPECTRUM_CUT_DEG, dest)
+    except LookupError:
+        raise
+    except Exception as ex:  # noqa: BLE001
+        if not s3.is_not_found(ex):
+            raise
+        moved = s3.find_in_bucket(url)          # reprocessed: a listing of the bucket finds it (~1 s)
+        if not moved or moved == url:
+            raise LookupError(f"not in the bucket: {url.rsplit('/', 1)[-1]}") from ex
+        return s3.fetch_cutout(moved, ra, dec, SPECTRUM_CUT_DEG, dest)
+
+
+def _spectrum_point(e, ra: float, dec: float) -> tuple[str, object]:
+    """('row', dict) | ('missing', frame id) | ('lost', exposure) for one exposure."""
+    fid = f"{e.obs_id}-D{e.detector}"
+    try:
+        m = measure_cutout(_spectrum_cutout(e.fits_url, ra, dec), ra, dec)
+    except LookupError:
+        return "missing", fid
+    except Exception:  # noqa: BLE001 - path moved (reprocessed): looked up afterwards
+        return "lost", e
+    if m is None:
+        return "missing", fid
+    return "row", {"frame_id": fid, "epoch": e.epoch, "mjd": round(e.mjd_mid, 6), "time_utc": e.time_utc,
+                   "detector": e.detector, **m}
+
+
+def _spectrum_batch(exposures: list, ra: float, dec: float) -> list[tuple[str, object]]:
+    with ThreadPoolExecutor(len(exposures)) as pool:
+        return list(pool.map(lambda e: _spectrum_point(e, ra, dec), exposures))
+
+
+def _pool():
+    global _proc_pool
+    with _proc_lock:
+        if _proc_pool is None:
+            import multiprocessing
+            from concurrent.futures import ProcessPoolExecutor
+            _proc_pool = ProcessPoolExecutor(SPECTRUM_PROCESSES, mp_context=multiprocessing.get_context("forkserver"))
+        return _proc_pool
+
+
+def measure_all(ra: float, dec: float, progress=None, threads: int = SPECTRUM_THREADS,
+                processes: int | None = None) -> dict:
     """T66: photometry at (ra, dec) on every exposure that covers it. progress(done, total) while running.
-    Same answer shape as measure(); frame_id = '<obs_id>-D<detector>' (these are not the field's frames)."""
+    Same answer shape as measure(); frame_id = '<obs_id>-D<detector>' (these are not the field's frames).
+    processes: 0 = threads only in this process (tests); default SPECTRUM_PROCESSES worker processes (T83)."""
     ra, dec = round(ra % 360, 4), round(dec, 4)
     cached = spectrum_cache(ra, dec)
     if cached.is_file():
@@ -151,32 +212,35 @@ def measure_all(ra: float, dec: float, progress=None, threads: int = SPECTRUM_TH
     t0 = time.time()
     exposures, _ = build.cached_exposures(ra, dec)
     total = len(exposures)
-    done, rows, missing, lock = [0], [], [], threading.Lock()
+    done, rows, missing, lost = 0, [], [], []
 
-    def one(e) -> dict | None:
-        path = build.fetch(e.fits_url, ra, dec, SPECTRUM_CUT_DEG, min_deg=SPECTRUM_CUT_DEG)
-        m = measure_cutout(path, ra, dec)
-        return None if m is None else {
-            "frame_id": f"{e.obs_id}-D{e.detector}", "epoch": e.epoch, "mjd": round(e.mjd_mid, 6),
-            "time_utc": e.time_utc, "detector": e.detector, **m}
+    def take(results):
+        nonlocal done
+        for kind, v in results:
+            {"row": rows, "missing": missing, "lost": lost}[kind].append(v)
+        done += len(results)
+        if progress:
+            progress(done, total)
 
-    lost = []
-    with ThreadPoolExecutor(threads) as pool:
-        futs = {pool.submit(one, e): e for e in exposures}
-        for f in as_completed(futs):
-            e = futs[f]
-            try:
-                r = f.result()
-                (rows.append(r) if r else missing.append(f"{e.obs_id}-D{e.detector}"))
-            except LookupError:
-                missing.append(f"{e.obs_id}-D{e.detector}")
-            except Exception:  # noqa: BLE001 - path moved (reprocessed): resolved below
-                lost.append(e)
-            with lock:
-                done[0] += 1
-                if progress:
-                    progress(done[0], total)
-    if lost:   # reprocessed images live under another path (l2b_retry): look them up, one more try
+    procs = SPECTRUM_PROCESSES if processes is None else processes
+    if procs:
+        global _proc_pool
+        batches = [exposures[i:i + SPECTRUM_BATCH] for i in range(0, total, SPECTRUM_BATCH)]
+        try:
+            futs = [_pool().submit(_spectrum_batch, b, ra, dec) for b in batches]
+            for f in as_completed(futs):
+                take(f.result())
+        except Exception as ex:  # noqa: BLE001 - e.g. BrokenProcessPool: start over with threads
+            print(f"spectrum worker processes failed ({type(ex).__name__}), using threads", file=sys.stderr)
+            with _proc_lock:
+                _proc_pool = None
+            done, rows[:], missing[:], lost[:] = 0, [], [], []
+            procs = 0
+    if not procs:
+        with ThreadPoolExecutor(threads) as pool:
+            for f in as_completed([pool.submit(_spectrum_point, e, ra, dec) for e in exposures]):
+                take([f.result()])
+    if lost:   # reprocessed images under another path the bucket listing didn't find: TAP lookup, one more try
         try:
             from .mirror import resolve_urls
             fixed = resolve_urls([e.publisher_did for e in lost])
@@ -184,13 +248,11 @@ def measure_all(ra: float, dec: float, progress=None, threads: int = SPECTRUM_TH
             fixed = {}
         for e in lost:
             url = fixed.get(e.publisher_did)
-            try:
-                if not url or url == e.fits_url:
-                    raise LookupError
+            if url and url != e.fits_url:
                 e.fits_url = url
-                r = one(e)
-                (rows.append(r) if r else missing.append(f"{e.obs_id}-D{e.detector}"))
-            except Exception:  # noqa: BLE001
+                kind, v = _spectrum_point(e, ra, dec)
+                (rows.append(v) if kind == "row" else missing.append(f"{e.obs_id}-D{e.detector}"))
+            else:
                 missing.append(f"{e.obs_id}-D{e.detector}")
     rows.sort(key=lambda r: (r["mjd"], r["detector"]))
     out = {"ra_deg": ra, "dec_deg": dec, "aperture_px": APERTURE_PX, "annulus_px": list(ANNULUS_PX),
