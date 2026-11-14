@@ -29,9 +29,13 @@ function objectsOf(t) {
   return [...dets, ...missed].sort((a, b) => ORDER[a.status] - ORDER[b.status] || (b.score ?? 0) - (a.score ?? 0));
 }
 
-/** Did a detection step run on this target? (detect appends to provenance, CONTRACTS "detect".) */
+/**
+ * Did a detection step run on this target? detect appends to provenance (CONTRACTS "detect").
+ * Match the service name only, as whole words: the IRSA entry's query says "per epoch+detector".
+ */
 const detectionRan = (t) =>
-  (t.detections?.length ?? 0) > 0 || (t.provenance ?? []).some((p) => /detect|sbident|jpl/i.test(`${p.service} ${p.query}`));
+  (t.detections?.length ?? 0) > 0 ||
+  (t.provenance ?? []).some((p) => /\bdetect(ion|\.run)?\b|\bsb[-_ ]?ident|\bjpl\b/i.test(p.service ?? ""));
 
 function chip(status) {
   const text = { unknown: "unknown", known: "known", missed: "known · not detected", artifact: "artifact" }[status] ?? status;

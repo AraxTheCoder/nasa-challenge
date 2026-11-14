@@ -56,8 +56,14 @@ _t = dict(_fixture, id="multi-epoch", name="Synthetic multi-epoch test field (NO
                  {"a": "f001", "b": "f007", "detector": 2, "dwave_um": 0.005, "dt_days": 360.0},
                  {"a": "f003", "b": "f006", "detector": 3, "dwave_um": 0.01, "dt_days": 179.0}])
 (MULTI / "multi-epoch" / "target.json").write_text(json.dumps(_t))
+# Same frames, no detection run, provenance worded like a real build ("per epoch+detector").
+_nd = dict(_t, id="no-detect", detections=[], known_objects=[], provenance=[
+    {"service": "IRSA SPHEREx cutouts", "query": "2 per epoch+detector of 358 images; 0 failed", "retrieved_utc": "2026-11-14T00:00:00Z"}])
+shutil.copytree(MULTI / "multi-epoch" / "frames", MULTI / "no-detect" / "frames")
+(MULTI / "no-detect" / "target.json").write_text(json.dumps(_nd))
 (MULTI / "index.json").write_text(json.dumps({"schema_version": "0.1", "targets": [
-    {"id": "multi-epoch", "name": _t["name"], "synthetic": True, "ra_deg": 150.0, "dec_deg": 2.2, "n_frames": 9}]}))
+    {"id": "multi-epoch", "name": _t["name"], "synthetic": True, "ra_deg": 150.0, "dec_deg": 2.2, "n_frames": 9},
+    {"id": "no-detect", "name": _t["name"] + " without detection", "synthetic": True, "ra_deg": 150.0, "dec_deg": 2.2, "n_frames": 9}]}))
 
 API, WEB = "http://127.0.0.1:8001", "http://127.0.0.1:8081/web/"
 Q = "api=" + API
@@ -331,6 +337,11 @@ try:
         q.locator("#objects-list .obj-row").first.click()
         check(q.locator("#focus-layer .focus-ring").count() == 0, "clicking again clears the focus")
         q.screenshot(path=str(out / "t13-objects.png"), full_page=True)
+        q.goto(WEB + "?data=../data/test-targets/&target=no-detect")
+        wait_loaded(q)
+        q.wait_for_function("document.querySelector('#objects-summary').textContent.length > 0")
+        check("has not run" in q.text_content("#objects-summary"),
+              f"no detection run: headline says so, 'detector' in provenance doesn't fool it ({q.text_content('#objects-summary')})")
         check(not qerr, f"T13: no page errors {qerr}")
 
         # 9. phone width
