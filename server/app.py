@@ -6,8 +6,11 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
+import json
+
+from . import hips
 from .builder import REPO, Builder
 from .coords import CoordError, parse_dec, parse_ra, parse_size, target_id
 
@@ -62,6 +65,40 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
         if not path.is_file():
             raise HTTPException(404)
         return FileResponse(path, headers={"Cache-Control": "public, max-age=86400"})
+
+    # -- T32: per-epoch HiPS tiles for Aladin Lite ------------------------------------------------
+
+    def _target(tid: str) -> dict:
+        path = builder.target_dir(tid) / "target.json" if _ID.match(tid) else None
+        if path is None or not path.is_file():
+            raise HTTPException(404, "target not built")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    @app.get("/api/hips/{tid}")
+    def hips_layers(tid: str):
+        t = _target(tid)
+        return {"id": tid, "synthetic": bool(t.get("synthetic")), "layers": hips.layers(tid, t)}
+
+    @app.get("/api/hips/{tid}/e{ep}/properties")
+    def hips_properties(tid: str, ep: int):
+        t = _target(tid)
+        if ep not in hips.epochs(t):
+            raise HTTPException(404)
+        return PlainTextResponse(hips.properties(tid, t, ep))
+
+    @app.get("/api/hips/{tid}/e{ep}/Norder{order}/Dir{d}/Npix{name}")
+    def hips_tile(tid: str, ep: int, order: int, d: int, name: str):
+        if not name.endswith(".png") or not 0 <= order <= hips.HIPS_ORDER:
+            raise HTTPException(404)
+        _target(tid)
+        try:
+            npix = int(name[:-4])
+        except ValueError:
+            raise HTTPException(404) from None
+        png = hips.tile_png(builder.target_dir(tid), ep, order, npix)
+        if png is None:
+            return Response(status_code=404, headers={"Cache-Control": "public, max-age=3600"})
+        return Response(png, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
 
     @app.get("/api/health")
     def health():

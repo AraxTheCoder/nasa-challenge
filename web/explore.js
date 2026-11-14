@@ -108,19 +108,26 @@ export function markField(ra, dec, sizeArcmin) {
   fieldOverlay.add(A.polyline(pts));
 }
 
-/** T32: per-epoch HiPS from our Live API. layers: [{epoch, label, url}] */
+/** T32: per-epoch HiPS from our Live API. layers: [{epoch, label, url (absolute)}].
+ * All epochs are added as overlay layers at once and switched by opacity, so blinking is instant
+ * once their tiles are loaded (requirement R2). */
 export function setEpochLayers(layers) {
-  epochLayers = layers.map((l) => ({ ...l, layer: A.HiPS(l.url, { name: l.label, imgFormat: "png" }) }));
+  hideEpochs();
+  const make = A.HiPS || A.imageHiPS;
+  epochLayers = layers.map((l, i) => {
+    const layer = make(l.url, { name: l.label, imgFormat: "png" });
+    aladin.setOverlayImageLayer(layer, `epoch${i}`);
+    aladin.getOverlayImageLayer(`epoch${i}`)?.setOpacity(i === 0 ? 1 : 0);
+    return { ...l, name: `epoch${i}` };
+  });
   return epochLayers;
 }
 
 export function showEpoch(i) {
-  const l = epochLayers[i];
-  if (!aladin || !l) return;
-  aladin.setOverlayImageLayer(l.layer, "epoch");
-  aladin.getOverlayImageLayer("epoch")?.setOpacity(1);
+  epochLayers.forEach((l, j) => aladin?.getOverlayImageLayer(l.name)?.setOpacity(j === i ? 1 : 0));
 }
 
 export function hideEpochs() {
-  aladin?.removeImageLayer?.("epoch");
+  epochLayers.forEach((l) => aladin?.removeImageLayer?.(l.name));
+  epochLayers = [];
 }

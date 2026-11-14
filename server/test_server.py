@@ -78,3 +78,42 @@ def test_cors_and_errors(client):
     assert client.get("/api/jobs/nope").status_code == 404
     assert client.get("/api/targets/..%2f/target.json").status_code == 404
     assert client.get("/api/targets/c1-p1-s5/frames/..%2ftarget.json").status_code == 404
+
+
+def test_hips_layers_and_tiles(client):
+    import astropy.units as u
+    from astropy_healpix import HEALPix
+
+    body = _wait_ready(client, client.get("/api/target", params={"ra": "150", "dec": "2.2", "size": "5"}).json())
+    t = client.get(body["target_url"]).json()
+    h = client.get(f"/api/hips/{t['id']}").json()
+    assert h["synthetic"] is True and [l["epoch"] for l in h["layers"]] == sorted({f["epoch"] for f in t["frames"]})
+    url = h["layers"][0]["url"]
+    props = client.get(f"{url}/properties").text
+    assert "hips_order           = 7" in props and "SYNTHETIC" in props
+    # the tile containing the field centre has data; one on the other side of the sky doesn't
+    c = t["center"]
+    for order in (7, 4):
+        n = int(HEALPix(nside=2 ** order, order="nested").lonlat_to_healpix(c["ra_deg"] * u.deg, c["dec_deg"] * u.deg))
+        r = client.get(f"{url}/Norder{order}/Dir{(n // 10000) * 10000}/Npix{n}.png")
+        assert r.status_code == 200 and r.content[:4] == b"\x89PNG"
+    far = int(HEALPix(nside=2 ** 7, order="nested").lonlat_to_healpix((c["ra_deg"] + 180) * u.deg, -c["dec_deg"] * u.deg))
+    assert client.get(f"{url}/Norder7/Dir0/Npix{far}.png").status_code == 404
+
+
+def test_hips_pixel_lands_on_field_centre(tmp_path):
+    """The tile pixel that maps to the field centre must take its value from the grid centre."""
+    import astropy.units as u
+    import numpy as np
+    from astropy_healpix import HEALPix
+    from server import hips
+
+    order = 7
+    ra, dec = 150.0, 2.2
+    n = int(HEALPix(nside=2 ** order, order="nested").lonlat_to_healpix(ra * u.deg, dec * u.deg))
+    sub = int(HEALPix(nside=2 ** (order + 9), order="nested").lonlat_to_healpix(ra * u.deg, dec * u.deg))
+    flat = np.nonzero((n * 512 * 512 + hips._XY).ravel() == sub)[0]
+    assert len(flat) == 1
+    row, col = divmod(int(flat[0]), 512)
+    lon, lat = HEALPix(nside=2 ** (order + 9), order="nested").healpix_to_lonlat(n * 512 * 512 + int(hips._XY[row, col]))
+    assert abs(lon.to_value(u.deg) - ra) < 3 / 3600 and abs(lat.to_value(u.deg) - dec) < 3 / 3600

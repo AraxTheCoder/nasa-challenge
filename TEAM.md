@@ -132,6 +132,9 @@ Dated, one line each, with why.
   direction, class `still` / `proper motion` / `fast mover` / `distant body?`, plain-words note) from
   the new `pipeline/motion.py`. Why: the viewer can say *how* something moves, not just where it is
   (T23). `summarize()` takes any per-frame positions, so B can reuse it for detections.
+- 2026-11-14 [Jonathan] CONTRACTS v0.6: Live API serves per-epoch HiPS tiles (`/api/hips/...`, T32) so
+  Aladin Lite can blink epochs in the map. Why: requirement R2 (epoch switch <= 0.1 s) in the
+  explore view; additive, nothing existing changes.
 
 ## Ideas
 
