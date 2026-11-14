@@ -10,6 +10,7 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `viewer.js` | frame viewer: stacks the frames of one `target.json`, A/B blink, play as video, pairs + wavelength filter, frame table |
 | `timeline.js` | epoch timeline: one panel per epoch, y = wavelength (T12) |
 | `diff.js` | difference view A − B (T43) |
+| `lambda.js`, `lampick.js` | type an exact wavelength (T78): "Frames at λ" picks A/B closest to it, the map's µm box picks the closest of 102 channels; `?lam=` in links |
 | `spectrum.js` | spectrum context (T63): star-like baseline per epoch, points that leave it, plain-words hints, feature list; pure, checked by `tests/spectrum_check.mjs` |
 | `trail.js` | trail view: brightest pixel over the frames, movers leave a row of dots (T23) |
 | `paths.js`, `paths.css` | names and motion paths on the image, label priority + hover (T22, T34) |
@@ -56,6 +57,7 @@ URL parameters:
   e.g. `?data=../fixtures/targets/`. Add `&target=<id>` to pick a target: `demo-epochs` has every
   feature (3 epochs, pairs, labels, known / unknown / artifact objects), `demo-synthetic` is minimal.
 - `?explore=0` no sky map (embeds, slow connections, tests). `?debug=1` sky-map tile outlines.
+- `?lam=2.17` a wavelength in µm (T78): the blink viewer shows the frames closest to it, the sky map the closest channel.
 - `?tip=1` / `?tip=0` force the RA/Dec help bubble on / off (it is switched off by default, T29).
 
 Keys: `Space` blink on/off, `P` play the series, `D` difference A − B, `X` flip A/B, `M` match B to
