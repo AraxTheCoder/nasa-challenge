@@ -25,6 +25,7 @@ const state = {
   bId: null,
   shownId: null,
   playing: false,
+  playMode: null,    // "blink" (A/B) or "film" (the whole series, T45) while playing
   intervalMs: 500,
   timer: null,
 };
@@ -439,18 +440,63 @@ function flip() {
   show(state.shownId === state.aId ? state.bId : state.aId);
 }
 
-function startBlink() {
-  if (state.playing || !state.target) return;
-  state.playing = true;
-  if (state.shownId !== state.aId && state.shownId !== state.bId) show(state.aId);
-  state.timer = setInterval(flip, state.intervalMs);
-  updatePlayButton();
-  document.dispatchEvent(new CustomEvent("viewer:blink", { detail: { playing: true } }));
+/**
+ * T45 film: the frames "Play all" runs through, recomputed on every tick so filter changes apply.
+ * "all": every frame inside the wavelength/detector filter, in time order.
+ * "epoch": one frame per epoch, the one closest to A's wavelength (same detector preferred).
+ */
+function filmFrames() {
+  const visible = visibleFrames();
+  if ($("#film-mode").value !== "epoch") return visible;
+  const a = frameById(state.aId) ?? visible[0];
+  if (!a) return [];
+  const cost = (f) => Math.abs(f.wavelength_um - a.wavelength_um) + (f.detector === a.detector ? 0 : 10);
+  const best = new Map();
+  for (const f of visible) {
+    const cur = best.get(f.epoch);
+    if (!cur || cost(f) < cost(cur)) best.set(f.epoch, f);
+  }
+  return [...best.values()].sort((x, y) => x.mjd - y.mjd);
 }
 
+function filmNext() {
+  const seq = filmFrames();
+  if (!seq.length) return;
+  const i = seq.findIndex((f) => f.id === state.shownId);
+  show(seq[(i + 1) % seq.length].id); // loops
+}
+
+const tick = () => (state.playMode === "film" ? filmNext() : flip());
+
+function startPlayback(mode) {
+  if (!state.target) return;
+  if (state.playing) stopBlink();
+  state.playing = true;
+  state.playMode = mode;
+  if (mode === "blink") {
+    if (state.shownId !== state.aId && state.shownId !== state.bId) show(state.aId);
+  } else {
+    const trail = $("#trail-on"); // the trail canvas would hide the film (T23)
+    if (trail?.checked) {
+      trail.checked = false;
+      trail.dispatchEvent(new Event("change"));
+    }
+    const seq = filmFrames();
+    if (seq.length && !seq.some((f) => f.id === state.shownId)) show(seq[0].id);
+  }
+  state.timer = setInterval(tick, state.intervalMs);
+  updatePlayButton();
+  document.dispatchEvent(new CustomEvent("viewer:blink", { detail: { playing: true, mode } }));
+}
+
+const startBlink = () => startPlayback("blink");
+const startFilm = () => startPlayback("film");
+
+/** Stops any playback, blink or film. */
 export function stopBlink() {
   const was = state.playing;
   state.playing = false;
+  state.playMode = null;
   clearInterval(state.timer);
   state.timer = null;
   updatePlayButton();
@@ -458,9 +504,12 @@ export function stopBlink() {
 }
 
 function updatePlayButton() {
-  const btn = $("#btn-play");
-  btn.setAttribute("aria-pressed", String(state.playing));
-  btn.textContent = state.playing ? "❚❚ Pause" : "▶ Blink";
+  const blink = state.playMode === "blink";
+  const film = state.playMode === "film";
+  $("#btn-play").setAttribute("aria-pressed", String(blink));
+  $("#btn-play").textContent = blink ? "❚❚ Pause" : "▶ Blink";
+  $("#btn-film").setAttribute("aria-pressed", String(film));
+  $("#btn-film").textContent = film ? "❚❚ Pause" : "▶ Play all";
 }
 
 /** Step through the frames inside the filter. */
@@ -480,7 +529,9 @@ const numberOrNull = (v) => (v === "" || !Number.isFinite(Number(v)) ? null : Nu
 export function initViewer() {
   $("#btn-a").addEventListener("click", () => { stopBlink(); show(state.aId); });
   $("#btn-b").addEventListener("click", () => { stopBlink(); show(state.bId); });
-  $("#btn-play").addEventListener("click", () => (state.playing ? stopBlink() : startBlink()));
+  $("#btn-play").addEventListener("click", () => (state.playMode === "blink" ? stopBlink() : startBlink()));
+  $("#btn-film").addEventListener("click", () => (state.playMode === "film" ? stopBlink() : startFilm()));
+  $("#film-mode").addEventListener("change", () => { if (state.playMode === "film") filmNext(); });
 
   const speed = $("#speed");
   const onSpeed = () => {
@@ -488,7 +539,7 @@ export function initViewer() {
     $("#speed-out").textContent = `${state.intervalMs} ms`;
     if (state.playing) {
       clearInterval(state.timer);
-      state.timer = setInterval(flip, state.intervalMs);
+      state.timer = setInterval(tick, state.intervalMs);
     }
   };
   speed.addEventListener("input", onSpeed);
@@ -521,7 +572,8 @@ export function initViewer() {
     // Buttons keep Space (it clicks them); radios and the slider also keep the arrow keys.
     const control = e.target.closest?.("input, button");
     if (control && (e.key === " " || (e.key.startsWith("Arrow") && control.tagName === "INPUT"))) return;
-    if (e.key === " ") { e.preventDefault(); state.playing ? stopBlink() : startBlink(); }
+    if (e.key === " ") { e.preventDefault(); state.playMode === "blink" ? stopBlink() : startBlink(); }
+    else if (e.key === "p" || e.key === "P") { state.playMode === "film" ? stopBlink() : startFilm(); }
     else if (e.key === "x" || e.key === "X") { stopBlink(); flip(); }
     else if (e.key === "m" || e.key === "M") { matchB(); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
