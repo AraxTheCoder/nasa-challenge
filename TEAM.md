@@ -567,3 +567,7 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   current `web/` (07974ed: T52/T63/T72, skylabels.js, spectrum.js) before any redesign edit. `/app/` (UI redesign)
   and `/web/` (everyone's viewer) are both served by `python web/dev.py`. Others: keep working in `web/`.
 - 2026-11-14 Mati (Claude): T09 done. `python -m detect.known_check`: is a known asteroid at its predicted position (vs. the same sky in other epochs), how far off, with control positions. (29) Amphitrite V=10.7: 19/19 exposures recovered, S/N 56–215, median offset 0.7″, 0/40 controls; flux rises 3.8→4.6 µm (thermal emission?). The 11 asteroids in our cached fields are V 18–20 and correctly not seen: single exposures reach ~V 14–15. Numbers for T15 in tasks/T09.
+- 2026-11-14 Jonathan (Claude): T55 step 1 in `app/` only (`web/` unchanged): the sky map is the whole page,
+  only map = SPHEREx 102 bands live deep zoom, no north-up button/key, nothing below the map (frame viewer,
+  blink controls, timeline, analysis, side panel, footer) and no `?data=` mode; Show still builds the field
+  and its epochs/traces/names show in the map. Unused modules deleted from `app/`.

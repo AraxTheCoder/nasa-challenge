@@ -5,8 +5,13 @@ wiring, tests, other agents' work) stays in `web/` exactly as before; `/web/` re
 viewer and the default URL.
 
 - Started 2026-11-14 as a 1:1 copy of the viewer files in `web/`; refreshed to `web/` at 07974ed.
-- Open it via `python web/dev.py` → `http://localhost:8080/app/` (same API, same fixtures;
-  `?data=../fixtures/targets/` etc. work as in `web/`).
+- Open it via `python web/dev.py` → `http://localhost:8080/app/` (same Live API as `web/`).
+- 2026-11-14 redesign step 1: the sky map is the whole page. One base map only (SPHEREx 102
+  bands, live deep zoom; no map picker), no north-up button/key, nothing below the map (no frame
+  viewer, blink controls, timeline, brightness/spectrum analysis, side panel, footer) and no
+  offline `?data=` mode. "Show" / "Blink this spot" still build the field; its epochs, traces and
+  names show in the map. Modules: `app.js`, `api.js`, `util.js`, `explore.js`, `sky.js`,
+  `healpix.js`, `traces.js`, `skylabels.js`.
 - Changes made in `web/` after the copy are **not** picked up automatically; the T55 owner ports
   them into `app/` when needed. When the redesign is done, `app/` replaces `web/` (decided then,
   with a line under TEAM.md "Decisions").

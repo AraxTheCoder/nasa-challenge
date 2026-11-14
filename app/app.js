@@ -1,18 +1,16 @@
-// SPHEREx Blink: page controller. Two ways to get data:
-//  - live (default): the Live API (docs/CONTRACTS.md v0.3) builds any RA/Dec field on request.
-//    ?ra=&dec=&size= in the page URL requests that field on load; ?api=<base> sets the API address.
-//  - offline (?data=<folder>): read a static targets folder with an index.json, no server needed
-//    (e.g. ?data=../fixtures/targets/). ?target=<id> picks a target there.
+// SPHEREx Blink (T55 redesign, /app/): the sky map is the whole page. The Live API
+// (docs/CONTRACTS.md v0.3) builds any RA/Dec field on request; its SPHEREx epochs then show as map
+// layers (blinkable), with traces and names of the field's objects drawn on the map.
+// ?ra=&dec=&size= in the page URL requests that field on load; ?api=<base> sets the API address.
 //
-// Modules: api.js (Live API client), viewer.js (frames + blink), util.js (helpers).
+// Unlike web/ there is no frame viewer, analysis or side panel below the map, and no offline
+// (?data=) mode, which only fed the frame viewer.
 
 import { DEFAULT_API, ApiError, health, requestField } from "./api.js";
 import { $, el, fmtElapsed } from "./util.js";
-import { checkTarget, clearTarget, initViewer, showTarget, stopBlink } from "./viewer.js";
-import { initObjects } from "./objects.js";
-import { initDiff } from "./diff.js";
-import { initPhotometry } from "./photometry.js";
 import * as explore from "./explore.js";
+import "./traces.js";      // T35: paths + per-epoch positions of the field's objects on the map
+import "./skylabels.js";   // T72: catalogue names anywhere on the map
 
 const SIZE_MIN = 5;
 const SIZE_MAX = 60;
@@ -30,8 +28,7 @@ const STEP_LABELS = {
 const FORM_TIP_ENABLED = false;
 const TIP_DISMISSED_KEY = "spherex-blink.formTipDismissed";
 
-// T40: catalogue labels default ON (fast since T38: 1-7 s, fetched in the background without
-// blocking the field). The choice is remembered per browser.
+// T40: catalogue labels default ON; the choice is remembered per browser.
 function labelsPref() {
   try { return localStorage.getItem("spherex.labels") !== "0"; } catch { return true; }
 }
@@ -39,18 +36,17 @@ function labelsPref() {
 const app = {
   labelsOn: labelsPref(),
   api: DEFAULT_API,
-  dataRoot: null,    // offline mode: folder with index.json
-  index: null,       // offline mode: parsed index.json
-  request: null,     // live mode: last {ra, dec, size} asked for
+  request: null,     // last {ra, dec, size} asked for
   presets: [],
   loadToken: 0,      // bumps on every new load; stale async results check it and bail out
   abort: null,
   jobStart: 0,
   jobTimer: null,
+  shownTarget: null,
+  shownTargetUrl: null,
 };
 
 const params = () => new URLSearchParams(location.search);
-const withSlash = (s) => (s.endsWith("/") ? s : `${s}/`);
 const clampSize = (n) => Math.min(SIZE_MAX, Math.max(SIZE_MIN, Math.round(n)));
 
 // ---------- messages ----------
@@ -66,7 +62,7 @@ function clearMessages() {
 function showLoadError(err) {
   if (!(err instanceof ApiError)) return showMessage(err.message);
   if (err.kind === "unreachable") {
-    showMessage(`${err.message} Start it with "python -m server --fixture" (see web/README.md), or open this page with ?api=<url>.`);
+    showMessage(`${err.message} Start it with "python web/dev.py" (see web/README.md), or open this page with ?api=<url>.`);
   } else if (err.kind === "bad_request") {
     showMessage(`Can't use these coordinates: ${err.message}`);
   } else if (err.kind === "no_data") {
@@ -76,7 +72,28 @@ function showLoadError(err) {
   }
 }
 
-// ---------- loading (shared) ----------
+// ---------- the shown field ----------
+
+/** Hand the field to the map overlays (traces.js, skylabels.js); labels only while switched on. */
+function publishTarget(target) {
+  const shown = target && !app.labelsOn ? { ...target, labels: [] } : target;
+  $("#synthetic-badge").hidden = !target || target.synthetic === false;   // missing flag counts as synthetic
+  document.title = target ? `${target.name ?? target.id} · SPHEREx Blink` : "SPHEREx Blink";
+  document.dispatchEvent(new CustomEvent("viewer:target", { detail: { target: shown } }));
+}
+
+/** Light checks only; the full schema is docs/target.schema.json and is enforced upstream. */
+function checkTarget(t, expectedId) {
+  if (!t || !Array.isArray(t.frames) || t.frames.length === 0) {
+    throw new Error(`target "${expectedId ?? t?.id}" has no frames`);
+  }
+  const warnings = [];
+  if (expectedId && t.id !== expectedId) warnings.push(`target.json id "${t.id}" differs from "${expectedId}".`);
+  if (typeof t.synthetic !== "boolean") warnings.push("target.json has no synthetic flag; treating it as synthetic.");
+  return warnings;
+}
+
+// ---------- loading ----------
 
 /** Start a new load: cancels the previous one. Returns its token + abort signal. */
 function beginLoad() {
@@ -97,15 +114,12 @@ async function openTarget(targetUrl, expectedId, token, signal) {
   if (token !== app.loadToken) return;
   const warnings = checkTarget(target, expectedId);
   app.shownTargetUrl = targetUrl;
-  // T37: labels are shown only when switched on (and then asked for on demand)
-  showTarget(app.labelsOn ? target : { ...target, labels: [] }, targetUrl);
   syncExplore(target);
+  publishTarget(target);
   if (app.labelsOn && !target.labels_requested) setLabels(true);
   loadObjects(target);
   warnings.forEach((w) => showMessage(w, "warn"));
 }
-
-// ---------- live mode ----------
 
 function readForm() {
   const f = $("#field-form");
@@ -133,11 +147,7 @@ const defaultPreset = () => app.presets.find((p) => p.default) ?? app.presets[0]
 /** Pre-fill the form with the default test field (no request; the user presses Show). */
 function fillDefaults() {
   const f = defaultPreset();
-  $("#empty-default").hidden = !f;
-  if (!f) return;
-  fillForm(presetRequest(f));
-  $("#empty-default-name").textContent = f.name;
-  $("#empty-default-kind").textContent = f.kind ? ` (${f.kind.charAt(0).toLowerCase()}${f.kind.slice(1)})` : "";
+  if (f) fillForm(presetRequest(f));
 }
 
 function setPageUrl(req, push) {
@@ -164,8 +174,6 @@ function loadFromUrl() {
 
 async function loadField(req) {
   const { token, signal } = beginLoad();
-  stopBlink();
-  $("#empty-default").hidden = true;
   app.request = req;
   try {
     const onProgress = (progress, id) => { if (token === app.loadToken) showJob(req, progress, id); };
@@ -233,7 +241,7 @@ function tipDismissed() {
 
 /** force: the "?" button opens it even when automatic showing is off or "Got it" was clicked. */
 function showTip({ force = false } = {}) {
-  if (app.dataRoot || (!force && (!tipEnabled() || tipDismissed()))) return;
+  if (!force && (!tipEnabled() || tipDismissed())) return;
   $("#form-tip").hidden = false;
   $("#form-help").setAttribute("aria-expanded", "true");
   placeTip();
@@ -292,67 +300,9 @@ function onPresetPicked() {
   loadField(req);
 }
 
-async function showApiStatus(fieldRequested) {
-  const h = await health(app.api);
-  const info = $("#source-info");
-  if (h) {
-    const mode = h.mode === "fixture" ? "fixture mode: every field is the synthetic demo" : "live SPHEREx data";
-    info.textContent = `Live API ${app.api} · ${mode}`;
-  } else {
-    info.textContent = `Live API ${app.api} · not reachable`;
-    if (!fieldRequested) {
-      showMessage(`The Live API at ${app.api} is not reachable. Start it with "python -m server --fixture" (see web/README.md), or open this page with ?api=<url>.`, "warn");
-    }
-  }
-}
-
-// ---------- offline mode ----------
-
-async function startOffline(root) {
-  app.dataRoot = new URL(withSlash(root), location.href).href;
-  $("#field-form").hidden = true;
-  $("#btn-rebuild").hidden = true;
-  $("#picker").hidden = false;
-  $("#source-info").textContent = `Offline mode · reading ${new URL(app.dataRoot).pathname}`;
-  try {
-    app.index = await fetchJson(`${app.dataRoot}index.json`);
-    if (!Array.isArray(app.index.targets) || app.index.targets.length === 0) {
-      throw new Error(`${app.dataRoot}index.json lists no targets.`);
-    }
-  } catch (err) {
-    showMessage(`${err.message} Check the ?data= folder.`);
-    return;
-  }
-  const select = $("#target-select");
-  select.replaceChildren(
-    ...app.index.targets.map((t) => {
-      const name = t.name ?? t.id;
-      const tag = t.synthetic !== false && !/synthetic/i.test(name) ? " (synthetic)" : "";
-      return el("option", { value: t.id }, name + tag);
-    }),
-  );
-  select.disabled = app.index.targets.length < 2;
-  await openOfflineFromUrl();
-}
-
-async function openOfflineFromUrl() {
-  const wanted = params().get("target");
-  const t = app.index.targets.find((x) => x.id === wanted) ?? app.index.targets[0];
-  await openOffline(t.id);
-  if (wanted && t.id !== wanted) showMessage(`Target "${wanted}" not found, showing "${t.id}".`, "warn");
-}
-
-async function openOffline(id) {
-  const { token, signal } = beginLoad();
-  $("#target-select").value = id;
-  try {
-    await openTarget(new URL(`${encodeURIComponent(id)}/target.json`, app.dataRoot).href, id, token, signal);
-    const url = new URL(location.href);
-    url.searchParams.set("target", id);
-    history.replaceState(null, "", url);
-  } catch (err) {
-    if (err.name !== "AbortError" && token === app.loadToken) showMessage(err.message);
-  }
+async function warnIfApiDown(fieldRequested) {
+  if (fieldRequested || await health(app.api)) return;   // a requested field reports its own error
+  showMessage(`The Live API at ${app.api} is not reachable. Start it with "python web/dev.py" (see web/README.md), or open this page with ?api=<url>.`, "warn");
 }
 
 // ---------- wiring ----------
@@ -376,11 +326,8 @@ function bindPage() {
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideTip(); });
   window.addEventListener("resize", placeTip);
   $("#field-form").addEventListener("input", (e) => {
-    if (e.target.name !== "ra" && e.target.name !== "dec") return;
-    syncPresetSelect();
-    $("#empty-default").hidden = true; // the form no longer holds the default field
+    if (e.target.name === "ra" || e.target.name === "dec") syncPresetSelect();
   });
-  $("#target-select").addEventListener("change", (e) => openOffline(e.target.value));
 
   $("#job-cancel").addEventListener("click", () => {
     app.abort?.abort();
@@ -388,37 +335,19 @@ function bindPage() {
     showMessage("Stopped waiting. The server keeps building this field; ask again later and it comes from the cache.", "warn");
   });
 
-  $("#btn-rebuild").addEventListener("click", () => {
-    if (!app.request) return;
-    if (!confirm("Rebuild this field from IRSA to pick up new SPHEREx data? This can take a few minutes.")) return;
-    loadField({ ...app.request, refresh: true });
-  });
-
-  $("#btn-copy").addEventListener("click", async () => {
-    const btn = $("#btn-copy");
-    try {
-      await navigator.clipboard.writeText(location.href);
-      btn.textContent = "Copied ✓";
-      setTimeout(() => { btn.textContent = "Copy link"; }, 1500);
-    } catch {
-      prompt("Copy this link:", location.href);
-    }
-  });
-
   window.addEventListener("popstate", () => {
-    if (app.dataRoot) {
-      if (app.index) openOfflineFromUrl();
-    } else if (!loadFromUrl()) {
-      app.abort?.abort();
-      hideJob();
-      clearMessages();
-      clearTarget();
-      fillDefaults();
-    }
+    if (loadFromUrl()) return;
+    app.abort?.abort();
+    hideJob();
+    clearMessages();
+    app.shownTarget = null;
+    app.shownTargetUrl = null;
+    publishTarget(null);
+    fillDefaults();
   });
 }
 
-// ---------- explore mode (T30) ----------
+// ---------- sky map (T30/T36) ----------
 
 function syncExplore(target) {
   app.shownTarget = target;
@@ -438,7 +367,6 @@ async function showEpochLayers(target) {
   clearInterval(epochTimer);
   box.replaceChildren();
   box.hidden = true;
-  if (app.dataRoot) return;                       // offline mode: no tile server
   let info;
   try {
     const res = await fetch(`${app.api}/api/hips/${encodeURIComponent(target.id)}`);
@@ -477,11 +405,6 @@ function updateExplorePos(_view, cursor) {
   const f = (x) => `${x >= 0 ? "+" : ""}${x.toFixed(4)}°`;
   const where = cursor ? `cursor RA ${cursor[0].toFixed(4)}° Dec ${f(cursor[1])}` : `RA ${v.ra.toFixed(4)}° Dec ${f(v.dec)}`;
   $("#explore-pos").textContent = `${where} · view ${v.fovArcmin >= 120 ? (v.fovArcmin / 60).toFixed(1) + "°" : Math.round(v.fovArcmin) + "′"}`;
-  const sv = explore.getSky()?.view();
-  const tilted = sv && Math.abs(sv.roll) > 1;
-  const nb = $("#sky-north");
-  nb.textContent = tilted ? `N↑ (${Math.round(sv.roll)}°)` : "N↑";
-  nb.classList.toggle("muted", !tilted);
 }
 
 function setupBand(layer) {
@@ -501,13 +424,6 @@ function setupBand(layer) {
 }
 
 async function startExplore() {
-  const sel = $("#explore-survey");
-  explore.SURVEYS.forEach((s) => sel.append(el("option", { value: s.id }, s.label)));
-  sel.value = explore.DEFAULT_SURVEY;
-  sel.addEventListener("change", async () => {
-    try { setupBand(await explore.setSurvey(sel.value)); }
-    catch (err) { showMessage(err.message, "warn"); }
-  });
   $("#explore-blink").addEventListener("click", () => {
     const v = explore.view();
     if (!v) return;
@@ -519,8 +435,7 @@ async function startExplore() {
   const f = readForm();
   try {
     const sky = await explore.initExplore($("#sky"), {
-      ra: Number(f.ra) || undefined, dec: Number(f.dec) || undefined, fovDeg: 2,
-      api: app.dataRoot ? null : app.api,
+      ra: Number(f.ra) || undefined, dec: Number(f.dec) || undefined, fovDeg: 2, api: app.api,
     });
     sky.on("change", updateExplorePos);
     // Debug overlay (tile outlines, max-zoom / sharp indicator); ?debug=1 switches it on at load
@@ -528,7 +443,7 @@ async function startExplore() {
     dbg.checked = params().get("debug") === "1";
     explore.setDebug(dbg.checked);
     dbg.addEventListener("change", () => explore.setDebug(dbg.checked));
-    setupTilesSwitch(sel);
+    setupTilesSwitch();
     setupBand(sky.base);
     if (app.shownTarget) syncExplore(app.shownTarget);   // a field loaded before the map was ready
     updateExplorePos();
@@ -539,8 +454,7 @@ async function startExplore() {
 
 // ---------- T47: live tiles from here or from the US VM next to the S3 bucket ----------
 
-async function setupTilesSwitch(surveySelect) {
-  if (app.dataRoot) return;
+async function setupTilesSwitch() {
   let info;
   try { info = await (await fetch(`${app.api}/api/settings`)).json(); } catch { return; }
   if (!info.remote_available) return;
@@ -555,7 +469,7 @@ async function setupTilesSwitch(surveySelect) {
       const now = await res.json();
       if (!res.ok) throw new Error(now.error ?? `HTTP ${res.status}`);
       mode.value = now.tiles;
-      setupBand(await explore.setSurvey(surveySelect.value));   // fresh layer: re-asks failed tiles
+      setupBand(await explore.setSurvey(explore.DEFAULT_SURVEY));   // fresh layer: re-asks failed tiles
     } catch (err) {
       showMessage(`Could not switch tiles: ${err.message}`, "warn");
     }
@@ -568,18 +482,14 @@ async function setLabels(on) {
   app.labelsOn = on;
   try { localStorage.setItem("spherex.labels", on ? "1" : "0"); } catch { /* private mode: not remembered */ }
   $("#labels-toggle").checked = on;
-  document.dispatchEvent(new CustomEvent("labels:changed", { detail: { on } }));  // other switches follow
+  document.dispatchEvent(new CustomEvent("labels:changed", { detail: { on } }));  // skylabels.js follows
   const t = app.shownTarget;
   const note = $("#labels-note");
   note.textContent = "";
   if (!t || !app.shownTargetUrl) return;
-  if (!on) {
-    showTarget({ ...t, labels: [] }, app.shownTargetUrl);
-    return;
-  }
-  if (t.labels_requested || app.dataRoot) {
-    showTarget(t, app.shownTargetUrl);
-    note.textContent = `${t.labels?.length ?? 0}`;
+  if (!on || t.labels_requested) {
+    publishTarget(t);
+    if (on) note.textContent = `${t.labels?.length ?? 0}`;
     return;
   }
   const id = t.id;
@@ -596,7 +506,7 @@ async function setLabels(on) {
     const fresh = await fetchJson(app.shownTargetUrl);
     if (app.shownTarget?.id !== id || !app.labelsOn) return;
     app.shownTarget = fresh;
-    showTarget(fresh, app.shownTargetUrl);
+    publishTarget(fresh);
     note.textContent = `${fresh.labels?.length ?? 0}`;
   } catch (err) {
     note.textContent = "";
@@ -605,17 +515,17 @@ async function setLabels(on) {
 }
 
 /**
- * T51: known asteroids and comets (JPL) arrive after the field: the Live API asks JPL in the
- * background (rate-limited, minutes per field). Poll /objects, then reload target.json.
+ * T51: known asteroids and comets arrive after the field (the Live API computes them in the
+ * background). Poll /objects, then reload target.json so the traces include them.
  */
 async function loadObjects(target) {
   const note = $("#objects-note");
   note.textContent = "";
-  if (target.synthetic || target.objects_requested || app.dataRoot || !app.shownTargetUrl) return;
+  if (target.synthetic || target.objects_requested || !app.shownTargetUrl) return;
   const id = target.id;
-  note.textContent = "Asking JPL for known asteroids and comets (can take a few minutes)…";
+  note.textContent = "looking up known asteroids and comets…";
   try {
-    for (let i = 0; i < 360; i++) {   // up to ~30 min; JPL allows 20 searches per 5 min
+    for (let i = 0; i < 360; i++) {
       const res = await fetch(`${app.api}/api/targets/${encodeURIComponent(id)}/objects`);
       const body = await res.json();
       if (app.shownTarget?.id !== id) return;
@@ -627,43 +537,29 @@ async function loadObjects(target) {
     if (app.shownTarget?.id !== id) return;
     note.textContent = "";
     app.shownTarget = fresh;
-    showTarget(app.labelsOn ? fresh : { ...fresh, labels: [] }, app.shownTargetUrl);
+    publishTarget(fresh);
   } catch (err) {
     if (app.shownTarget?.id === id) note.textContent = `Known objects unavailable: ${err.message}`;
   }
 }
 
 async function main() {
-  // T40: the Labels switch works in every mode (live, offline ?data=, ?explore=0); other modules can
-  // flip it with a "labels:set" event and follow it via "labels:changed".
+  // T40: the Labels switch; other modules can flip it with "labels:set" and follow "labels:changed".
   $("#labels-toggle").checked = app.labelsOn;
   $("#labels-toggle").addEventListener("change", (e) => setLabels(e.target.checked));
-  $("#sky-north").addEventListener("click", () => { explore.northUp(); updateExplorePos(); });
   document.addEventListener("labels:set", (e) => setLabels(Boolean(e.detail?.on)));
   queueMicrotask(() => document.dispatchEvent(new CustomEvent("labels:changed", { detail: { on: app.labelsOn } })));
-  initViewer();
-  initObjects();
-  initDiff();
-  initPhotometry();
   bindPage();
   const p = params();
   if (p.get("api")) app.api = p.get("api");
-  if (p.get("data")) {
-    $("#explore").hidden = true; // offline mode has no tile server; an empty map box only confuses
-    await startOffline(p.get("data"));
-    return;
-  }
   await loadPresets();
-  // ?explore=0 skips the sky map (embeds, slow connections, and the browser test, which must not
-  // depend on external tile servers being up).
-  if (p.get("explore") === "0") $("#explore").hidden = true;
-  else startExplore();   // not awaited: the map loads in the background
+  startExplore();   // not awaited: the map loads in the background
   const requested = loadFromUrl();
   if (!requested) {
     fillDefaults();
     showTip();
   }
-  await showApiStatus(requested);
+  await warnIfApiDown(requested);
 }
 
 main();

@@ -1,6 +1,6 @@
 // T30/T36 Sky map: Google-Earth-style pan/zoom over the whole sky with our own HiPS renderer
-// (sky.js, no dependencies). Base maps: SPHEREx all-sky (IRSA DR1 cube, 102 bands; CDS per-detector
-// maps) and comparison surveys. Overlays: the shown field's SPHEREx epochs (T32), blinkable.
+// (sky.js, no dependencies). T55: one base map only, SPHEREx 102 bands with live deep zoom.
+// Overlays: the shown field's SPHEREx epochs (T32), blinkable.
 // Draw hooks let other modules (field outline, traces.js) paint on top.
 
 import { createSky } from "./sky.js";
@@ -9,15 +9,6 @@ export const SURVEYS = [
   // T42: IRSA cube up to order 5, deeper zoom = live tiles from the AWS level-2 images (our server)
   { id: "spherex-live", label: "SPHEREx · 102 bands · live deep zoom",
     urls: [], fallback: ["https://irsa.ipac.caltech.edu/data/hips/SPHEREx/spherex_allsky_cube"] },
-  { id: "spherex-cube", label: "SPHEREx all-sky · 102 bands (IRSA DR1)",
-    urls: ["https://irsa.ipac.caltech.edu/data/hips/SPHEREx/spherex_allsky_cube"] },
-  ...[1, 2, 3, 4, 5, 6].map((d) => ({
-    id: `spherex-d${d}`,
-    label: `SPHEREx D${d} · ${["0.75–1.1", "1.1–1.6", "1.6–2.4", "2.4–3.8", "3.8–4.4", "4.4–5.0"][d - 1]} µm (CDS QR2)`,
-    urls: [`https://alasky.cds.unistra.fr/SPHEREx/D${d}`, `https://alaskybis.cds.unistra.fr/SPHEREx/D${d}`],
-  })),
-  { id: "2mass", label: "Compare: 2MASS colour (IRSA)", urls: ["https://irsa.ipac.caltech.edu/data/hips/CDS/2MASS/Color"] },
-  { id: "allwise", label: "Compare: AllWISE colour (IRSA)", urls: ["https://irsa.ipac.caltech.edu/data/hips/CDS/AllWISE/RGB-W4-W2-W1"] },
 ];
 export const DEFAULT_SURVEY = "spherex-live";
 
@@ -74,7 +65,6 @@ export function view() {
 
 export function on(ev, fn) { sky?.on(ev, fn); }
 export function setDebug(on) { sky?.setDebug(on); }
-export function northUp() { sky?.northUp(); }
 export function addDrawHook(fn) { sky?.addDrawHook(fn); }
 export function redraw() { sky?.redraw(); }
 

@@ -719,7 +719,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     const step = 60;
     const keys = { ArrowLeft: () => panBy(step, 0), ArrowRight: () => panBy(-step, 0), ArrowUp: () => panBy(0, step),
       ArrowDown: () => panBy(0, -step), "+": () => zoomAt(0.7, st.w / 2, st.h / 2), "=": () => zoomAt(0.7, st.w / 2, st.h / 2),
-      "-": () => zoomAt(1 / 0.7, st.w / 2, st.h / 2), n: () => api.northUp() };
+      "-": () => zoomAt(1 / 0.7, st.w / 2, st.h / 2) };   // T55 /app/: no N (north up) key
     if (keys[e.key]) { e.preventDefault(); e.stopPropagation(); keys[e.key](); }
   });
 
