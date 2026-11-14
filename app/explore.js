@@ -159,3 +159,29 @@ export function hideEpochs() {
   epochLayers = [];
   sky?.setOverlays([]);
 }
+
+// ---------- T55: survey passes as map layers (T82 spherex-live-p<n>), blinked at the sharp order ----------
+
+/** Survey passes the map's live layer has images from (its x_survey_passes), e.g. [1, 2, 3]. */
+export function surveyPasses() {
+  return (sky?.base?.props.x_survey_passes ?? "").split(/\s+/).filter(Boolean).map(Number);
+}
+
+/** Put one overlay per pass on the map (replaces the field's epochs). Returns the layers made. */
+export async function setPassLayers(passes, order) {
+  if (!sky || !apiBase) return [];
+  const base = apiBase.replace(/\/$/, "");
+  epochLayers = await sky.setOverlays(passes.map((n) => ({
+    url: `${base}/api/sky/spherex-live-p${n}`, label: `Survey pass ${n}`, epoch: null, pass: n, sharpOrder: order })));
+  return epochLayers;
+}
+
+/** {total, done, ok} tiles of overlay i for this view, or null. */
+export function overlayProgress(i) { return sky?.overlayProgress(i) ?? null; }
+
+/** Draw overlay i, or none (-1), without the epoch event (passes are not field epochs). */
+export function showOverlay(i) { sky?.showOverlay(i); }
+
+/** Order the base map currently draws (HiPS order of its visible tiles), or null. */
+export function baseOrder() { return sky?.stats()?.order ?? null; }
+export function onTiles(fn) { sky?.on("tiles", fn); }

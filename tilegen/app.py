@@ -2,6 +2,7 @@
 
     GET /health                                            -> {"ok": true, "orders": [6, 7], ...}
     GET /tiles/live/Norder<k>/Dir<d>/Npix<p>[_<slice>].png -> PNG, or 404 if no SPHEREx image covers it
+    GET /tiles/live-p<n>/Norder<k>/...                     -> the same from survey pass n's images only (T82)
     GET /cutout?url=<IRSA level-2 FITS URL>&ra=&dec=&size=<deg> -> gzip of the cutout FITS that
         pipeline.s3.fetch_cutout writes (T57: builds in Europe get ~200 kB instead of ~2-3 MB of rows);
         404 + `X-Cutout: off-image` if the field is not on that image. Cached in data/vm_cutouts/.
@@ -24,6 +25,13 @@ from . import render
 
 TILE_RE = re.compile(r"^Norder(\d+)/Dir(\d+)/Npix(\d+)(?:_(\d+))?\.png$")
 MISSING = b"MISSING"
+PASS_RE = re.compile(r"^p(\d+)/(.*)$")       # cache key of a pass tile: p<n>/Norder.../Npix....png
+
+
+def parse_key(key: str):
+    """Cache key -> (pass or None, TILE_RE match of the tile path, or None)."""
+    pm = PASS_RE.match(key)
+    return (int(pm.group(1)), TILE_RE.match(pm.group(2))) if pm else (None, TILE_RE.match(key))
 VIA = "team-vm-us-east4"   # T57: in the cutout's header and the frame's source_url (#rows=...;via=...)
 
 
@@ -41,17 +49,18 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
     pending: list[str] = []
     wake = threading.Condition()
 
-    def render_to_cache(path: str, m) -> None:
+    def render_to_cache(path: str, m, pass_: int | None = None) -> None:
         f = cache_root / path
         t0 = time.time()
-        png = render.render(int(m.group(4) or 0), int(m.group(1)), int(m.group(3)))
+        args = (int(m.group(4) or 0), int(m.group(1)), int(m.group(3)))
+        png = render.render(*args, pass_=pass_) if pass_ else render.render(*args)
         stats["seconds"] += time.time() - t0
         f.parent.mkdir(parents=True, exist_ok=True)
         tmp = f.with_name(f.name + f".{threading.get_ident()}.part")
         tmp.write_bytes(png if png is not None else MISSING)
         tmp.replace(f)
 
-    def queue_neighbours(path: str, m) -> None:
+    def queue_neighbours(path: str, m, pass_: int | None = None) -> None:
         try:
             from astropy_healpix import HEALPix
             order, npix, sl = int(m.group(1)), int(m.group(3)), m.group(4)
@@ -63,6 +72,8 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
                 if p < 0:
                     continue
                 sub = f"Norder{order}/Dir{(int(p) // 10000) * 10000}/Npix{int(p)}{'_' + sl if sl else ''}.png"
+                if pass_:
+                    sub = f"p{pass_}/{sub}"
                 if not (cache_root / sub).exists() and sub not in pending:
                     pending.append(sub)
             del pending[:-64]                                   # keep the newest 64
@@ -81,7 +92,8 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
                     continue
                 ev = inflight[path] = threading.Event()
             try:
-                render_to_cache(path, TILE_RE.match(path))
+                pass_, m = parse_key(path)
+                render_to_cache(path, m, pass_)
                 stats["prefetched"] += 1
             except Exception:  # noqa: BLE001 - best effort
                 pass
@@ -97,13 +109,23 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
     def health():
         n = stats["rendered"]
         return {"ok": True, "orders": list(render.LIVE_ORDERS), "images_per_tile": render.IMAGES_PER_TILE,
+                "passes": True,                                 # T82: /tiles/live-p<n>/ is served
                 "rendered": n, "served_from_cache": stats["cached"], "prefetched": stats["prefetched"],
                 "prefetch_pending": len(pending),
                 "mean_render_s": round(stats["seconds"] / (n + stats["prefetched"]), 2) if n + stats["prefetched"] else None}
 
     @app.get("/tiles/live/{path:path}")
     def tile(path: str):
-        m = TILE_RE.match(path)
+        return serve(path)
+
+    @app.get("/tiles/live-p{pass_}/{path:path}")
+    def pass_tile(pass_: int, path: str):
+        if not 1 <= pass_ <= 20:
+            raise HTTPException(404)
+        return serve(f"p{pass_}/{path}")
+
+    def serve(path: str):
+        pass_, m = parse_key(path)
         if not m or int(m.group(1)) not in render.LIVE_ORDERS:
             raise HTTPException(404)
         f = cache_root / path
@@ -119,7 +141,7 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
                 busy["n"] += 1
                 try:
                     with sem:
-                        render_to_cache(path, m)
+                        render_to_cache(path, m, pass_)
                     stats["rendered"] += 1
                 finally:
                     busy["n"] -= 1
@@ -129,7 +151,7 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
             else:
                 ev.wait(300)                       # same tile already being rendered: wait for it
         if prefetch:
-            queue_neighbours(path, m)
+            queue_neighbours(path, m, pass_)
         if not f.exists():
             raise HTTPException(503, "render failed")
         data = f.read_bytes()

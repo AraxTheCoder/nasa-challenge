@@ -99,3 +99,45 @@ def test_fresh_checkout_without_index(monkeypatch, tmp_path):
     c = TestClient(api(tmp_path / "targets", fixture=True))
     r = c.get("/api/sky/spherex-live/Norder7/Dir0/Npix5_20.png")
     assert r.status_code == 503 and r.headers["retry-after"] == "20"
+
+
+def test_service_pass_tiles_cached_apart(tmp_path, monkeypatch):
+    """T82/T55: /tiles/live-p<n>/ renders from pass n's images only, cached apart from the combined tile."""
+    calls = []
+
+    def fake(sl, o, n, pass_=None):
+        calls.append((sl, o, n, pass_))
+        return f"png-{pass_}".encode()
+    monkeypatch.setattr(render, "render", fake)
+    c = TestClient(create_app(tmp_path, prefetch=False))
+    assert c.get("/tiles/live-p2/Norder7/Dir0/Npix5_20.png").content == b"png-2"
+    assert c.get("/tiles/live-p2/Norder7/Dir0/Npix5_20.png").content == b"png-2"     # cached
+    assert c.get("/tiles/live-p3/Norder7/Dir0/Npix5_20.png").content == b"png-3"
+    assert c.get("/tiles/live/Norder7/Dir0/Npix5_20.png").content == b"png-None"
+    assert c.get("/tiles/live-p2/Norder5/Dir0/Npix1.png").status_code == 404           # not a live order
+    assert calls == [(20, 7, 5, 2), (20, 7, 5, 3), (20, 7, 5, None)]
+    assert (tmp_path / "p2/Norder7/Dir0/Npix5_20.png").exists()
+    assert c.get("/health").json()["passes"] is True
+
+
+def test_client_pass_tiles_remote_then_local_on_old_vm(monkeypatch):
+    monkeypatch.setattr(render, "render", lambda sl, o, n, pass_=None: b"local")
+    g = TileGenerator("https://vm.example", use_remote=True)
+    urls = []
+
+    class New:
+        def get(self, url, timeout):
+            urls.append(url)
+            return _Resp(200, b"vm-pass")
+    g._session = New()
+    assert g.get(20, 7, 5, pass_=2) == b"vm-pass"
+    assert urls == ["https://vm.example/tiles/live-p2/Norder7/Dir0/Npix5_20.png"]
+
+    class Old:                                     # deploy without the pass route: FastAPI's JSON 404
+        def get(self, url, timeout):
+            urls.append(url)
+            return _Resp(404, b'{"detail":"Not Found"}')
+    g._session = Old()
+    assert g.get(20, 7, 5, pass_=2) == b"local"
+    n = len(urls)
+    assert g.get(20, 7, 6, pass_=2) == b"local" and len(urls) == n   # not asked again

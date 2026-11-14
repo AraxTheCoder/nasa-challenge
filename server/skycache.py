@@ -99,7 +99,7 @@ class SkyCache:
     def _live_route(self, path: str, survey: str = "spherex-live"):
         """spherex-live: properties and orders <= 5 come from the cube, 6-7 are rendered by us.
         spherex-live-p<n> (T82): the same, but orders <= 5 are empty (no per-pass cube)."""
-        from tilegen.render import LIVE_ORDERS
+        from tilegen.render import LIVE_ORDERS, survey_passes
 
         if survey != "spherex-live":
             n = survey.rsplit("-p", 1)[1]
@@ -123,7 +123,9 @@ class SkyCache:
                 lines += [f"hips_order           = {max(LIVE_ORDERS)}",
                           "obs_title            = SPHEREx DR1: IRSA cube to order 5, live tiles from AWS level-2 images above",
                           "creator_did          = ivo://spherex-blink/live",
-                          "x_live_orders        = " + " ".join(map(str, LIVE_ORDERS))]
+                          "x_live_orders        = " + " ".join(map(str, LIVE_ORDERS)),
+                          # T55: passes with images in the index (spherex-live-p<n> layers to blink)
+                          "x_survey_passes      = " + " ".join(map(str, survey_passes()))]
                 return ("\n".join(lines) + "\n").encode()
             return props
         if ALLSKY_RE.match(path):

@@ -55,6 +55,24 @@ _pool = ThreadPoolExecutor(16, thread_name_prefix="live-chunk")      # S3 row-ch
 _images = ThreadPoolExecutor(8, thread_name_prefix="live-image")     # one task per image (uses _pool)
 
 
+_passes = None
+
+
+def survey_passes() -> list[int]:
+    """Survey passes the image index has images from (T82/T55: the map blinks these), e.g. [1, 2, 3].
+    Before the index is ready: the passes started by today (some may still be empty)."""
+    global _passes
+    if _passes is None:
+        try:
+            d = _mirror().d
+            _passes = sorted(int(n) for n in np.unique(pass_of((d["t_min"] + d["t_max"]) / 2)))
+        except Exception:  # noqa: BLE001 - index not ready: don't cache the guess
+            import time as _t
+            now_mjd = _t.time() / 86400 + 40587
+            return list(range(1, int(pass_of(now_mjd)) + 1))
+    return _passes
+
+
 def _mirror():
     """The local SPHEREx image index. data/ is gitignored, so on a fresh checkout it is missing:
     then it is built in the background (once, ~3 min) and IndexNotReady is raised meanwhile."""

@@ -394,3 +394,7 @@ body.pin-picking .sky-stage canvas { cursor: crosshair !important; }   /* pick m
 .ph-context h4 { margin: 4px 0; }
 .ph-context p { margin: 6px 0; }
 .ph-hint-mark { color: var(--warn); }
+
+/* T55: survey passes still loading for this view: dimmed until all their visible tiles are there */
+.explore-epochs button.loading { opacity: 0.5; }
+.explore-epochs button:disabled { opacity: 0.35; text-decoration: line-through; }

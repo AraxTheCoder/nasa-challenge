@@ -35,10 +35,22 @@ Rework the UI without blocking anyone: the redesign lives in `app/` (URL `/app/`
         after 5 s; 📍 button = pick mode (follows the mouse, left click sets form + URL, then fades)
   - [x] Steps 10-12 (Jonathan, 2026-11-14): pin tip on the point with RA/Dec below; Blink builds the whole
         view (≤ 60′, API limit) and the red outline marks that part of the view; no jump when it is ready
+  - [x] Step 13 (Jonathan, 2026-11-14): survey passes blink by themselves at level 7 (`app/passes.js`,
+        T82 layers `spherex-live-p<n>` on the map's own tile grid, no build); loaded one level earlier
+        (order 6: the tiles a zoom in at the centre needs), only fully loaded passes take part; switch
+        "Blink: survey passes / field epochs" next to Debug (epochs = the old Blink button, now only at
+        level 7); a built field switches to epochs. Server: the VM renders pass tiles
+        (`/tiles/live-p<n>/`), the Live API asks it in remote mode (old VM → local), passes listed in
+        the live properties (`x_survey_passes`)
 - [ ] Port relevant `web/` changes made after the copy
 - [ ] When done: decide (TEAM.md Decisions) whether `app/` replaces `web/`
 
 ## Findings
+- Step 13: pass vs epoch. Epoch = the visits to that spot, grouped by gaps > 30 d (pipeline/query.py);
+  pass = a fixed 182.6 d all-sky window from 2025-05-01 (tilegen/render.py). Usually the same; near the
+  ecliptic poles (observed almost all the time) a pass boundary cuts through. A pass tile is a mosaic
+  (1 image, more where it has holes): a fast asteroid can be cut or doubled at a tile edge; slow movers
+  (stars, Planet X) are fine. Index (data/mirror) has passes 1-3 (to 2026-10).
 - Copy taken from main at 6026134 (2026-11-14); refreshed from `web/` at 07974ed (2026-11-14, before any redesign edit): T52 labels, T63 spectrum, T72 map names, new `skylabels.js` + `spectrum.js`.
 
 ## Questions / needs from others

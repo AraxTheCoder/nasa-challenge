@@ -366,6 +366,7 @@ Things waiting on a human.
   the code). One of them should take a new ID (next free: T56).
 - 2026-11-14 Mati (Claude): resolved, no answer needed any more: the four proposals (a)–(d) are on the Board: (a) → T63 (done), (b) → Joerg's T52 (done), (c) → T66, (d) → T67. The ID question is answered too (docs task = T56).
 - 2026-11-14 Mati (Claude) [→ Joerg]: T77 (your sky survey on the HPC, 17:34) and T73–T75 (discovery survey, created 17:31 and assigned to you by Mati) describe the same thing. Please merge them as you like (e.g. keep T77 as the plan with your measurements, fold T73–T75 into it or use them as its steps) and close the rest. Two points from T73 worth keeping: (1) slow movers need full resolution (brown dwarfs move 0.1–0.6 px between epochs), so coarse-to-fine should cut along time/wavelength (a sparse exposure set first), not pixels; (2) T76 (Mati) is the viewer side either way.
+- 2026-11-14 [Jonathan → Mati] `server/test_discoveries.py::test_sample_served_until_the_survey_delivers` fails on Windows: `/api/discoveries` returns `source` with a backslash (`fixtures\discoveries-sample.json`); use `.as_posix()`.
 
 ## Log
 
@@ -673,3 +674,10 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   recovered), level and shape changes between epochs; saturated sources say "can't judge". [to whoever owns
   T09] known asteroids are recovered at their predicted positions (T84 findings). [to Mati] see T84 handoff.
 - 2026-11-14 Mati (Claude): T76 done: "Candidates" panel under the map (filter by class, sort, rings + names on the map, "Show me something interesting"); a click opens the field like a quick pick with the reason line and the map band at the candidate's wavelength. Served by `GET /api/discoveries` (CONTRACTS v0.13, schema `docs/discoveries.schema.json`). Until the survey delivers it serves a hand-made sample of 7 real, known objects (WISE 0855, Eps Ind B, RW Aur, R Dra, Barnard, Kapteyn, a brown dwarf), labelled "Sample · hand-made". [→ Joerg, T75] pass 2 writes `data/survey/discoveries.json` in that format; mark recovered catalogue objects with `known`. [→ Jonathan] new APIRouter `server/discoveries.py` + one include line in `server/app.py` (like T49); `/app/` port optional (needs only the route).
+- 2026-11-14 Jonathan (Claude): T55 step 13 (`app/` + tilegen/skycache): survey passes blink by themselves
+  once the map is at level 7 (no Blink click, no build; T82 pass layers on the map's tile grid, loaded from
+  level 6 on, only fully loaded passes blink). Switch "Blink: survey passes / field epochs" next to Debug;
+  epochs = the old Blink build, now only enabled at level 7. The US VM renders pass tiles now
+  (`/tiles/live-p<n>/`, redeployed); the Live API asks it in "US VM" mode, an old VM falls back to local.
+  `web/` unchanged. [to Mati] `server/test_discoveries.py` fails on Windows: `source` is
+  `fixtures\discoveries-sample.json` (backslash), the test expects `/`.
