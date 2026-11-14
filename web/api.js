@@ -6,8 +6,10 @@
 // Default: port 8000 on the machine that served this page. That is localhost when you run it
 // yourself, and the host's machine when a teammate opens it over the LAN (python web/dev.py --lan).
 // Override with ?api=<url>; a hosted deployment (T14) sets its own value here.
+// Hosted (T47): page served on the default port (https via Caddy) -> the API is the same origin.
 export const DEFAULT_API = /^https?:$/.test(location.protocol) && location.hostname
-  ? `${location.protocol}//${location.hostname}:8000` // hostname keeps IPv6 brackets per the URL spec
+  ? (location.port === "" ? location.origin
+    : `${location.protocol}//${location.hostname}:8000`) // hostname keeps IPv6 brackets per the URL spec
   : "http://localhost:8000";
 export const POLL_MS = 2000;
 
