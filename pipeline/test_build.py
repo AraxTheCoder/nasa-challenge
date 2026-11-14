@@ -57,3 +57,63 @@ def test_render_png_alpha_marks_no_data(tmp_path):
     im = np.array(Image.open(tmp_path / "f.png"))
     assert im.shape == (20, 20, 2)
     assert (im[:5, :, 1] == 0).all() and (im[5:, :, 1] == 255).all()
+
+
+# -- T26 retry, T28 cutout reuse, T27 exposure cache ---------------------------------------------
+
+class _Resp:
+    def __init__(self, status, content=b""):
+        self.status_code, self.content, self.text = status, content, content.decode(errors="replace")
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(self.status_code)
+
+
+def test_retry_on_503_then_success(monkeypatch):
+    import requests
+    from pipeline import build
+
+    answers = iter([_Resp(503, b"Server busy, retry later."), _Resp(200, b"oops"), _Resp(200, b"SIMPLE  = T")])
+    monkeypatch.setattr(requests, "get", lambda url, timeout: next(answers))
+    waits = []
+    assert build._get_with_retry("u", sleep=waits.append) == b"SIMPLE  = T"
+    assert len(waits) == 2
+
+
+def test_retry_gives_up(monkeypatch):
+    import pytest
+    import requests
+    from pipeline import build
+
+    monkeypatch.setattr(requests, "get", lambda url, timeout: _Resp(503, b"busy"))
+    with pytest.raises(RuntimeError, match="gave up"):
+        build._get_with_retry("u", sleep=lambda s: None)
+
+
+def test_cutout_reuse_across_fov(monkeypatch, tmp_path):
+    from pipeline import build
+
+    calls = []
+    monkeypatch.setattr(build, "_get_with_retry", lambda url: calls.append(url) or b"SIMPLE  = T")
+    p1 = build.fetch("https://x/a.fits", 10.0, 20.0, 0.2, raw_root=tmp_path)    # -> MIN_CUTOUT_DEG
+    assert float(p1.stem) == build.MIN_CUTOUT_DEG and len(calls) == 1
+    assert build.fetch("https://x/a.fits", 10.0, 20.0, 0.385, raw_root=tmp_path) == p1   # smaller/equal: cache
+    p2 = build.fetch("https://x/a.fits", 10.0, 20.0, 1.5, raw_root=tmp_path)    # larger: download
+    assert len(calls) == 2 and float(p2.stem) == 1.5
+    assert build.fetch("https://x/a.fits", 10.0, 20.0, 0.8, raw_root=tmp_path) == p2     # smallest that fits
+    assert len(calls) == 2
+
+
+def test_exposure_list_cached(monkeypatch, tmp_path):
+    from pipeline import build
+    from pipeline.query import Exposure
+
+    e = Exposure("o", "spherex_dr1", 1, 1.0, 1.5, "2025-01-01T00:00:00Z", 100.0, 0.75, 1.1, 1, "https://x", "d")
+    calls = []
+    monkeypatch.setattr(build, "find_exposures", lambda ra, dec: calls.append(1) or ([e], {"service": "s", "query": "q", "retrieved_utc": "t"}))
+    a, _ = build.cached_exposures(1.0, 2.0, raw_root=tmp_path)
+    b, prov = build.cached_exposures(1.0, 2.0, raw_root=tmp_path)
+    assert a == b == [e] and prov["retrieved_utc"] == "t" and len(calls) == 1
+    build.cached_exposures(1.0, 2.0, refresh=True, raw_root=tmp_path)
+    assert len(calls) == 2

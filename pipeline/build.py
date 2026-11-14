@@ -12,7 +12,11 @@ import hashlib
 import io
 import json
 import math
+import random
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -58,20 +62,99 @@ def cutout_url(fits_url: str, ra: float, dec: float, size_deg: float) -> str:
     return f"{fits_url}?center={ra:.6f},{dec:.6f}&size={size_deg:.4f}deg"
 
 
-def fetch(url: str, raw_root: Path = RAW_ROOT) -> Path:
-    """Download once; later calls hit the cache (data/raw/<hash>.fits)."""
+# T26: IRSA answers "503 Server busy, retry later" under load. Retry with backoff, and share one
+# download limit across all concurrent builds in this process so we don't hammer it.
+RETRY_STATUS = {429, 500, 502, 503, 504}
+RETRY_WAITS_S = (2, 4, 8, 16, 30)
+_DOWNLOAD_SLOTS = threading.BoundedSemaphore(THREADS)
+
+
+def _get_with_retry(url: str, sleep=time.sleep) -> bytes:
     import requests
 
-    raw_root.mkdir(parents=True, exist_ok=True)
-    path = raw_root / (hashlib.sha1(url.encode()).hexdigest()[:20] + ".fits")
-    if path.exists() and path.stat().st_size > 0:
-        return path
-    r = requests.get(url, timeout=TIMEOUT_S)
-    r.raise_for_status()
-    tmp = path.with_suffix(".part")
-    tmp.write_bytes(r.content)
+    last = None
+    for attempt, wait in enumerate((0,) + RETRY_WAITS_S):
+        if wait:
+            sleep(wait + random.uniform(0, wait / 4))
+        try:
+            with _DOWNLOAD_SLOTS:
+                r = requests.get(url, timeout=TIMEOUT_S)
+        except (requests.ConnectionError, requests.Timeout) as e:
+            last = e
+            continue
+        if r.status_code in RETRY_STATUS:
+            last = RuntimeError(f"HTTP {r.status_code}: {r.text[:60].strip()}")
+            continue
+        r.raise_for_status()
+        if not r.content.startswith(b"SIMPLE"):
+            last = RuntimeError(f"not a FITS file: {r.content[:60]!r}")
+            continue
+        return r.content
+    raise RuntimeError(f"gave up after {len(RETRY_WAITS_S) + 1} tries: {last}")
+
+
+# T28: cutouts are cached per (image, centre) with their size in the file name. A cached cutout at
+# least as large as needed is reused, so changing the field of view to something smaller (or equal)
+# downloads nothing. Every download is at least MIN_CUTOUT_DEG: ~82% of a cutout's bytes are the
+# EPSF table, which doesn't grow with size, so a bigger minimum costs little and saves re-downloads.
+MIN_CUTOUT_DEG = 0.40   # covers fields up to ~15' with rotation margin
+
+
+def _cutout_dir(fits_url: str, ra: float, dec: float, raw_root: Path) -> Path:
+    key = f"{fits_url}|{ra:.4f}|{dec:.4f}"
+    return raw_root / "cutouts" / hashlib.sha1(key.encode()).hexdigest()[:20]
+
+
+def cached_cutout(fits_url: str, ra: float, dec: float, size_deg: float,
+                  raw_root: Path = RAW_ROOT) -> Path | None:
+    d = _cutout_dir(fits_url, ra, dec, raw_root)
+    best = None
+    for p in d.glob("*.fits") if d.exists() else []:
+        try:
+            s = float(p.stem)
+        except ValueError:
+            continue
+        if s >= size_deg - 1e-9 and (best is None or s < best[0]):
+            best = (s, p)
+    return best[1] if best else None
+
+
+def fetch(fits_url: str, ra: float, dec: float, size_deg: float, raw_root: Path = RAW_ROOT) -> Path:
+    """Return a cached cutout covering size_deg, downloading one (>= MIN_CUTOUT_DEG) if needed."""
+    hit = cached_cutout(fits_url, ra, dec, size_deg, raw_root)
+    if hit:
+        return hit
+    size = round(max(size_deg, MIN_CUTOUT_DEG), 4)
+    d = _cutout_dir(fits_url, ra, dec, raw_root)
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / f"{size:.4f}.fits"
+    content = _get_with_retry(cutout_url(fits_url, ra, dec, size))
+    tmp = path.with_suffix(f".{threading.get_ident()}.part")
+    tmp.write_bytes(content)
     tmp.replace(path)
     return path
+
+
+# T27: the exposure list for a position is cached on disk, so a new field of view (same centre)
+# or a rebuild skips the IRSA TAP queries. Kept for a day so new data releases still show up;
+# `refresh=True` forces a new query.
+EXPOSURE_TTL_S = 24 * 3600
+
+
+def cached_exposures(ra: float, dec: float, refresh: bool = False, raw_root: Path = RAW_ROOT):
+    from .query import Exposure
+
+    path = raw_root / "exposures" / f"{ra:.4f}_{dec:+.4f}.json"
+    if not refresh and path.exists() and time.time() - path.stat().st_mtime < EXPOSURE_TTL_S:
+        d = json.loads(path.read_text(encoding="utf-8"))
+        return [Exposure(**e) for e in d["exposures"]], d["provenance"]
+    exposures, prov = find_exposures(ra, dec)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(f".{threading.get_ident()}.part")
+    tmp.write_text(json.dumps({"provenance": prov, "exposures": [asdict(e) for e in exposures]}),
+                   encoding="utf-8")
+    tmp.replace(path)
+    return exposures, prov
 
 
 # -- T03: align + wavelength -------------------------------------------------------------------------
@@ -155,33 +238,34 @@ def render_png(img: np.ndarray, path: Path) -> None:
 
 def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: float,
                  out_root: Path = Path("data/targets"), progress: Progress | None = None,
-                 per_group: int = PER_GROUP, name: str | None = None) -> Path:
+                 per_group: int = PER_GROUP, name: str | None = None, refresh: bool = False) -> Path:
     """Query, download, align, render. Returns the target folder with a valid target.json."""
     def report(step, done=None, total=None, message=""):
         if progress:
             progress(step, done, total, message)
 
     report("query", message="searching IRSA for SPHEREx images")
-    exposures, prov_query = find_exposures(ra_deg, dec_deg)
+    exposures, prov_query = cached_exposures(ra_deg, dec_deg, refresh=refresh)
     if not exposures:
         raise LookupError(f"no SPHEREx images cover RA {ra_deg} Dec {dec_deg}")
     chosen = select(exposures, per_group)
 
     npix = max(16, int(round(size_arcmin * 60 / PIXEL_SCALE_ARCSEC)))
     cut_deg = size_arcmin / 60 * 1.5 + 0.01   # room for the rotation of the original frames
-    urls = [cutout_url(e.fits_url, ra_deg, dec_deg, cut_deg) for e in chosen]
     downloads_started = _now()
-    paths: list[Path | None] = [None] * len(urls)
+    n_cached = sum(cached_cutout(e.fits_url, ra_deg, dec_deg, cut_deg) is not None for e in chosen)
+    paths: list[Path | None] = [None] * len(chosen)
     errors = []
-    report("download", 0, len(urls), f"downloading {len(urls)} of {len(exposures)} SPHEREx images")
+    report("download", 0, len(chosen), f"{len(chosen)} of {len(exposures)} SPHEREx images, "
+                                       f"{n_cached} already cached")
     with ThreadPoolExecutor(THREADS) as pool:
-        futs = {pool.submit(fetch, u): i for i, u in enumerate(urls)}
+        futs = {pool.submit(fetch, e.fits_url, ra_deg, dec_deg, cut_deg): i for i, e in enumerate(chosen)}
         for n, f in enumerate(as_completed(futs), 1):
             try:
                 paths[futs[f]] = f.result()
             except Exception as e:  # noqa: BLE001 - one failed cutout shouldn't kill the field
-                errors.append(f"{urls[futs[f]]}: {e}")
-            report("download", n, len(urls), f"downloaded {n}/{len(urls)}")
+                errors.append(f"{chosen[futs[f]].obs_id} D{chosen[futs[f]].detector}: {e}")
+            report("download", n, len(chosen), f"downloaded {n}/{len(chosen)}")
 
     out = Path(out_root) / target_id
     (out / "frames").mkdir(parents=True, exist_ok=True)
@@ -189,7 +273,7 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
         old.unlink()
     out_w = output_wcs(ra_deg, dec_deg, npix)
     frames = []
-    for i, (e, p, u) in enumerate(zip(chosen, paths, urls)):
+    for i, (e, p) in enumerate(zip(chosen, paths)):
         report("align", i, len(chosen), f"aligning {e.obs_id} D{e.detector}")
         if p is None:
             continue
@@ -200,6 +284,7 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
             continue
         if np.isfinite(img).mean() < 0.2:
             continue                      # target barely on this image
+        u = cutout_url(e.fits_url, ra_deg, dec_deg, float(p.stem))   # the cutout actually used
         fid = f"f{len(frames):03d}"
         render_png(img, out / "frames" / f"{fid}.png")
         frames.append({
@@ -220,7 +305,8 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
         "image": {"width": npix, "height": npix, "pixel_scale_arcsec": PIXEL_SCALE_ARCSEC},
         "provenance": [prov_query, {
             "service": "IRSA SPHEREx cutouts",
-            "query": f"{len(urls)} cutouts (per frame: source_url), size {cut_deg:.4f} deg, "
+            "query": f"{len(chosen)} cutouts (per frame: source_url; {n_cached} from cache), "
+                     f"needed size {cut_deg:.4f} deg, "
                      f"{per_group} per epoch+detector of {len(exposures)} images; "
                      f"{len(errors)} failed",
             "retrieved_utc": downloads_started}],
@@ -245,10 +331,11 @@ def main(argv=None):
     ap.add_argument("--size", type=float, default=15)
     ap.add_argument("--out", type=Path, default=Path("data/targets"))
     ap.add_argument("--per-group", type=int, default=PER_GROUP)
+    ap.add_argument("--refresh", action="store_true", help="re-query IRSA instead of the cached exposure list")
     args = ap.parse_args(argv)
     out = build_target(args.id, args.ra, args.dec, args.size, args.out,
                        progress=lambda s, d=None, t=None, m="": print(f"[{s}] {m}", flush=True),
-                       per_group=args.per_group)
+                       per_group=args.per_group, refresh=args.refresh)
     print(f"wrote {out}")
 
 
