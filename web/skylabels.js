@@ -13,7 +13,8 @@ const COLOURS = { simbad: "#9cc3ff", vsx: "#ffb36b", catwise2020: "#e88bff" };
 const st = { on: true, region: null, labels: [], pending: null, timer: null, hooked: false, placed: [],
   traced: new Set(), tip: null };
 
-function namesBudget(fov) { return fov > 1 ? 30 : fov > 0.4 ? 70 : 200; }
+function namesBudget(fov) { return fov > 1 ? 20 : fov > 0.4 ? 40 : 120; }
+const NUMBERS_FOV_DEG = 0.25;   // catalogue numbers (2dFGRS, LEDA, Gaia DR3 ...) get a name only closer than this
 
 function regionKey(v) {
   const r = Math.min(1, Math.max(0.25, v.fov * 0.6));
@@ -69,7 +70,7 @@ function paint(ctx, proj) {
     ctx.strokeStyle = colour; ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.arc(s.x, s.y, 3.5, 0, 2 * Math.PI); ctx.stroke();
     st.placed.push({ x: s.x, y: s.y, l });
-    if (named >= budget) continue;
+    if (named >= budget || (l.importance >= 3 && v.fov > NUMBERS_FOV_DEG)) continue;
     const w = ctx.measureText(l.name).width + 4, h = 13;
     const box = { x: s.x + 6, y: s.y - 10, w, h };
     if (boxes.some((b) => box.x < b.x + b.w && b.x < box.x + box.w && box.y < b.y + b.h && b.y < box.y + box.h)) continue;
