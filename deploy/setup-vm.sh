@@ -35,12 +35,12 @@ UNIT
 cat > /etc/caddy/Caddyfile <<CADDY
 ${HOST} {
 	encode gzip
-	@tilegen path /tiles/* /health
+	@tilegen path /tiles/* /health /cutout /cutout/*
 	handle @tilegen {
 		reverse_proxy 127.0.0.1:8100
 	}
 	handle {
-		respond "SPHEREx tile generator. GET /health, /tiles/live/..." 404
+		respond "SPHEREx tile generator. GET /health, /tiles/live/..., /cutout?url=&ra=&dec=&size=" 404
 	}
 }
 CADDY

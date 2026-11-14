@@ -129,9 +129,17 @@ def fetch(fits_url: str, ra: float, dec: float, size_deg: float, raw_root: Path 
     d = _cutout_dir(fits_url, ra, dec, raw_root)
     d.mkdir(parents=True, exist_ok=True)
     path = d / f"{size:.4f}.fits"
-    # T33: AWS Open Data bucket first (HTTP Range, only the rows we need), IRSA cutouts as fallback.
+    from . import s3
+    # T57: the team VM next to the bucket cuts it (fastest from Europe), then T33: the AWS bucket
+    # directly (HTTP Range, only the rows we need), IRSA cutouts as the last fallback.
+    if s3.remote_available():
+        try:
+            return s3.fetch_cutout_remote(fits_url, ra, dec, size, path)
+        except LookupError:
+            raise
+        except Exception as e:  # noqa: BLE001 - VM down or old: read the bucket ourselves
+            print(f"Cutout VM failed, reading S3 directly: {fits_url.rsplit('/', 1)[-1]}: {e}")
     try:
-        from . import s3
         return s3.fetch_cutout(fits_url, ra, dec, size, path)
     except LookupError:
         raise
@@ -176,7 +184,8 @@ def source_of(path: Path, fits_url: str, ra: float, dec: float) -> str:
     h = fits.getheader(path, 0)
     if "S3SRC" in h:
         from .s3 import s3_url
-        return f"{s3_url(fits_url)}#rows={h.get('S3CUT', '').replace(' ', '')}"
+        via = f";via={h['VIA']}" if "VIA" in h else ""   # T57: cut by the team VM
+        return f"{s3_url(fits_url)}#rows={h.get('S3CUT', '').replace(' ', '')}{via}"
     return cutout_url(fits_url, ra, dec, float(path.stem))
 
 
@@ -403,7 +412,8 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
         "size_arcmin": size_arcmin,
         "image": {"width": npix, "height": npix, "pixel_scale_arcsec": PIXEL_SCALE_ARCSEC},
         "provenance": [prov_query, {
-            "service": "SPHEREx level-2 images: AWS Open Data s3://nasa-irsa-spherex (HTTP Range) or IRSA cutouts",
+            "service": ("SPHEREx level-2 images: AWS Open Data s3://nasa-irsa-spherex (HTTP Range; cut next to "
+                        "the bucket by the team VM where a frame's source_url says via=...) or IRSA cutouts"),
             "query": f"{len(chosen)} cutouts (per frame: source_url; {n_cached} from cache), "
                      f"needed size {cut_deg:.4f} deg, "
                      f"{per_group} per epoch+detector of {len(exposures)} images; "

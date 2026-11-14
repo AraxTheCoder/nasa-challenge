@@ -26,7 +26,11 @@ _HTTP = {"ready": 200, "building": 202, "no_data": 404, "error": 500}
 
 
 def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = False,
-               tiles_remote: str | None = None, use_remote: bool = False) -> FastAPI:
+               tiles_remote: str | None = None, use_remote: bool = False,
+               cutouts_remote: str | None = None) -> FastAPI:
+    if not fixture:
+        from pipeline import s3   # T57: builds get their cutouts from the team VM (fallback: S3 directly)
+        s3.REMOTE = cutouts_remote.rstrip("/") if cutouts_remote else None
     builder = Builder(cache_root, fixture=fixture)
     app = FastAPI(title="SPHEREx blink Live API", version="0.3")
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"],
@@ -172,9 +176,17 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
 
     # -- T47: which tile generator renders the live deep-zoom tiles (local / remote US VM) --------
 
+    def settings_info() -> dict:
+        info = dict(sky.tiles.info())
+        if not fixture:
+            from pipeline import s3
+            info["cutouts_remote"] = s3.REMOTE           # T57: who cuts the images for builds
+            info["cutouts"] = "remote" if s3.remote_available() else "s3"
+        return info
+
     @app.get("/api/settings")
     def get_settings():
-        return sky.tiles.info()
+        return settings_info()
 
     @app.post("/api/settings")
     async def set_settings(request: Request):
@@ -184,7 +196,7 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
                 sky.tiles.use_remote(body["tiles"] == "remote")
             except ValueError as e:
                 return JSONResponse({"error": str(e)}, status_code=400)
-        return sky.tiles.info()
+        return settings_info()
 
     @app.get("/api/health")
     def health():

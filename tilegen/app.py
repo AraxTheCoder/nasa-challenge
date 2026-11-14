@@ -2,6 +2,9 @@
 
     GET /health                                            -> {"ok": true, "orders": [6, 7], ...}
     GET /tiles/live/Norder<k>/Dir<d>/Npix<p>[_<slice>].png -> PNG, or 404 if no SPHEREx image covers it
+    GET /cutout?url=<IRSA level-2 FITS URL>&ra=&dec=&size=<deg> -> gzip of the cutout FITS that
+        pipeline.s3.fetch_cutout writes (T57: builds in Europe get ~200 kB instead of ~2-3 MB of rows);
+        404 + `X-Cutout: off-image` if the field is not on that image. Cached in data/vm_cutouts/.
 
 Rendered tiles are cached on disk (data/tilegen_cache/). Meant to run next to the AWS SPHEREx bucket
 (us-east-1); the Live API asks it in remote mode (python -m server --tiles-remote <url>).
@@ -23,7 +26,8 @@ TILE_RE = re.compile(r"^Norder(\d+)/Dir(\d+)/Npix(\d+)(?:_(\d+))?\.png$")
 MISSING = b"MISSING"
 
 
-def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, prefetch: bool = True) -> FastAPI:
+def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, prefetch: bool = True,
+               cutout_slots: int = 24) -> FastAPI:
     app = FastAPI(title="SPHEREx tile generator", version="1")
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
     sem = threading.BoundedSemaphore(slots)
@@ -131,5 +135,60 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
         if data == MISSING:
             return Response(status_code=404, headers={"Cache-Control": "public, max-age=86400"})
         return Response(data, media_type="image/png", headers={"Cache-Control": "public, max-age=604800, immutable"})
+
+    # -- T57: cutouts for the Live API's builds (pipeline.s3.fetch_cutout_remote) ----------------
+    cut_root = cache_root.parent / "vm_cutouts"
+    cut_sem = threading.BoundedSemaphore(cutout_slots)
+    cut_stats = {"cut": 0, "cached": 0, "seconds": 0.0}
+
+    @app.get("/cutout")
+    def cutout(url: str, ra: float, dec: float, size: float):
+        """gzip of the cutout FITS (IMAGE, FLAGS, WCS-WAVE) that pipeline.s3.fetch_cutout writes."""
+        import gzip
+        import hashlib
+
+        from pipeline import s3
+
+        if s3.s3_url(url) is None or not url.endswith(".fits") or ".." in url:
+            raise HTTPException(400, "url must be an IRSA SPHEREx level-2 image")
+        if not (0 < size <= 2.0) or not (-90 <= dec <= 90) or not (0 <= ra < 360):
+            raise HTTPException(400, "bad ra/dec/size")
+        key = hashlib.sha1(f"{url}|{ra:.7f}|{dec:.7f}|{size:.4f}".encode()).hexdigest()
+        gz = cut_root / key[:2] / f"{key}.fits.gz"
+        off = gz.with_suffix(".off")
+        headers = {"Cache-Control": "public, max-age=604800, immutable"}
+        if off.exists():
+            return Response(status_code=404, headers={**headers, "X-Cutout": s3.OFF_IMAGE})
+        if not gz.exists():
+            t0 = time.time()
+            tmp = cut_root / "tmp" / f"{key}.{threading.get_ident()}.fits"
+            busy["n"] += 1                         # tile prefetch pauses while someone waits for this
+            try:
+                with cut_sem:
+                    s3.fetch_cutout(url, ra, dec, size, tmp, via="team VM us-east4 (tilegen /cutout)")
+            except LookupError:
+                off.parent.mkdir(parents=True, exist_ok=True)
+                off.touch()
+                return Response(status_code=404, headers={**headers, "X-Cutout": s3.OFF_IMAGE})
+            except Exception as e:  # noqa: BLE001 - e.g. not in the bucket: the client falls back
+                raise HTTPException(502, f"S3 read failed: {e}") from e
+            finally:
+                busy["n"] -= 1
+            gz.parent.mkdir(parents=True, exist_ok=True)
+            part = gz.with_name(f"{gz.name}.{threading.get_ident()}.part")
+            part.write_bytes(gzip.compress(tmp.read_bytes(), 5))
+            part.replace(gz)
+            tmp.unlink(missing_ok=True)
+            cut_stats["cut"] += 1
+            cut_stats["seconds"] += time.time() - t0
+        else:
+            cut_stats["cached"] += 1
+        return Response(gz.read_bytes(), media_type="application/gzip", headers=headers)
+
+    @app.get("/cutout/health")
+    def cutout_health():
+        n = cut_stats["cut"]
+        return {"ok": True, "cut": n, "served_from_cache": cut_stats["cached"],
+                "mean_cut_s": round(cut_stats["seconds"] / n, 2) if n else None}
 
     return app

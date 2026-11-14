@@ -27,11 +27,17 @@ def main() -> None:
                          f"(default: $SPHEREX_TILES_REMOTE or {TEAM_TILEGEN}; 'none' to disable). "
                          "In local mode it also stands in while the local index is being built.")
     ap.add_argument("--use-remote", action="store_true", help="start with the remote tile generator")
+    ap.add_argument("--cutouts-remote", default=os.environ.get("SPHEREX_CUTOUTS_REMOTE", TEAM_TILEGEN),
+                    help="tilegen service that cuts the SPHEREx images for builds next to the bucket (T57; "
+                         f"default: $SPHEREX_CUTOUTS_REMOTE or {TEAM_TILEGEN}; 'none' = read S3 directly)")
     args = ap.parse_args()
     if str(args.tiles_remote).lower() in ("none", ""):
         args.tiles_remote = None
+    if str(args.cutouts_remote).lower() in ("none", ""):
+        args.cutouts_remote = None
     uvicorn.run(create_app(args.cache, fixture=args.fixture, tiles_remote=args.tiles_remote,
-                           use_remote=args.use_remote), host=args.host, port=args.port)
+                           use_remote=args.use_remote, cutouts_remote=args.cutouts_remote),
+                host=args.host, port=args.port)
 
 
 if __name__ == "__main__":

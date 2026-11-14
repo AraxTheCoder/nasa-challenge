@@ -14,8 +14,12 @@ Measured 2026-11-14 from Europe: 5-7 MB/s with 8-32 parallel requests and no err
 """
 from __future__ import annotations
 
+import gzip
 import io
 import math
+import os
+import threading
+import time
 from pathlib import Path
 
 import numpy as np
@@ -124,7 +128,8 @@ def _flags_rows(url: str, offset: int, hdr, hsize: int, y0: int, y1: int, x0: in
         return np.asarray(hd[1].data)[:, x0:x1].astype(np.int32)
 
 
-def fetch_cutout(fits_url: str, ra: float, dec: float, size_deg: float, dest: Path) -> Path:
+def fetch_cutout(fits_url: str, ra: float, dec: float, size_deg: float, dest: Path,
+                 via: str | None = None) -> Path:
     """Write a small cutout FITS (IMAGE, FLAGS, WCS-WAVE) of size_deg around (ra, dec) to dest."""
     from astropy.io import fits
     from astropy.wcs import WCS
@@ -186,17 +191,60 @@ def fetch_cutout(fits_url: str, ra: float, dec: float, size_deg: float, dest: Pa
     ])
     out[0].header["S3SRC"] = (url[:68], "read via HTTP Range")
     out[0].header["S3CUT"] = (f"x {x0}:{x1} y {y0}:{y1}", "detector pixels kept (0-based)")
+    if via:
+        out[0].header["VIA"] = (via[:68], "cut by this host next to the bucket (T57)")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(".s3.part")
+    tmp = dest.with_suffix(f".{threading.get_ident()}.s3.part")
     out.writeto(tmp, overwrite=True)
+    tmp.replace(dest)
+    return dest
+
+
+# -- T57: the same cutout, cut by the team VM next to the bucket -----------------------------------
+# From Europe the bucket gives ~3 MB/s in total and each read takes whole detector rows (~2-3 MB per
+# image for a 478 kB cutout). The VM in us-east4 reads at 38-95 MB/s and sends back only the finished
+# cutout, gzipped (~200 kB). Same file as fetch_cutout writes, so everything downstream is unchanged.
+REMOTE: str | None = os.environ.get("SPHEREX_CUTOUTS_REMOTE") or None   # set by `python -m server`
+REMOTE_RETRY_S = 60          # after a VM failure, go straight to the bucket for this long
+_remote_down_until = 0.0
+OFF_IMAGE = "off-image"      # X-Cutout header value: the field is not on this image (-> LookupError)
+
+
+def remote_available() -> bool:
+    return bool(REMOTE) and time.time() >= _remote_down_until
+
+
+def fetch_cutout_remote(fits_url: str, ra: float, dec: float, size_deg: float, dest: Path,
+                        base: str | None = None) -> Path:
+    """fetch_cutout, done by the tilegen service at `base` (default REMOTE). Raises LookupError if the
+    field is not on the image, RuntimeError (and pauses remote use) if the VM can't help."""
+    global _remote_down_until
+    base = (base or REMOTE or "").rstrip("/")
+    try:
+        r = _session().get(f"{base}/cutout", params={"url": fits_url, "ra": f"{ra:.7f}",
+                                                     "dec": f"{dec:.7f}", "size": f"{size_deg:.4f}"},
+                           timeout=(5, TIMEOUT_S))
+    except Exception as e:  # noqa: BLE001 - connection refused, timeout, DNS
+        _remote_down_until = time.time() + REMOTE_RETRY_S
+        raise RuntimeError(f"cutout VM unreachable: {e}") from e
+    if r.status_code == 404 and r.headers.get("X-Cutout") == OFF_IMAGE:
+        raise LookupError("field is not on this image")
+    if r.status_code != 200:
+        if r.status_code >= 500 or r.status_code == 404:   # 404 without the header: old VM, no /cutout
+            _remote_down_until = time.time() + REMOTE_RETRY_S
+        raise RuntimeError(f"cutout VM: HTTP {r.status_code} {r.text[:120]}")
+    data = gzip.decompress(r.content)
+    if not data.startswith(b"SIMPLE"):
+        raise RuntimeError("cutout VM: answer is not a FITS file")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(f".{threading.get_ident()}.vm.part")
+    tmp.write_bytes(data)
     tmp.replace(dest)
     return dest
 
 
 # -- T42: whole-image access with cached headers and row chunks (for live map tiles) -------------
 
-import os
-import threading
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 
