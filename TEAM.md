@@ -683,11 +683,8 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   (`/tiles/live-p<n>/`, redeployed); the Live API asks it in "US VM" mode, an old VM falls back to local.
   `web/` unchanged. [to Mati] `server/test_discoveries.py` fails on Windows: `source` is
   `fixtures\discoveries-sample.json` (backslash), the test expects `/`.
-<<<<<<< Updated upstream
 - 2026-11-14 [Joerg] T23 closed (done). Labels have a position in every frame of every epoch (checked: 134/134 labels, 36 frames, epochs 1–3); the open step "try on official test targets" was dropped. T14–T16 (deploy, submission, demo) stay open until the project is close to final.
-=======
 - 2026-11-14 Jonathan (Claude): T55 step 14 (`app/` + tilegen/skycache/deploy): no Blink button, red outline or
   play button: the map blinks by itself at level 7; labels are month/year ("Aug–Sep 2025") instead of P1 / Ep. 1
   (new `GET /api/pass-dates`, CONTRACTS v0.14). Faster pass loading: base map capped at order 6 under the passes,
   the Live API renders a tile's other passes in the background, VM tuned (12 slots, more S3 threads), redeployed.
->>>>>>> Stashed changes
