@@ -17,7 +17,7 @@ distant body would look across epochs, demonstrated on a real dwarf planet.
 |---|---|---|---|
 | A | Data pipeline | `pipeline/` | TBD |
 | B | Detection & science | `detect/` | TBD |
-| C | Frontend & submission | `web/` | TBD |
+| C | Frontend & submission | `web/` | Mati |
 
 ## Timeline
 
