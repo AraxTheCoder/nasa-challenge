@@ -305,3 +305,14 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 [Joerg → Jonathan] T17: `pipeline/build.py` now calls `pipeline.pairs.add_pairs(target)`
   right before writing `target.json` (2 lines, next to your `add_labels`). Rule per CONTRACTS "Pair",
   tests in `pipeline/test_pairs.py`. Fields built before this have no `pairs`: `?refresh=1` adds them.
+- 2026-11-14 [Joerg → Jonathan, for T32] Local feel-test of per-epoch HiPS (nothing committed, your
+  task): Barnard's Star, D1, 5 images per epoch as 1 deg IBE cutouts -> `reproject_and_coadd` (mean,
+  zodi subtracted, hardware flags masked) onto a 1.2 deg TAN grid -> `reproject.hips.reproject_to_hips`
+  (FITS tiles, 256 px). Per epoch: stitch 1 s, tiling < 1 s, ~26 tiles, ~7 MB, HiPS order 7 =
+  ~6.4"/px (native 6.15"). Coverage 70% (rotated 1 deg cutouts leave corners; use more images or
+  full frames). Aladin Lite v3 shows them as overlay layers above `CDS/P/SPHEREx/QR2/color`;
+  epoch switch = toggle layer opacity (no tile reload). Bottleneck is IRSA downloads, not tiling:
+  15 x 1 deg cutouts took ~40 min while 5 live builds ran. Scripts: Joerg's scratchpad, ask if useful.
+- 2026-11-14 [joerg + Claude] T23 progress: label motion summary + class (contracts v0.5), trail view,
+  object inspector, overlap-free names, shift-and-stack (`python -m pipeline.stack`). T17 pairs now in
+  `pipeline.build`. All merged.
