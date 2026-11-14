@@ -58,6 +58,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T19 | A: Labels on the images: catalogue names/positions (SIMBAD, Gaia DR3 with proper motion) into `target.json` | Joerg | done | `joerg/T19-labels` | [task file](tasks/T19-labels.md). `pipeline/labels.py`; viewer side is T13 |
 | T20 | C: Viewer ↔ Live API: RA/Dec/size input, `?ra=&dec=&size=` in the page URL, request + poll with progress, load from `target_url`, quick picks for the official test fields (contracts v0.3) | Mati | done | `mati/T20-live-api-client` | [tasks/T20](tasks/T20-live-api-client.md). Run: `web/README.md` (API :8000, viewer :8080). Test fields in `web/presets.json` |
 | T21 | C: Everyone can run the viewer locally: one-command launcher (API + viewer), README run steps for Linux/macOS/Windows | Mati | doing | `mati/T21-run-kit` | [tasks/T21](tasks/T21-run-kit.md) |
+| T22 | C: Movement paths in the viewer: line + tick per frame, early→late colour, current position + name, labelled exaggerated arrow for slow movers | Joerg | doing | `joerg/T22-movement-paths` | [task file](tasks/T22-movement-paths.md). From the "Draw paths" idea |
 
 ## Decisions
 
@@ -106,6 +107,20 @@ Dated, one line each, with why.
 ## Ideas
 
 Format: `[name] idea — status: new`. Agents don't act on an idea until a human moves it to the Board.
+- [Joerg] Draw paths, not just positions: for every label, known object and detection, a line
+  through its per-frame positions with a tick per frame and colour from early to late (data is
+  already in the JSON). — status: new
+- [Joerg] Motion classification for detections: from the track, rate + direction + shape, shown as
+  a label, e.g. "asteroid-like, 30"/h" (seen in one burst only), "moves between epochs only: nearby
+  star / brown dwarf", "large jump between epochs, slow drift within one: distant solar-system body".
+  Rough numbers: main belt ~150 px/day; Barnard 1.7 px/yr; a body at 500 AU swings ~+-0.11 deg/yr
+  from Earth's orbit, i.e. up to ~14' between epochs (about one default field!), ~1 px/day within
+  an epoch. — status: new
+- [Joerg] Shift-and-stack: add frames after shifting each along a guessed motion; faint movers
+  sharpen, stars smear. Standard for distant-object searches; matches the challenge's "add together
+  or subtract images". — status: new
+- [Joerg] Trail image: sum one burst (or one epoch) into a single picture so movers show as dot rows
+  or streaks without playing the blink. — status: new
 
 ## Questions / Blockers
 

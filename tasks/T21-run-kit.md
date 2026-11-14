@@ -24,3 +24,6 @@ browser with a few copy-paste commands, without port clashes or guessing which p
 
 ## Notes from others
 (anyone may append here, dated and signed)
+- 2026-11-14 [Joerg] FYI: T22 (movement paths) adds two event-dispatch lines to `web/viewer.js`
+  (`viewer:target`, `viewer:frame`) and imports a new `web/paths.js`. Shouldn't touch your T21 files;
+  shout in tasks/T22-movement-paths.md if it does.
