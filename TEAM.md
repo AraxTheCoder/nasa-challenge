@@ -47,7 +47,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T08 | B: Classify detections as known / unknown / artifact and write them into `target.json` | | open | | Needs T06, T07 |
 | T09 | B: Sanity check on a known bright asteroid in real SPHEREx data: do we recover it at the JPL position? | | open | | Needs T04, T08 |
 | T10 | B: "Planet X mode": pick a slow distant body (dwarf planet), check it's detectable across epochs, propose the demo target list | | open | | Feeds T05 |
-| T11 | C: Static viewer skeleton: load `index.json` + `target.json` from the fixture, show frames, blink between two | Mati | review | `mati/T11-viewer-skeleton` | Works on fixture; waiting for Mati's look before merge. Run: see `web/README.md` |
+| T11 | C: Static viewer skeleton: load `index.json` + `target.json` from the fixture, show frames, blink between two | Mati | done | `mati/T11-viewer-skeleton` | [tasks/T11](tasks/T11-viewer-skeleton.md). Vanilla JS, no build. Reads static target folders; not yet wired to the Live API (v0.3). Run: see `web/README.md` |
 | T12 | C: Epoch timeline and band/wavelength filter | | open | | Needs T11 |
 | T13 | C: Overlay detections and known objects, with a clear "synthetic" badge where it applies | | open | | Needs T11 |
 | T14 | C: Deploy to GitHub Pages with pre-baked targets, target picker, no live API calls | | open | | Needs T11; real targets arrive with T05 |
@@ -94,6 +94,8 @@ Dated, one line each, with why.
   v0.2 (pairs, bandwidth, alpha no-data) and v0.3 (live API) are both in effect.
 - 2026-11-14 [Joerg] Every task gets a file `tasks/T<id>-<slug>.md` for details and communication;
   the Board stays the one-line index. Why: Board rows are too short for findings and requests.
+- 2026-11-14 [Mati] Agrees with the architecture and CONTRACTS v0.1 (closes the Questions item).
+  Why: Mati's answer; per Joerg's line above no ack is needed, v0.2 + v0.3 are in effect.
 
 ## Ideas
 
@@ -150,3 +152,11 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   - Cutouts: append `?center=ra,dec&size=0.25deg` to the FITS URL. 10-25 s and ~4 MB each (mostly
     the EPSF table), so fetch in parallel (8 threads: 39 cutouts in ~2 min).
   - C: frames rotate between visits, so corners of the common grid have no data; show as "no data".
+- 2026-11-14 [Mati + Claude] Done: T11 merged. `web/` is plain HTML/CSS/ES-module JS, no build:
+  loads `index.json` + `target.json` (`web/targets/`, falls back to `fixtures/targets/`; `?data=`
+  and `?target=` URL params), stacks all frames, A/B blink with speed, keys Space/X/arrows,
+  frame info incl. A-B time and wavelength gap, provenance, synthetic badge + image watermark,
+  transparent pixels shown hatched as no data, empty SVG overlay layer in CONTRACTS pixel coords
+  for T13. Accepts schema 0.1 and 0.2. Next: wire the viewer to the Live API (v0.3), then
+  T12/T13. Gotchas: viewer does not call the Live API yet; T14's note "no live API calls" is
+  outdated since v0.3.
