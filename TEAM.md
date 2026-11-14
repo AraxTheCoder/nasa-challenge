@@ -77,7 +77,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T38 | A: Fast labels: vectorised tracks (all objects x frames at once), ranked cap of 400 SIMBAD + 400 Gaia per field, grid-based duplicate merge, SIMBAD + Gaia in parallel, 15 s per mirror | Joerg | done | (merged as e715788) | Deep field (COSMOS, 30,785 SIMBAD objects): 23 s -> 5.5 s, labels 50+ MB -> 1.2 MB. Official fields: same important labels |
 | T39 | A: Wide per-epoch stitch test (reference): full 3.5° images from AWS, one mosaic per epoch over ~6°, HiPS, page with region-wide labels + traces | Joerg | done | `joerg/T39-wide-stitch` | `pipeline/reference/wide_stitch/` (README, `run.sh`). Input for T32/T36 (Jonathan) |
 | T40 | C: Labels on by default + switch everywhere: default ON (remembered per browser), works in live/offline/`?explore=0`, second Labels switch next to the path controls | Joerg | done | `joerg/T40-labels-on` | Without labels the paths, names, inspector and sky-map traces had nothing to draw |
-| T41 | C: Faster map images: server-side HiPS tile cache + prefetch (neighbours, children, Allsky), browser skips stale tiles and loads the centre first, epoch tiles cached and pre-rendered | Jonathan | doing | `jonathan/T41-fast-tiles` | IRSA tiles 0.7 s first byte, Allsky 4.3 s, HTTP/1.1 (6 per browser) |
+| T41 | C: Faster map images: server-side HiPS tile cache + prefetch (neighbours, children, Allsky), browser skips stale tiles and loads the centre first, epoch tiles cached and pre-rendered | Jonathan | done | `jonathan/T41-fast-tiles` | IRSA tiles 0.7 s first byte, Allsky 4.3 s, HTTP/1.1 (6 per browser) |
 
 ## Decisions
 
@@ -414,3 +414,8 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   (was inside `startExplore`, so offline mode and `?explore=0` had no working switch), `setLabels`
   remembers the choice and fires `labels:changed`; `labels:set` flips it from elsewhere (paths.js
   has a second switch). Default is ON, see Decisions.
+- 2026-11-14 [Jonathan + Claude] Done: T41. `/api/sky/<survey>/...` caches IRSA/CDS HiPS tiles under
+  `data/hips_cache/` and prefetches 8 neighbours + 4 children per tile; the SPHEREx cube's Allsky is
+  warmed at server start. Measured: Allsky 4.3 s -> 12 ms, cached tile 0.7-1.0 s -> ~10 ms. The
+  browser now loads the most central wanted tiles first and drops tiles that left the screen. Epoch
+  tiles are kept in memory and pre-rendered when the viewer asks for a field's layers.
