@@ -18,6 +18,7 @@ Source of truth, in order: `docs/CHALLENGE.md` (official text) > `docs/CONTRACTS
    - anything waiting on them,
    - which task you suggest next.
 4. Wait for their OK before doing anything else.
+   Don't write code until I've OK'd the task and you've claimed it on the Board.
 
 ## Claiming work (prevents two agents doing the same thing)
 
