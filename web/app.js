@@ -512,7 +512,10 @@ async function main() {
     return;
   }
   await loadPresets();
-  startExplore();   // not awaited: the map loads from CDS in the background
+  // ?explore=0 skips the sky map (embeds, slow connections, and the browser test, which must not
+  // depend on external tile servers being up).
+  if (p.get("explore") === "0") $("#explore").hidden = true;
+  else startExplore();   // not awaited: the map loads in the background
   const requested = loadFromUrl();
   if (!requested) {
     fillDefaults();

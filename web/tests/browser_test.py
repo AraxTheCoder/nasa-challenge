@@ -67,7 +67,7 @@ shutil.copytree(MULTI / "multi-epoch" / "frames", MULTI / "no-detect" / "frames"
     {"id": "no-detect", "name": _t["name"] + " without detection", "synthetic": True, "ra_deg": 150.0, "dec_deg": 2.2, "n_frames": 9}]}))
 
 API, WEB = "http://127.0.0.1:8001", "http://127.0.0.1:8081/web/"
-Q = "api=" + API
+Q = "explore=0&api=" + API  # explore=0: no sky map, the test must not depend on external tile servers
 procs = [
     subprocess.Popen([sys.executable, "-m", "server", "--fixture", "--port", "8001", "--cache", str(cache)],
                      cwd=repo, stdout=subprocess.DEVNULL, stderr=open(out / "server.log", "w")),
@@ -103,7 +103,7 @@ try:
         page.wait_for_function("document.querySelector('#source-info').textContent.includes('Live API')")
         check(page.is_visible("#empty"), "empty state shown without coordinates")
         check(page.locator("#preset option").count() == 6, "5 test fields + placeholder in quick picks")
-        check("fixture mode" in page.text_content("#source-info"), "footer shows fixture mode")
+        check("fixture mode" in page.text_content("#source-info"), f"footer shows fixture mode ({page.text_content('#source-info')})")
         # Default field pre-filled (T25), but nothing is requested until the user presses Show.
         check(page.input_value("input[name=ra]") == "269.4463" and page.input_value("input[name=dec]") == "4.7682"
               and page.input_value("input[name=size]") == "15", "form pre-filled with the default field")
@@ -231,10 +231,10 @@ try:
         e.goto(WEB + "?ra=abc&dec=20&" + Q)
         e.wait_for_selector(".msg-error")
         check("Can't use these coordinates" in e.text_content(".msg-error"), f"bad coordinates: {e.text_content('.msg-error')}")
-        e.goto(WEB + "?ra=10&dec=20&api=http://127.0.0.1:9")
+        e.goto(WEB + "?explore=0&ra=10&dec=20&api=http://127.0.0.1:9")
         e.wait_for_selector(".msg-error")
         check("Can't reach the Live API" in e.text_content(".msg-error"), "unreachable API explained")
-        e.goto(WEB + "?api=http://127.0.0.1:9")
+        e.goto(WEB + "?explore=0&api=http://127.0.0.1:9")
         e.wait_for_selector(".msg-warn")
         check("not reachable" in e.text_content(".msg-warn"), "unreachable API warned on bare page")
 
@@ -242,7 +242,7 @@ try:
         o = b.new_page()
         oerr = []
         o.on("pageerror", lambda x: oerr.append(str(x)))
-        o.goto(WEB + "?data=../fixtures/targets/")
+        o.goto(WEB + "?explore=0&data=../fixtures/targets/")
         wait_loaded(o)
         check(o.is_hidden("#field-form") and o.is_visible("#picker"), "offline mode: picker instead of form")
         check("target=demo-synthetic" in o.url, "offline mode: target in URL")
@@ -274,7 +274,7 @@ try:
         z = b.new_page(viewport={"width": 1280, "height": 900})
         zerr = []
         z.on("pageerror", lambda x: zerr.append(str(x)))
-        z.goto(WEB + "?data=../data/test-targets/")
+        z.goto(WEB + "?explore=0&data=../data/test-targets/")
         wait_loaded(z)
         a_id = lambda: z.eval_on_selector("input[name=slot-a]:checked", "e => e.value")
         b_id = lambda: z.eval_on_selector("input[name=slot-b]:checked", "e => e.value")
@@ -312,7 +312,7 @@ try:
         check("f005" in z.text_content("#stage-label"), "clicking a timeline dot shows that frame")
         z.screenshot(path=str(out / "t12-timeline.png"), full_page=True)
         zp = b.new_page(viewport={"width": 390, "height": 844})
-        zp.goto(WEB + "?data=../data/test-targets/")
+        zp.goto(WEB + "?explore=0&data=../data/test-targets/")
         wait_loaded(zp)
         sw = zp.evaluate("document.documentElement.scrollWidth")
         check(sw <= 390 and zp.locator(".tl-panel").count() == 3, f"timeline fits on a phone (scrollWidth={sw})")
@@ -323,7 +323,7 @@ try:
         q = b.new_page(viewport={"width": 1280, "height": 900})
         qerr = []
         q.on("pageerror", lambda x: qerr.append(str(x)))
-        q.goto(WEB + "?data=../data/test-targets/")
+        q.goto(WEB + "?explore=0&data=../data/test-targets/")
         wait_loaded(q)
         names = q.eval_on_selector_all("#objects-list .obj-name", "es => es.map(e => e.textContent)")
         check(names == ["Unknown mover", "(99) Testia", "(77) Missedia"], f"objects: unknown first, artifact hidden, known listed once ({names})")
@@ -343,7 +343,7 @@ try:
         q.locator("#objects-list .obj-row").first.click()
         check(q.locator("#focus-layer .focus-ring").count() == 0, "clicking again clears the focus")
         q.screenshot(path=str(out / "t13-objects.png"), full_page=True)
-        q.goto(WEB + "?data=../data/test-targets/&target=no-detect")
+        q.goto(WEB + "?explore=0&data=../data/test-targets/&target=no-detect")
         wait_loaded(q)
         q.wait_for_function("document.querySelector('#objects-summary').textContent.length > 0")
         check("has not run" in q.text_content("#objects-summary"),
