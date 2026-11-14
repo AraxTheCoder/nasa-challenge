@@ -43,3 +43,13 @@
 .trail-canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
 .trail-row { margin-top: 4px; align-items: center; }
 .trail-row select { font: inherit; color: inherit; background: var(--panel-2); border: 1px solid var(--border); border-radius: 4px; }
+
+/* Object inspector (T23, web/inspector.js) */
+.inspector { border-color: #3a4a6a; }
+.insp-head { display: flex; justify-content: space-between; align-items: baseline; }
+.insp-name { font-size: 16px; font-weight: 600; margin: 0 0 6px; color: #ffe2a8; overflow-wrap: anywhere; }
+.insp-sub { margin-top: 12px; }
+.insp-links { margin: 6px 0 0; }
+.insp-table tr { cursor: pointer; }
+.insp-bright .bar { display: inline-block; min-width: 2.4em; padding-left: 4px; font-variant-numeric: tabular-nums;
+  background: linear-gradient(90deg, rgba(255, 210, 122, 0.45) calc(var(--v) * 100%), transparent 0); }
