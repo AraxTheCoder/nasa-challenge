@@ -30,7 +30,7 @@ SIMBAD_TAP = (
 GAIA_TAP = "https://gea.esac.esa.int/tap-server/tap"
 GAIA_MAX_G = 16.0
 J2000_MJD, J2016_MJD = 51544.5, 57388.5
-TIMEOUT_S = 60
+TIMEOUT_S = 15  # per mirror; a hanging host must not eat the build (T38)
 
 # SIMBAD otype -> words for the UI. Unknown types pass through unchanged.
 KIND = {
@@ -63,30 +63,36 @@ NOTABLE_OTYPES = {"BD*", "BD?", "PM*", "WD*", "Mi*", "LP*", "Ce*", "RR*", "TT*",
                   "SN*", "No*", "CV*", "XB*", "Psr", "PN", "HH", "Ae*", "Sy1", "Sy2", "SyG"}
 FIELD_OBJECT_ARCSEC = 15.0   # the SIMBAD object nearest the requested centre within this = "the field's object"
 MERGE_ARCSEC = 3.0           # labels closer than this (~0.5 px) are one object on the image
+SIMBAD_CAP = 400             # T38: SIMBAD objects kept per field, ranked (deep fields have ~30,000)
+# Classic designations that read as names (stars and bright galaxies), ranked above survey names.
+CLASSIC_PREFIXES = ("NAME ", "V* ", "* ", "HD ", "HIP ", "HR ", "BD", "CD-", "CPD", "GJ ", "LHS ", "LP ", "Ross ",
+                    "Wolf ", "G ", "NGC ", "IC ", "M ", "UGC ", "PGC ", "Mrk ", "3C ", "PN ", "HH ", "IRAS ")
+GAIA_CAP = 400               # T38: brightest Gaia stars kept per field
 SKIP_OTYPES = {"Pl", "Pl?"}  # exoplanets are not separately visible
 # Catalogue-number names; everything else counts as a "real" name the UI shows by default.
 SURVEY_PREFIXES = ("Gaia", "2MASS", "TYC", "UCAC", "WISE", "[", "SDSS", "GALEX", "LAMOST", "ATO ", "GES ",
                    "USNO", "LEDA", "GAT ", "1RXS", "Z ", "ZTF", "PM ", "UGCA", "NVSS", "FIRST", "APOP", "CRTS")
 
 
-def _tap(url: str, adql: str) -> list[dict]:
+def _tap(url: str, adql: str) -> dict:
+    """Run an ADQL query, return {column: numpy masked array} (columns lower-case).
+    Column arrays, not row dicts: deep fields return ~30,000 SIMBAD rows (T38)."""
+    import numpy as np
     from astropy.io.votable import parse_single_table
 
     r = requests.post(url.rstrip("/") + "/sync", timeout=TIMEOUT_S,
                       data={"REQUEST": "doQuery", "LANG": "ADQL", "FORMAT": "votable", "QUERY": adql})
     r.raise_for_status()
     table = parse_single_table(io.BytesIO(r.content)).to_table()
-    names = [c.lower() for c in table.colnames]
-    rows = []
-    for row in table:
-        rows.append({n: (None if _masked(v) else (v.item() if hasattr(v, "item") else v))
-                     for n, v in zip(names, row)})
-    return rows
+    return {c.lower(): np.ma.asarray(table[c]) for c in table.colnames}
 
 
-def _masked(v) -> bool:
+def _num(a):
+    """Masked/NaN -> 0.0 float array, plus a 'had a value' mask."""
     import numpy as np
-    return v is np.ma.masked or (isinstance(v, float) and math.isnan(v))
+    a = np.ma.asarray(a, dtype=float)
+    ok = ~np.ma.getmaskarray(a) & np.isfinite(a.filled(np.nan))
+    return np.where(ok, a.filled(0.0), 0.0), ok
 
 
 def _now() -> str:
@@ -108,76 +114,110 @@ class Grid:
         self.wcs.wcs.cdelt = [-scale, scale]
         self.radius_deg = math.hypot(self.w, self.h) / 2 * scale + 0.01  # corners + room for movers
 
-    def to_xy(self, ra: float, dec: float) -> tuple[float, float]:
+    def to_xy(self, ra, dec):
+        """Scalars or arrays; contract pixels: y down, origin at the top-left pixel centre."""
         x, y = self.wcs.world_to_pixel_values(ra, dec)
-        return float(x), float(self.h - 1 - y)  # contract: y down, origin top-left pixel centre
+        return x, self.h - 1 - y
 
-    def contains(self, x: float, y: float, margin: float = 2) -> bool:
-        return -margin <= x <= self.w - 1 + margin and -margin <= y <= self.h - 1 + margin
+    def contains(self, x, y, margin: float = 2):
+        return (x >= -margin) & (x <= self.w - 1 + margin) & (y >= -margin) & (y <= self.h - 1 + margin)
 
 
-def _track(grid: Grid, frames: list[dict], ra, dec, pmra, pmdec, epoch_mjd) -> list[dict]:
-    pmra, pmdec = pmra or 0.0, pmdec or 0.0
-    out = []
-    for f in frames:
-        yr = (f["mjd"] - epoch_mjd) / 365.25
-        r = ra + pmra * yr / 3.6e6 / math.cos(math.radians(dec))
-        d = dec + pmdec * yr / 3.6e6
-        x, y = grid.to_xy(r, d)
-        out.append({"frame_id": f["id"], "ra_deg": round(r, 6), "dec_deg": round(d, 6),
-                    "x": round(x, 2), "y": round(y, 2)})
-    return out
+def _tracks(grid: Grid, frames: list[dict], ra, dec, pmra, pmdec, epoch_mjd):
+    """All objects x all frames at once: positions moved by proper motion (linear, parallax ignored).
+    Returns (RA, Dec, x, y) arrays of shape (n_objects, n_frames) and the 'inside the field' mask."""
+    import numpy as np
+    yrs = (np.array([f["mjd"] for f in frames]) - epoch_mjd) / 365.25           # (F,)
+    ra, dec = np.asarray(ra, float)[:, None], np.asarray(dec, float)[:, None]   # (N, 1)
+    R = ra + np.asarray(pmra, float)[:, None] * yrs / 3.6e6 / np.cos(np.radians(dec))
+    D = dec + np.asarray(pmdec, float)[:, None] * yrs / 3.6e6
+    X, Y = grid.to_xy(R.ravel(), D.ravel())
+    X, Y = X.reshape(R.shape), Y.reshape(R.shape)
+    inside = grid.contains(X, Y).any(axis=1)
+    return R, D, X, Y, inside
+
+
+def _positions(frames, R, D, X, Y, i) -> list[dict]:
+    return [{"frame_id": f["id"], "ra_deg": round(float(R[i, k]), 6), "dec_deg": round(float(D[i, k]), 6),
+             "x": round(float(X[i, k]), 2), "y": round(float(Y[i, k]), 2)} for k, f in enumerate(frames)]
 
 
 def simbad_labels(target: dict, grid: Grid) -> tuple[list[dict], dict | None]:
+    import numpy as np
     c = target["center"]
     adql = (f"SELECT main_id, ra, dec, pmra, pmdec, otype FROM basic WHERE "
             f"CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', {c['ra_deg']}, {c['dec_deg']}, {grid.radius_deg:.5f})) = 1")
     errors = []
     for url in SIMBAD_TAP:
         try:
-            rows = _tap(url, adql)
+            cols = _tap(url, adql)
         except Exception as e:  # a down mirror must not break the build
             errors.append(f"{url}: {str(e)[:80]}")
             continue
         prov = {"service": "SIMBAD TAP " + url, "query": adql, "retrieved_utc": _now()}
+        if not len(cols.get("main_id", [])):
+            return [], prov
+        ids = np.array([str(x) for x in cols["main_id"].filled("")])
+        otype = np.array([str(x) for x in cols["otype"].filled("")])
+        ra, ok_pos = _num(cols["ra"]); dec, _ = _num(cols["dec"])
+        pmra, has_pm = _num(cols["pmra"]); pmdec, _ = _num(cols["pmdec"])
+        keep = ok_pos & ~np.isin(otype, list(SKIP_OTYPES))
+        idx = np.nonzero(keep)[0]
+        R, D, X, Y, inside = _tracks(grid, target["frames"], ra[idx], dec[idx], pmra[idx], pmdec[idx], J2000_MJD)
+        idx, R, D, X, Y = idx[inside], R[inside], D[inside], X[inside], Y[inside]
+        named = np.array([not n.startswith(SURVEY_PREFIXES) for n in ids[idx]], dtype=bool)
+        notable = np.isin(otype[idx], list(NOTABLE_OTYPES))
+        pm = np.hypot(pmra[idx], pmdec[idx])
+        classic = np.array([n.startswith(CLASSIC_PREFIXES) for n in ids[idx]], dtype=bool)
+        d2 = (X[:, 0] - (grid.w - 1) / 2) ** 2 + (Y[:, 0] - (grid.h - 1) / 2) ** 2
+        centre_px = FIELD_OBJECT_ARCSEC / target["image"]["pixel_scale_arcsec"]
+        # T38 ranking + cap: deep fields return ~30,000 objects (COSMOS), most of them faint galaxies
+        # with survey names. Always kept: notable proper motion, the object at the centre. Then by tier,
+        # nearest the centre first, up to SIMBAD_CAP in total.
+        tier = np.select([(has_pm[idx] & (pm >= 100)) | (d2 <= centre_px ** 2), notable, classic, named],
+                         [0, 1, 2, 3], default=4)
+        order = np.lexsort((d2, tier))
+        rows = order[(tier[order] == 0) | (np.arange(len(order)) < SIMBAD_CAP)]
         labels = []
-        for r in rows:
-            if r["otype"] in SKIP_OTYPES or r["ra"] is None:
-                continue
-            pos = _track(grid, target["frames"], r["ra"], r["dec"], r["pmra"], r["pmdec"], J2000_MJD)
-            if not any(grid.contains(p["x"], p["y"]) for p in pos):
-                continue
-            name = str(r["main_id"]).replace("NAME ", "").replace("V* ", "").strip()
-            pm = math.hypot(r["pmra"] or 0, r["pmdec"] or 0) if r["pmra"] is not None else None
-            labels.append({"name": name, "kind": KIND.get(r["otype"], r["otype"]), "otype": r["otype"],
-                           "source": "simbad", "named": not str(r["main_id"]).startswith(SURVEY_PREFIXES),
-                           "mag": None, "pm_mas_yr": None if pm is None else round(pm, 1), "positions": pos})
+        for j in rows:
+            i = idx[j]
+            name = ids[i].replace("NAME ", "").replace("V* ", "").strip()
+            labels.append({"name": name, "kind": KIND.get(otype[i], otype[i]), "otype": otype[i],
+                           "source": "simbad", "named": bool(named[j]), "mag": None,
+                           "pm_mas_yr": round(float(pm[j]), 1) if has_pm[i] else None,
+                           "positions": _positions(target["frames"], R, D, X, Y, j)})
+        prov["note"] = f"{len(idx)} SIMBAD objects in the field, {len(labels)} kept (cap {SIMBAD_CAP}, ranked)"
         return labels, prov
     print("SIMBAD unavailable, no names this time:", "; ".join(errors))
     return [], None
 
 
 def gaia_labels(target: dict, grid: Grid) -> tuple[list[dict], dict | None]:
+    import numpy as np
     c = target["center"]
-    adql = (f"SELECT source_id, ra, dec, pmra, pmdec, phot_g_mean_mag FROM gaiadr3.gaia_source WHERE "
+    adql = (f"SELECT TOP {GAIA_CAP * 3} source_id, ra, dec, pmra, pmdec, phot_g_mean_mag FROM gaiadr3.gaia_source WHERE "
             f"1 = CONTAINS(POINT(ra, dec), CIRCLE({c['ra_deg']}, {c['dec_deg']}, {grid.radius_deg:.5f})) "
-            f"AND phot_g_mean_mag < {GAIA_MAX_G}")
+            f"AND phot_g_mean_mag < {GAIA_MAX_G} ORDER BY phot_g_mean_mag")
     try:
-        rows = _tap(GAIA_TAP, adql)
+        cols = _tap(GAIA_TAP, adql)
     except Exception as e:
         print("Gaia unavailable:", str(e)[:120])
         return [], None
     prov = {"service": "Gaia DR3 TAP (ESA) " + GAIA_TAP, "query": adql, "retrieved_utc": _now()}
+    if not len(cols.get("source_id", [])):
+        return [], prov
+    ra, _ = _num(cols["ra"]); dec, _ = _num(cols["dec"])
+    pmra, has_pm = _num(cols["pmra"]); pmdec, _ = _num(cols["pmdec"])
+    gmag, _ = _num(cols["phot_g_mean_mag"])
+    sid = cols["source_id"].filled(0)
+    R, D, X, Y, inside = _tracks(grid, target["frames"], ra, dec, pmra, pmdec, J2016_MJD)
+    rows = np.nonzero(inside)[0][:GAIA_CAP]  # already sorted by brightness
     labels = []
-    for r in rows:
-        pos = _track(grid, target["frames"], r["ra"], r["dec"], r["pmra"], r["pmdec"], J2016_MJD)
-        if not any(grid.contains(p["x"], p["y"]) for p in pos):
-            continue
-        pm = math.hypot(r["pmra"], r["pmdec"]) if r["pmra"] is not None else None
-        labels.append({"name": f"Gaia DR3 {r['source_id']}", "kind": "star", "otype": "*", "source": "gaia_dr3",
-                       "named": False, "mag": round(r["phot_g_mean_mag"], 2),
-                       "pm_mas_yr": None if pm is None else round(pm, 1), "positions": pos})
+    for i in rows:
+        labels.append({"name": f"Gaia DR3 {int(sid[i])}", "kind": "star", "otype": "*", "source": "gaia_dr3",
+                       "named": False, "mag": round(float(gmag[i]), 2),
+                       "pm_mas_yr": round(float(np.hypot(pmra[i], pmdec[i])), 1) if has_pm[i] else None,
+                       "positions": _positions(target["frames"], R, D, X, Y, i)})
     return labels, prov
 
 
@@ -194,11 +234,18 @@ def merge_duplicates(labels: list[dict]) -> list[dict]:
     catalogue numbers, shorter name). The kept label takes the Gaia magnitude if it had none."""
     order = sorted(labels, key=lambda l: (l["source"] != "simbad", not l["named"], len(l["name"])))
     kept: list[dict] = []
+    cell = MERGE_ARCSEC / 3600  # bucket size in degrees: only neighbouring buckets can hold a duplicate
+    buckets: dict[tuple[int, int], list[dict]] = {}
     for l in order:
-        host = next((k for k in kept if _sep(k["positions"][0], l["positions"][0]) < MERGE_ARCSEC), None)
+        p = l["positions"][0]
+        bx = int(math.floor(p["ra_deg"] * math.cos(math.radians(p["dec_deg"])) / cell))
+        by = int(math.floor(p["dec_deg"] / cell))
+        near = (k for dx in (-1, 0, 1) for dy in (-1, 0, 1) for k in buckets.get((bx + dx, by + dy), ()))
+        host = next((k for k in near if _sep(k["positions"][0], p) < MERGE_ARCSEC), None)
         if host is None:
             l.setdefault("aliases", [])
             kept.append(l)
+            buckets.setdefault((bx, by), []).append(l)
             continue
         if l["name"] != host["name"] and l["name"] not in host["aliases"]:
             host["aliases"].append(l["name"])
@@ -242,8 +289,10 @@ def add_labels(target: dict) -> dict:
         return target
     grid = Grid(target)
     labels = []
-    for fn in (simbad_labels, gaia_labels):
-        found, prov = fn(target, grid)
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(2) as pool:  # SIMBAD and Gaia at the same time: total = the slower one (T38)
+        results = list(pool.map(lambda fn: fn(target, grid), (simbad_labels, gaia_labels)))
+    for found, prov in results:
         labels += found
         if prov:
             target.setdefault("provenance", []).append(prov)
