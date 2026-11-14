@@ -103,7 +103,9 @@ try:
         page.goto(WEB + "?" + Q)
         page.wait_for_function("document.querySelector('#source-info').textContent.includes('Live API')")
         check(page.is_visible("#empty"), "empty state shown without coordinates")
-        check(page.locator("#preset option").count() == 6, "5 test fields + placeholder in quick picks")
+        groups = page.eval_on_selector_all("#preset optgroup", "gs => gs.map(g => [g.label, g.children.length])")
+        check(groups[0] == ["Official test fields", 5] and len(groups) >= 2 and all(n >= 5 for _, n in groups[1:]),
+              f"quick picks: 5 official fields + groups from discover.json (T65) {groups}")
         check("fixture mode" in page.text_content("#source-info"), f"footer shows fixture mode ({page.text_content('#source-info')})")
         # Default field pre-filled (T25), but nothing is requested until the user presses Show.
         check(page.input_value("input[name=ra]") == "269.4463" and page.input_value("input[name=dec]") == "4.7682"
@@ -125,6 +127,18 @@ try:
         check(page.input_value("#preset") == "" and page.is_hidden("#empty-default"), "typing own coordinates clears the default marker")
         page.fill("input[name=ra]", "269.4463")
         check(page.input_value("#preset") != "", "typing the default back re-selects it")
+
+        # 1b. T65: "Surprise me" opens a field from discover.json and says why it is interesting
+        check(page.is_visible("#surprise") and page.is_hidden("#pick-why"), "Surprise me button, no reason line for the default")
+        page.click("#surprise")
+        wait_loaded(page)
+        picked = page.eval_on_selector("#preset", "s => s.options[s.selectedIndex].parentElement.label")
+        check(picked != "Official test fields" and page.is_visible("#pick-why") and "Moves" in page.text_content("#pick-why")
+              and "ra=" in page.url, f"Surprise me loads a discover field with its reason ({picked}: {page.text_content('#pick-why')[:80]})")
+        page.fill("input[name=ra]", "10")
+        check(page.is_hidden("#pick-why"), "own coordinates hide the reason line")
+        page.goto(WEB + "?" + Q)   # back to the bare page, so step 2 waits for its own build
+        page.wait_for_function("document.querySelector('#source-info').textContent.includes('Live API')")
 
         # 2. pick a preset -> builds (202, progress) -> ready
         page.select_option("#preset", label="WISE 0855-0714")

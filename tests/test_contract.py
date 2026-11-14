@@ -3,6 +3,7 @@
 - every committed target.json under fixtures/ validates against docs/target.schema.json
 - every index.json lists folders that exist, and every frame image a target names exists
 - web/presets.json (the official test fields) is well formed, with exactly one default
+- web/discover.json (T65 quick picks) is well formed and has its provenance
 """
 from __future__ import annotations
 
@@ -52,3 +53,12 @@ def test_presets():
     assert sum(1 for f in fields if f.get("default")) == 1
     for f in fields:
         assert 0 <= f["ra_deg"] < 360 and -90 <= f["dec_deg"] <= 90 and 5 <= f.get("size_arcmin", 15) <= 60, f["name"]
+
+
+def test_discover():
+    d = json.loads((REPO / "web" / "discover.json").read_text(encoding="utf-8"))
+    assert d["provenance"] and all({"service", "query", "retrieved_utc"} <= set(p) for p in d["provenance"])
+    assert len(d["fields"]) >= 5 and not any(f.get("default") for f in d["fields"])
+    for f in d["fields"]:
+        assert 0 <= f["ra_deg"] < 360 and -90 <= f["dec_deg"] <= 90 and 5 <= f["size_arcmin"] <= 60, f["name"]
+        assert f["group"] and f["why"] and f["coverage"]["epochs"] >= 2, f["name"]

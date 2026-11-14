@@ -120,11 +120,15 @@ function fillForm(req) {
   syncPresetSelect();
 }
 
-/** Show the matching test field in the dropdown, or none once the user typed other coordinates. */
+/** Show the matching quick pick in the dropdown (and why it is interesting), or none once the user typed
+ *  other coordinates. */
 function syncPresetSelect() {
   const { ra, dec } = readForm();
   const i = app.presets.findIndex((p) => String(p.ra_deg) === ra && String(p.dec_deg) === dec);
   $("#preset").value = i >= 0 ? String(i) : "";
+  const why = i >= 0 ? app.presets[i].why : null;
+  $("#pick-why").hidden = !why;
+  $("#pick-why").replaceChildren(...(why ? [el("strong", {}, `${app.presets[i].name}: `), why] : []));
 }
 
 const presetRequest = (f) => ({ ra: String(f.ra_deg), dec: String(f.dec_deg), size: clampSize(f.size_arcmin ?? SIZE_DEFAULT) });
@@ -271,16 +275,29 @@ function hideTip({ remember = false } = {}) {
 }
 
 async function loadPresets() {
-  let fields = [];
-  try {
-    fields = (await fetchJson("presets.json")).fields ?? [];
-  } catch {
-    return; // quick picks are optional
-  }
-  app.presets = fields;
+  // The five official fields (presets.json) and, since T65, fields where something moves (discover.json).
+  // Both are optional: without them the form still works.
+  const [official, more] = await Promise.all(["presets.json", "discover.json"].map((u) =>
+    fetchJson(u).then((d) => d.fields ?? []).catch(() => [])));
+  app.presets = [...official.map((f) => ({ ...f, group: "Official test fields" })), ...more];
   const select = $("#preset");
-  select.append(...fields.map((f, i) => el("option", { value: String(i), title: f.kind ?? "" }, f.name)));
-  select.hidden = fields.length === 0;
+  const groups = new Map();
+  app.presets.forEach((f, i) => {
+    if (!groups.has(f.group)) groups.set(f.group, el("optgroup", { label: f.group }));
+    groups.get(f.group).append(el("option", { value: String(i), title: f.why ?? f.kind ?? "" }, f.name));
+  });
+  select.append(...groups.values());
+  select.hidden = app.presets.length === 0;
+  $("#surprise").hidden = more.length === 0;
+}
+
+/** "Surprise me" (T65): a random field from discover.json, not the one already shown. */
+function surprise() {
+  const shown = $("#preset").value;
+  const pool = app.presets.map((f, i) => ({ f, i })).filter(({ f, i }) => f.group !== "Official test fields" && String(i) !== shown);
+  if (!pool.length) return;
+  $("#preset").value = String(pool[Math.floor(Math.random() * pool.length)].i);
+  onPresetPicked();
 }
 
 function onPresetPicked() {
@@ -368,6 +385,7 @@ function bindPage() {
     loadField(req);
   });
   $("#preset").addEventListener("change", () => { hideTip(); onPresetPicked(); });
+  $("#surprise").addEventListener("click", () => { hideTip(); surprise(); });
   $("#field-form").addEventListener("focusin", (e) => {
     if (e.target.name === "ra" || e.target.name === "dec") showTip();
   });
