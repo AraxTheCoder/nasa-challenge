@@ -22,6 +22,8 @@ const MIN_FOV = 1 / 60;                   // 1 arcmin
 const MAX_TEXTURES = 200;           // 1 MB of GPU memory each
 const MAX_PARALLEL_LOADS = 6;             // = what a browser opens per host over HTTP/1.1
 const MAX_SLOW_LOADS = 2;                 // live-rendered tiles: leave connections for the rest
+const PRELOAD = 1e6;                      // prio >= PRELOAD: preload (other epochs, parent tiles)
+const MAX_PRELOADS = 2;                   // preloads in flight at once, and only when nothing visible waits
 
 // ---------- HiPS layer ------------------------------------------------------------------------
 
@@ -49,6 +51,11 @@ class Layer {
     this.label = opts.label ?? props.obs_title ?? url;
     this.props = props;
     this.tiles = new Map();     // key -> {state: "loading"|"ok"|"missing", tex, used}
+    // Our per-epoch field HiPS cover only the field: hips_initial_* describe it (size*2 = fov).
+    if ((props.creator_did ?? "").startsWith("ivo://spherex-blink/") && props.hips_initial_fov) {
+      this.region = { ra: Number(props.hips_initial_ra), dec: Number(props.hips_initial_dec),
+        radius: Number(props.hips_initial_fov) / 2 * 0.75 };
+    }
     // Orders a server renders on demand (our live deep zoom): slow, so only a few at a time.
     this.slowOrders = new Set((props.x_live_orders ?? "").split(/\s+/).filter(Boolean).map(Number));
   }
@@ -108,7 +115,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   const { gl } = G;
 
   const st = { ra, dec, fov, w: 1, h: 1, dpr: 1, base: null, overlays: [], shown: -1,
-    dirty: true, loads: 0, queue: [], inflight: new Set(), hooks: [], frame: 0, errors: 0, debug: false, stats: null, listeners: { change: [], tiles: [] } };
+    dirty: true, loads: 0, queue: [], inflight: new Set(), rendering: false, hooks: [], frame: 0, errors: 0, debug: false, stats: null, listeners: { change: [], tiles: [] } };
 
   // ----- projection (stereographic, north up, east left) -----
   // Screen px per unit of the projection plane: the view's half width covers fov/2.
@@ -180,18 +187,18 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     t = { state: "queued", tex: null, used: performance.now(), want: st.frame, prio, key: k };
     layer.tiles.set(k, t);
     st.queue.push({ layer, order, pix, t });
-    pump();
+    if (!st.rendering) pump();
     return t;
   }
 
   function requestAllsky(layer) {
     const k = `${layer.slice}/allsky`;
     let t = layer.tiles.get(k);
-    if (t) { t.used = performance.now() + 1e9; return t; }    // never evicted first
-    t = { state: "queued", tex: null, used: performance.now() + 1e9, want: Infinity, prio: -1, key: k };
+    if (t) { t.used = performance.now() + 1e9; t.want = st.frame; return t; }   // never evicted first
+    t = { state: "queued", tex: null, used: performance.now() + 1e9, want: st.frame, prio: -1, key: k };
     layer.tiles.set(k, t);
     st.queue.push({ layer, url: layer.allskyUrl(), t });
-    pump();
+    if (!st.rendering) pump();
     return t;
   }
 
@@ -235,33 +242,49 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     gl.drawArrays(gl.TRIANGLES, 0, pos.length / 2);
   }
 
+  /** After each frame: only what this frame shows may wait or download. Everything else is taken
+   *  out of the queue, its download aborted (frees the connection), and asked again if it comes
+   *  back on screen. */
+  function prune() {
+    st.queue = st.queue.filter((j) => {
+      if (j.t.want === st.frame) return true;
+      if (j.t.state === "queued") j.layer.tiles.delete(j.t.key);
+      return false;
+    });
+    for (const job of st.inflight) if (job.t.want !== st.frame) job.ctrl.abort();
+  }
+
+  // Order of work: visible tiles first (centre outwards), preloads only when no visible tile is
+  // waiting and at most MAX_PRELOADS at a time. A waiting visible tile pre-empts a preload download.
   function pump() {
-    if (st.queue.length > 1) {
-      st.queue = st.queue.filter((j) => {
-        const stale = j.t.state === "queued" && j.t.want < st.frame - 1 && j.t.prio < 1e12;
-        if (stale) j.layer.tiles.delete(j.t.key);          // asked again if it comes back on screen
-        return !stale && j.t.state === "queued";
-      });
-      st.queue.sort((a, b) => b.t.prio - a.t.prio);         // pop() takes the smallest prio
-    }
-    // Abort downloads of tiles that left the screen (zoomed past them): frees the connection now.
-    for (const job of st.inflight) {
-      if (job.t.want < st.frame - 1 && job.t.prio >= 0) {
-        job.ctrl.abort();
-      }
-    }
-    const slowBusy = () => [...st.inflight].filter((j) => j.slow).length;
-    let skipped = [];
+    st.queue = st.queue.filter((j) => j.t.state === "queued");
+    st.queue.sort((a, b) => b.t.prio - a.t.prio);           // pop() takes the smallest prio (centre)
+    const isPre = (j) => j.t.prio >= PRELOAD;
+    const count = (f) => { let n = 0; for (const j of st.inflight) if (f(j)) n++; return n; };
+    const skipped = [];
     while (st.loads < MAX_PARALLEL_LOADS && st.queue.length) {
       const job = st.queue.pop();
       if (job.t.state !== "queued") continue;
       job.slow = job.order != null && job.layer.slowOrders.has(job.order);
-      if (job.slow && slowBusy() >= MAX_SLOW_LOADS) { skipped.push(job); continue; }
+      const visibleWaiting = st.queue.some((j) => !isPre(j)) || skipped.some((j) => !isPre(j));
+      if ((job.slow && count((j) => j.slow) >= MAX_SLOW_LOADS)
+          || (isPre(job) && (visibleWaiting || count(isPre) >= MAX_PRELOADS))) {
+        skipped.push(job);
+        continue;
+      }
       job.t.state = "loading";
       st.loads++;
       load(job);
     }
     if (skipped.length) st.queue.push(...skipped.reverse());
+    // Pre-empt: a visible tile can't start because connections are busy with preloads -> abort one
+    // preload (it is asked again on a later frame, after the visible tiles).
+    const blocked = st.queue.filter((j) => !isPre(j));
+    if (blocked.length && st.loads >= MAX_PARALLEL_LOADS) {
+      for (const j of st.inflight) {
+        if (isPre(j)) { j.preempted = true; j.ctrl.abort(); break; }
+      }
+    }
   }
 
   // Tiles come via fetch() so we see the HTTP status: 404 = no tile there (final), anything else
@@ -292,6 +315,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       if (e.name === "AbortError") {             // left the screen: forget it, asked again if it comes back
         t.state = "aborted";
         job.layer.tiles.delete(t.key);
+        if (job.preempted) markDirty();          // a preload made room: ask for it again next frame
         return;
       }
       t.tries = (t.tries ?? 0) + 1;
@@ -326,6 +350,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   /** Texture to draw for a tile: its own, or the nearest loaded ancestor with a sub-rectangle. */
   function textureFor(layer, order, pix, prio) {
     const own = request(layer, order, pix, prio);
+    if (order - 1 >= layer.minOrder) request(layer, order - 1, Math.floor(pix / 4), PRELOAD + prio);
     if (own.state === "ok") return { tex: own.tex, d: 0, aOff: 0, bOff: 0 };
     const { ix, iy } = nest2xyf(order, pix);
     for (let d = 1; order - d >= layer.minOrder; d++) {
@@ -334,7 +359,6 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
         const m = 2 ** d;
         return { tex: anc.tex, d, aOff: ix % m, bOff: iy % m };
       }
-      if (d === 1 && order - 1 >= layer.minOrder) request(layer, order - 1, Math.floor(pix / 4), prio - 1);
     }
     return null;
   }
@@ -351,7 +375,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     const isBase = layer === st.base;
     const stats = isBase ? { order, wanted: wantedOrder(), maxOrder: layer.maxOrder, visible: 0, sharp: 0,
       blurry: 0, empty: 0, outlines: [] } : null;
-    for (const pix of visibleTiles(order)) {
+    for (const pix of tilesFor(layer, order)) {
       const g = tileGrid(order, pix, n);
       const sp = [];
       for (let i = 0; i < g.length; i += 2) sp.push(toScreen(g[i], g[i + 1]));
@@ -460,7 +484,8 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       `texel ${texel.toFixed(1)}"  screen px ${screen.toFixed(2)}"`,
       atMax ? "MAX ZOOM: the map has no finer tiles here" : "more detail available when zooming in",
       allSharp ? "SHARP: all visible tiles at this order loaded" : `loading: ${s.sharp}/${s.visible} sharp, ${s.blurry} blurry, ${s.empty} empty`,
-      `in flight ${st.loads} (${[...st.inflight].filter((j) => j.slow).length} live), queued ${st.queue.length}, errors ${st.errors}`,
+      `in flight ${st.loads} (${[...st.inflight].filter((j) => j.slow).length} live, ${[...st.inflight].filter((j) => j.t.prio >= PRELOAD).length} preload), `
+        + `queued ${st.queue.filter((j) => j.t.prio < PRELOAD).length} visible + ${st.queue.filter((j) => j.t.prio >= PRELOAD).length} preload, errors ${st.errors}`,
     ];
     const w = 330, h = 14 * lines.length + 10;
     ctx.fillStyle = "rgba(0,0,0,0.7)";
@@ -475,6 +500,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   function render() {
     st.dirty = false;
     st.frame++;
+    st.rendering = true;
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0.02, 0.03, 0.06, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -488,13 +514,33 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     for (const hook of st.hooks) {
       try { hook(ctx2d, proj); } catch (e) { console.error(e); }
     }
+    st.rendering = false;
+    prune();
+    pump();
     if (st.debug) drawDebug(ctx2d);
     st.listeners.tiles.forEach((fn) => fn(api.stats()));
   }
 
+  /** Other epochs (blink): their tiles on screen inside their field, after the shown ones. */
   function prefetch(layer) {
     const order = pickOrder(layer);
-    for (const pix of visibleTiles(order)) request(layer, order, pix, 5e5);   // after visible tiles
+    for (const pix of tilesFor(layer, order)) request(layer, order, pix, PRELOAD + 1000);
+  }
+
+  /** Visible tiles of a layer; a layer with a known region (our per-epoch field HiPS) only those
+   *  that touch it, so blinking never asks for tiles outside the red box. */
+  function tilesFor(layer, order) {
+    const all = visibleTiles(order);
+    if (!layer.region) return all;
+    const { ra, dec, radius } = layer.region;
+    const reach = radius + 1.2 * 58.6323 / 2 ** order;     // field radius + tile half-diagonal
+    return all.filter((pix) => {
+      const g = tileGrid(order, pix, 1);
+      const c = [(g[0] + g[6]) / 2, (g[1] + g[7]) / 2];
+      const d = Math.acos(Math.min(1, Math.sin(c[1] * DEG) * Math.sin(dec * DEG)
+        + Math.cos(c[1] * DEG) * Math.cos(dec * DEG) * Math.cos((c[0] - ra) * DEG))) / DEG;
+      return d < reach;
+    });
   }
 
   function markDirty() {
@@ -595,14 +641,12 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       const layer = new Layer(url, await readProperties(url), opts);
       if (st.base) for (const t of st.base.tiles.values()) if (t.tex) gl.deleteTexture(t.tex);
       st.base = layer;
-      requestAllsky(layer);            // the zoomed-out view is ready before anyone zooms out
       markDirty();
       return layer;
     },
     setSlice(i) {
       if (!st.base || st.base.depth <= 1) return;
       st.base.slice = Math.max(0, Math.min(st.base.depth - 1, i));
-      requestAllsky(st.base);
       markDirty();
     },
     /** layers: [{url, label, epoch}] — all are prefetched, one is drawn (showOverlay). */
