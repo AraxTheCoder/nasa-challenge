@@ -19,13 +19,21 @@ export const PASS_ORDER = 6;     // the pass layers' first live order: they blin
 const STEP_MS = 800;
 const DATES_MOVE_DEG = 0.3;      // ask for the dates again once the centre moved this far
 
-const st = { mode: "passes", passes: [], layers: false, shown: -1, labels: [], note: null, listeners: [],
+const st = { mode: "passes", passes: [], layers: false, colour: false, shown: -1, labels: [], note: null, listeners: [],
   dates: null, datesAt: null, datesTimer: null };
 
 export const mode = () => st.mode;
 export const sharp = () => (explore.wantedOrder() ?? 0) >= SHARP_ORDER;
 export const passesOn = () => (explore.wantedOrder() ?? 0) >= PASS_ORDER;
 export function onModeChange(fn) { st.listeners.push(fn); }
+export const colour = () => st.colour;
+
+/** T89: false colour (all detectors combined) or the band's detector; reloads the pass layers. */
+export async function setColour(on) {
+  if (st.colour === !!on) return;
+  st.colour = !!on;
+  if (st.mode === "passes") { st.layers = false; await loadLayers(); update(); }
+}
 
 /** "passes" or "epochs" (app.js decides; the options object is accepted for older callers). */
 export async function setMode(m, _opts = {}) {
@@ -46,7 +54,7 @@ async function loadLayers() {
   if (st.layers || !st.passes.length) return;
   st.layers = true;
   st.shown = -1;
-  const made = await explore.setPassLayers(st.passes);
+  const made = await explore.setPassLayers(st.passes, st.colour);
   if (st.mode !== "passes") return;
   if (!made.length) { st.layers = false; st.note.textContent = "survey passes unavailable (Live API?)"; }
 }

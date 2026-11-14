@@ -48,13 +48,17 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
         return JSONResponse(job.body(), status_code=_HTTP[job.status])
 
     @app.get("/api/target")
-    def request_target(ra: str, dec: str, size: str | None = None, refresh: int = 0):
+    def request_target(ra: str, dec: str, size: str | None = None, refresh: int = 0, detector: int | None = None):
         try:
             ra_deg, dec_deg, size_am = parse_ra(ra), parse_dec(dec), parse_size(size)
+            if detector is not None and not 1 <= detector <= 6:
+                raise CoordError("detector must be 1-6")
         except CoordError as e:
             return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
         tid, ra_r, dec_r = target_id(ra_deg, dec_deg, size_am)
-        return reply(builder.request(tid, ra_r, dec_r, size_am, refresh=bool(refresh)))
+        if detector:
+            tid += f"-d{detector}"                       # T89: one band's field, cached apart
+        return reply(builder.request(tid, ra_r, dec_r, size_am, refresh=bool(refresh), detector=detector))
 
     @app.get("/api/jobs/{tid}")
     def job_status(tid: str):

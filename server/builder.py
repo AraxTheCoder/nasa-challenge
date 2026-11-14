@@ -36,6 +36,7 @@ class Job:
                                                     "message": "queued"})
     message: str | None = None
     refresh: bool = False
+    detector: int | None = None         # T89: only this detector's images (one band of the map)
 
     def body(self) -> dict:
         b: dict = {"status": self.status, "id": self.id}
@@ -94,14 +95,15 @@ class Builder:
             job = Job(tid, 0, 0, 0, status="ready")
         return job
 
-    def request(self, tid: str, ra: float, dec: float, size: int, refresh: bool = False) -> Job:
+    def request(self, tid: str, ra: float, dec: float, size: int, refresh: bool = False,
+                detector: int | None = None) -> Job:
         with self._lock:
             job = self._jobs.get(tid)
             if job and job.status == "building":
                 return job
             if not refresh and self.is_cached(tid):
-                return Job(tid, ra, dec, size, status="ready")
-            job = Job(tid, ra, dec, size, refresh=refresh)
+                return Job(tid, ra, dec, size, status="ready", detector=detector)
+            job = Job(tid, ra, dec, size, refresh=refresh, detector=detector)
             self._jobs[tid] = job
         threading.Thread(target=self._run, args=(job,), daemon=True, name=f"build-{tid}").start()
         return job
@@ -256,6 +258,8 @@ class Builder:
         early: dict = {}
         if "early" in inspect.signature(build_target).parameters:
             kwargs["early"] = lambda stub: self._start_early(stub, early)
+        if job.detector:
+            kwargs["detectors"] = {job.detector}
         # Build into a temp root so a half-finished build is never served from the cache.
         tmp_root = self.cache_root / ".building"
         tmp_root.mkdir(exist_ok=True)

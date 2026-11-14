@@ -385,21 +385,27 @@ def remap_to_frames(items: list[dict], stub_frames: list[dict], frames: list[dic
 def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: float,
                  out_root: Path = Path("data/targets"), progress: Progress | None = None,
                  per_group: int = PER_GROUP, name: str | None = None, refresh: bool = False,
-                 final_root: Path | None = None, labels: bool = False, early=None) -> Path:
+                 final_root: Path | None = None, labels: bool = False, early=None,
+                 detectors: set[int] | None = None) -> Path:
     """Query, download, align, render. Returns the target folder with a valid target.json.
 
     early: T54, called once the frames are chosen (before any download) with a stub target: centre,
     image grid and one frame per chosen exposure (provisional ids, obs_id, detector, mjd). Labels and
     known objects need nothing more, so the caller can compute them while the images download; map
-    the results to the final frames with `remap_to_frames`."""
+    the results to the final frames with `remap_to_frames`.
+    detectors: T89, only images from these detectors (e.g. {3}: the band shown on the map), so a field
+    for one band downloads ~1/6 of the cutouts."""
     def report(step, done=None, total=None, message=""):
         if progress:
             progress(step, done, total, message)
 
     report("query", message="searching IRSA for SPHEREx images")
     exposures, prov_query = cached_exposures(ra_deg, dec_deg, refresh=refresh)
+    if detectors:
+        exposures = [e for e in exposures if e.detector in detectors]
     if not exposures:
-        raise LookupError(f"no SPHEREx images cover RA {ra_deg} Dec {dec_deg}")
+        raise LookupError(f"no SPHEREx images cover RA {ra_deg} Dec {dec_deg}"
+                          + (f" with detector {sorted(detectors)}" if detectors else ""))
     chosen = select(exposures, per_group)
 
     npix = max(16, int(round(size_arcmin * 60 / PIXEL_SCALE_ARCSEC)))

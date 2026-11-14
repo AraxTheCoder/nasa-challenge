@@ -48,7 +48,17 @@ def epochs(target: dict) -> dict[int, list[dict]]:
     return dict(sorted(out.items()))
 
 
-LAYER_RE = r"^(e\d+|f\d{3,}|d-f\d{3,}-f\d{3,})$"
+LAYER_RE = r"^(e\d+(d[1-6]|c)?|f\d{3,}|d-f\d{3,}-f\d{3,})$"
+# T89: e<ep>d<n> = the epoch's frames of detector n only (one band of the map); e<ep>c = false colour of
+# all of them: blue = D1+D2 (0.75-1.62 µm), green = D3+D4 (1.63-3.82 µm), red = D5+D6 (3.83-5.0 µm).
+COLOUR = ((5, 6), (3, 4), (1, 2))          # R, G, B detector pairs
+_EP_RE = __import__("re").compile(r"^e(\d+)(?:d([1-6])|(c))?$")
+
+
+def epoch_key(key: str):
+    """'e2' -> (2, None, False); 'e2d3' -> (2, 3, False); 'e2c' -> (2, None, True)."""
+    m = _EP_RE.match(key)
+    return int(m.group(1)), int(m.group(2)) if m.group(2) else None, bool(m.group(3))
 
 
 def frame_layers(tid: str, target: dict) -> list[dict]:
@@ -61,7 +71,9 @@ def frame_layers(tid: str, target: dict) -> list[dict]:
 def has_layer(target: dict, key: str) -> bool:
     ids = {f["id"] for f in target.get("frames", [])}
     if key.startswith("e"):
-        return int(key[1:]) in epochs(target)
+        ep, det, _ = epoch_key(key)
+        frames = epochs(target).get(ep, [])
+        return bool(frames) and (det is None or any(int(f.get("detector", 0)) == det for f in frames))
     if key.startswith("d-"):
         _, a, b = key.split("-")
         return a in ids and b in ids
@@ -72,9 +84,10 @@ def layers(tid: str, target: dict) -> list[dict]:
     res = []
     for ep, frames in epochs(target).items():
         t0, t1 = frames[0]["time_utc"][:10], frames[-1]["time_utc"][:10]
+        dets = sorted({int(f["detector"]) for f in frames if f.get("detector")})
         res.append({"epoch": ep, "id": f"e{ep}", "n_frames": len(frames),
                     "label": f"Epoch {ep} · {t0} – {t1} · {len(frames)} frames",
-                    "url": f"/api/hips/{tid}/e{ep}"})
+                    "url": f"/api/hips/{tid}/e{ep}", "detectors": dets})   # T89: + e<ep>d<n>, e<ep>c
     return res
 
 
@@ -82,6 +95,9 @@ def properties(tid: str, target: dict, ep) -> str:
     c = target["center"]
     key = ep if isinstance(ep, str) else f"e{ep}"
     what = {"e": f"epoch {key[1:]}", "f": f"frame {key}", "d": f"difference {key[2:].replace('-', ' − ')}"}[key[0]]
+    if key[0] == "e":
+        ep, det, colour = epoch_key(key)
+        what = f"epoch {ep}" + (f", detector {det}" if det else ", false colour" if colour else "")
     lines = {
         "creator_did": f"ivo://spherex-blink/{tid}/{key}",
         "obs_title": f"SPHEREx {what} around RA {c['ra_deg']:.4f} Dec {c['dec_deg']:+.4f}"
@@ -95,23 +111,43 @@ def properties(tid: str, target: dict, ep) -> str:
     return "".join(f"{k:<20} = {v}\n" for k, v in lines.items())
 
 
-@lru_cache(maxsize=32)
-def epoch_image(target_dir: str, mtime: float, ep: int) -> tuple[np.ndarray, np.ndarray]:
-    """Mean of the epoch's frames (grey 0-255) and a coverage mask. mtime keys the cache."""
+@lru_cache(maxsize=64)
+def epoch_image(target_dir: str, mtime: float, ep: int, det: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """Mean of the epoch's frames (grey 0-255; det: only that detector's) and a coverage mask.
+    mtime keys the cache."""
     from PIL import Image
 
     d = Path(target_dir)
     t = json.loads((d / "target.json").read_text(encoding="utf-8"))
     acc = cnt = None
-    for f in epochs(t)[ep]:
+    frames = [f for f in epochs(t)[ep] if det is None or int(f.get("detector", 0)) == det]
+    for f in frames:
         a = np.asarray(Image.open(d / f["image"]).convert("LA"), np.float32)
         grey, alpha = a[..., 0], a[..., 1] > 0
         if acc is None:
             acc, cnt = np.zeros_like(grey), np.zeros_like(grey)
         acc += np.where(alpha, grey, 0)
         cnt += alpha
+    if acc is None:                                      # no frame of that detector in this epoch
+        w, h = t["image"]["width"], t["image"]["height"]
+        return np.zeros((h, w), np.float32), np.zeros((h, w), bool)
     mean = np.divide(acc, cnt, out=np.zeros_like(acc), where=cnt > 0)
     return mean, cnt > 0
+
+
+@lru_cache(maxsize=32)
+def colour_image(target_dir: str, mtime: float, ep: int) -> tuple[np.ndarray, np.ndarray]:
+    """T89: false colour of the epoch, (h, w, 3) 0-255: R = D5+D6, G = D3+D4, B = D1+D2; coverage mask."""
+    chans, cov = [], None
+    for pair in COLOUR:
+        acc = cnt = None
+        for det in pair:
+            m, c = epoch_image(target_dir, mtime, ep, det)
+            acc = np.where(c, m, 0) if acc is None else acc + np.where(c, m, 0)
+            cnt = c.astype(np.float32) if cnt is None else cnt + c
+        chans.append(np.divide(acc, cnt, out=np.zeros_like(acc), where=cnt > 0))
+        cov = cnt > 0 if cov is None else cov | (cnt > 0)
+    return np.dstack(chans), cov
 
 
 @lru_cache(maxsize=256)
@@ -151,7 +187,8 @@ def diff_image(target_dir: str, mtime: float, a: str, b: str) -> tuple[np.ndarra
 
 def layer_image(target_dir: str, mtime: float, key: str) -> tuple[np.ndarray, np.ndarray]:
     if key.startswith("e"):
-        return epoch_image(target_dir, mtime, int(key[1:]))
+        ep, det, colour = epoch_key(key)
+        return colour_image(target_dir, mtime, ep) if colour else epoch_image(target_dir, mtime, ep, det)
     if key.startswith("d-"):
         _, a, b = key.split("-")
         return diff_image(target_dir, mtime, a, b)
@@ -241,11 +278,16 @@ def _render_tile(target_dir: Path, ep, order: int, npix: int) -> bytes | None:
     if not ok.any():
         return None
     mean, cov = layer_image(str(target_dir), (target_dir / "target.json").stat().st_mtime, key)
-    grey = np.zeros(TILE * TILE, np.uint8)
     alpha = np.zeros(TILE * TILE, np.uint8)
     rr, cc = row[ok], col[ok]
-    grey[ok] = mean[rr, cc].astype(np.uint8)
     alpha[ok] = np.where(cov[rr, cc], 255, 0)
     buf = io.BytesIO()
+    if mean.ndim == 3:                                 # T89 false colour: RGBA
+        rgb = np.zeros((TILE * TILE, 3), np.uint8)
+        rgb[ok] = mean[rr, cc].astype(np.uint8)
+        Image.fromarray(np.dstack([rgb.reshape(TILE, TILE, 3), alpha.reshape(TILE, TILE)]), "RGBA").save(buf, "PNG")
+        return buf.getvalue()
+    grey = np.zeros(TILE * TILE, np.uint8)
+    grey[ok] = mean[rr, cc].astype(np.uint8)
     Image.fromarray(np.dstack([grey.reshape(TILE, TILE), alpha.reshape(TILE, TILE)]), "LA").save(buf, "PNG")
     return buf.getvalue()

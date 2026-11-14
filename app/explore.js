@@ -167,13 +167,21 @@ export function surveyPasses() {
   return (sky?.base?.props.x_survey_passes ?? "").split(/\s+/).filter(Boolean).map(Number);
 }
 
-/** Put one overlay per pass on the map (replaces the field's epochs). Returns the layers made. */
-export async function setPassLayers(passes) {
+/** Put one overlay per pass on the map (replaces the field's epochs); colour: T89 false-colour layers.
+ *  Returns the layers made. */
+export async function setPassLayers(passes, colour = false) {
   if (!sky || !apiBase) return [];
   const base = apiBase.replace(/\/$/, "");
   epochLayers = await sky.setOverlays(passes.map((n) => ({
-    url: `${base}/api/sky/spherex-live-p${n}`, label: `Survey pass ${n}`, epoch: null, pass: n, eager: true })));
+    url: `${base}/api/sky/spherex-live-p${n}${colour ? "-rgb" : ""}`, label: `Survey pass ${n}${colour ? " (false colour)" : ""}`,
+    epoch: null, pass: n, eager: true })));
   return epochLayers;
+}
+
+/** T89: SPHEREx detector (1-6) of the map's band: 17 channels each, D1 0.75 µm ... D6 5.0 µm. */
+export function detector() {
+  const s = sky?.base?.slice ?? 0;
+  return Math.min(6, Math.floor(s / 17) + 1);
 }
 
 /** {total, done, ok} tiles of overlay i for this view, or null. */

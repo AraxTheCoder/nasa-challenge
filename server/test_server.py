@@ -182,7 +182,8 @@ def test_live_layer_routes_low_orders_to_cube(tmp_path, monkeypatch):
     assert c.get("spherex-live", "Norder5/Dir0/Npix12_20.png") == b"\x89PNG"
     assert c.get("spherex-live", "Norder3/Allsky_20.png") == b"\x89PNG"
     assert c.get("spherex-live", "Norder7/Dir0/Npix123_20.png") == b"\x89PNGlive"
-    assert ("live", 20, 7, 123) in seen and ("spherex-cube", "Norder5/Dir0/Npix12_20.png") in seen
+    # T89: live orders ask one slice per detector (20 -> 17 = detector 2); the cube keeps its slice
+    assert ("live", 17, 7, 123) in seen and ("spherex-cube", "Norder5/Dir0/Npix12_20.png") in seen
 
 
 def _poll(client, url):
@@ -446,3 +447,44 @@ def test_spectral_outliers_job(tmp_path, monkeypatch):
     assert r.status_code == 200 and body["status"] == "ready" and body["items"][0]["name"] == "star 5"
     assert body["field"]["n_sources"] == 60 and "flux_ujy" not in body
     assert len(list((tmp_path / "spectra").glob("*.json"))) == 60          # clicks on these sources are instant
+
+
+def test_hips_epoch_layers_per_detector_and_false_colour(tmp_path):
+    """T89: e<ep>d<n> = one detector's frames of the epoch, e<ep>c = false colour of all of them."""
+    import json as _json
+
+    import numpy as np
+    from PIL import Image
+
+    from server import hips
+
+    d = tmp_path / "t"
+    d.mkdir()
+    frames = []
+    for i, det in enumerate((1, 3, 5)):
+        Image.fromarray(np.dstack([np.full((8, 8), 50 * (i + 1), np.uint8), np.full((8, 8), 255, np.uint8)]), "LA").save(d / f"f{i}.png")
+        frames.append({"id": f"f00{i}", "epoch": 1, "detector": det, "image": f"f{i}.png", "mjd": 1.0 + i,
+                       "time_utc": "2025-06-01T00:00:00"})
+    t = {"center": {"ra_deg": 10.0, "dec_deg": 0.0}, "size_arcmin": 1, "frames": frames,
+         "image": {"width": 8, "height": 8, "pixel_scale_arcsec": 6.15}}
+    (d / "target.json").write_text(_json.dumps(t), encoding="utf-8")
+    assert hips.has_layer(t, "e1d3") and not hips.has_layer(t, "e1d2") and hips.has_layer(t, "e1c")
+    m = (d / "target.json").stat().st_mtime
+    mean, cov = hips.epoch_image(str(d), m, 1, 3)
+    assert mean[0, 0] == 100 and cov.all()
+    rgb, cov = hips.colour_image(str(d), m, 1)
+    assert tuple(rgb[0, 0]) == (150, 100, 50)            # R = D5, G = D3, B = D1 (their pairs have no D6/D4/D2)
+    assert hips.layers("x", t)[0]["detectors"] == [1, 3, 5]
+    import re
+    assert re.match(hips.LAYER_RE, "e1c") and re.match(hips.LAYER_RE, "e12d6") and not re.match(hips.LAYER_RE, "e1d7")
+
+
+def test_target_request_for_one_detector(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from server.app import create_app as api
+
+    c = TestClient(api(tmp_path / "targets", fixture=True))
+    r = c.get("/api/target?ra=10&dec=5&size=20&detector=3")
+    assert r.json()["id"].endswith("-d3")
+    assert c.get("/api/target?ra=10&dec=5&size=20&detector=9").status_code == 400

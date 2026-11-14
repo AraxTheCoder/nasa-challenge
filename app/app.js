@@ -349,7 +349,7 @@ function bindPage() {
 function syncExplore(target) {
   app.shownTarget = target;
   if (!target?.center) return;
-  autoField.ready = autoField.building;     // the tile it was built for (null: opened some other way)
+  if (autoField.building) autoField.ready.set(autoField.building, target);   // tile|variant it was built for
   autoField.building = null;
   decideSource();
 }
@@ -382,7 +382,9 @@ async function showEpochLayers(target) {
     info = await res.json();
   } catch { return; }
   if (app.shownTarget !== target || !info.layers?.length || passes.mode() !== "epochs") return;
-  const layers = await explore.setEpochLayers(info.layers.map((l) => ({ ...l, url: new URL(l.url, app.api).href })));
+  // T89: false colour = e<ep>c (all detectors), else the field holds only the band's detector: e<ep>
+  const suffix = passes.colour() ? "c" : "";
+  const layers = await explore.setEpochLayers(info.layers.map((l) => ({ ...l, url: new URL(l.url + suffix, app.api).href })));
   if (!layers.length || app.shownTarget !== target || passes.mode() !== "epochs") return;
   // T55: when, not "Ep. n": the epoch's month(s) from its label "Epoch 1 · 2025-06-03 – 2025-06-10 · …"
   const labels = layers.map((l) => {
@@ -419,7 +421,12 @@ function updateExplorePos() {
 
 const FIELD_ORDER = 6;
 const AUTO_BUILD_MS = 2000;
-const autoField = { tile: null, building: null, ready: null, progress: null, error: null, timer: null };
+// keys "<tile>|<variant>": variant d<n> = only the band's detector (fast, ~1/6 of the cutouts), rgb = all six
+// (false colour); ready: key -> its target, kept so returning to a tile or band shows it at once
+const autoField = { key: null, building: null, ready: new Map(), progress: null, error: null, timer: null };
+
+/** T89: what a field must hold for the current band setting. */
+const fieldVariant = () => (passes.colour() ? "rgb" : `d${explore.detector()}`);
 
 /** Order-6 tile under the view centre (null when not at level 7 or no map). */
 function centreTile() {
@@ -440,27 +447,36 @@ function tileField(pix) {
   return { ra: c[0].toFixed(4), dec: c[1].toFixed(4), size: clampSize(Math.ceil(2 * half * 60 * 1.02)) };
 }
 
-/** Called on every view change and when a field is ready: pick the source, start a build after a rest. */
+const fieldKey = () => { const t = centreTile(); return t === null ? null : `${t}|${fieldVariant()}`; };
+
+/** Called on every view / band change and when a field is ready: pick the source, start a build after a rest. */
 function decideSource() {
-  const tile = centreTile();
-  const moved = tile !== autoField.tile;
-  autoField.tile = tile;
-  const want = tile !== null && autoField.ready === tile && app.shownTarget ? "epochs" : "passes";
+  const key = fieldKey();
+  const moved = key !== autoField.key;
+  autoField.key = key;
+  const ready = key && autoField.ready.get(key);
+  if (ready && ready !== app.shownTarget) {          // a field built earlier for this tile + band: show it
+    app.shownTarget = ready;
+    publishTarget(ready);
+    if (passes.mode() === "epochs") showEpochLayers(ready);
+  }
+  const want = ready ? "epochs" : "passes";
   if (passes.mode() !== want) passes.setMode(want, { remember: false });
   if (moved) {
     clearTimeout(autoField.timer);
     autoField.error = null;
-    if (tile !== null && autoField.ready !== tile && autoField.building !== tile) {
-      autoField.timer = setTimeout(() => buildTile(tile), AUTO_BUILD_MS);
+    if (key && !ready && autoField.building !== key) {
+      autoField.timer = setTimeout(() => buildTile(key), AUTO_BUILD_MS);
     }
   }
   showBlinkStatus();
 }
 
-function buildTile(pix) {
-  if (centreTile() !== pix) return;
-  const req = { ...tileField(pix), auto: true };
-  autoField.building = pix;
+function buildTile(key) {
+  if (fieldKey() !== key) return;
+  const [pix, variant] = key.split("|");
+  const req = { ...tileField(Number(pix)), auto: true, ...(variant === "rgb" ? {} : { detector: Number(variant.slice(1)) }) };
+  autoField.building = key;
   autoField.progress = null;
   loadField(req, { quiet: true });
   showBlinkStatus();
@@ -470,14 +486,14 @@ function buildTile(pix) {
 function showBlinkStatus() {
   const out = $("#blink-status");
   if (!out) return;
-  const tile = autoField.tile;
+  const key = autoField.key;
   let text;
   if (!passes.passesOn()) text = "Blink: zoom in to level 6";
-  else if (tile === null) text = "Blink: survey passes · field epochs at level 7";
+  else if (key === null) text = "Blink: survey passes · field epochs at level 7";
   else if (passes.mode() === "epochs") text = "Blink: field epochs";
   else {
     text = "Blink: survey passes";
-    if (autoField.building === tile) {
+    if (autoField.building === key) {
       const p = autoField.progress;
       const step = p?.step ? STEP_LABELS[p.step] ?? p.step : "building";
       const n = Number.isFinite(p?.done) && Number.isFinite(p?.total) && p.total ? ` ${p.done}/${p.total}` : "";
@@ -487,6 +503,9 @@ function showBlinkStatus() {
   out.textContent = text;
 }
 
+// T89: SPHEREx's 6 detectors; one image covers a detector's whole range (a λ gradient across its face)
+const DETECTOR_UM = [[0.75, 1.09], [1.10, 1.62], [1.63, 2.41], [2.42, 3.82], [3.83, 4.41], [4.42, 5.00]];
+
 function setupBand(layer) {
   const box = $("#explore-band-box");
   const waves = explore.bandWavelengths();
@@ -495,11 +514,18 @@ function setupBand(layer) {
   const input = $("#explore-band");
   input.max = String(layer.depth - 1);
   input.value = String(layer.slice);
+  const colour = $("#band-colour");
   const show = () => {
     const w = waves[Number(input.value)];
-    $("#explore-band-out").textContent = Number.isFinite(w) ? `${w.toFixed(3)} µm` : `#${input.value}`;
+    const d = explore.detector(), [lo, hi] = DETECTOR_UM[d - 1];
+    input.disabled = colour.checked;
+    $("#explore-band-out").textContent = colour.checked ? "all bands: B 0.75–1.62 · G 1.63–3.82 · R 3.83–5.0 µm"
+      : `${Number.isFinite(w) ? `${w.toFixed(3)} µm` : `#${input.value}`} · D${d} ${lo.toFixed(2)}–${hi.toFixed(2)} µm`;
+    $("#explore-band-out").title = colour.checked ? "False colour: blue = detectors 1+2, green = 3+4, red = 5+6"
+      : "Blinking images show this detector's whole range: SPHEREx's filter changes wavelength across each detector, so one image is not one channel. Zoomed out (IRSA cube) the map shows the exact channel.";
   };
-  input.oninput = () => { explore.setBand(Number(input.value)); show(); };
+  input.oninput = () => { explore.setBand(Number(input.value)); show(); decideSource(); };
+  colour.onchange = async () => { show(); await passes.setColour(colour.checked); decideSource(); };
   show();
 }
 

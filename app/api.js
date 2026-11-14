@@ -73,6 +73,7 @@ function sleep(ms, signal) {
 export async function requestField(apiBase, req, { onProgress, signal } = {}) {
   const q = new URLSearchParams({ ra: req.ra, dec: req.dec, size: String(req.size) });
   if (req.refresh) q.set("refresh", "1");
+  if (req.detector) q.set("detector", String(req.detector));   // T89: one band's field (~1/6 of the cutouts)
   let url = apiUrl(apiBase, `/api/target?${q}`);
   for (;;) {
     const { http, body } = await getJson(url, signal);

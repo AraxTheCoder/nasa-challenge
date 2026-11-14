@@ -66,11 +66,17 @@ class Layer {
     // Orders a server renders on demand (our live deep zoom): slow, so only a few at a time.
     this.slowOrders = new Set((props.x_live_orders ?? "").split(/\s+/).filter(Boolean).map(Number));
   }
+  /** T89: at the live orders a tile only depends on the detector (17 channels each), so all channels of a
+   *  detector use its first slice: one download and one texture instead of 17. */
+  sliceAt(order) {
+    return this.slowOrders.has(order) ? Math.floor(Math.min(this.slice, 101) / 17) * 17 : this.slice;
+  }
   tileUrl(order, pix) {
-    const s = this.depth > 1 && this.slice > 0 ? `_${this.slice}` : "";
+    const sl = this.sliceAt(order);
+    const s = this.depth > 1 && sl > 0 ? `_${sl}` : "";
     return `${this.url}/Norder${order}/Dir${Math.floor(pix / 10000) * 10000}/Npix${pix}${s}.${this.ext}`;
   }
-  key(order, pix) { return `${this.slice}/${order}/${pix}`; }
+  key(order, pix) { return `${this.sliceAt(order)}/${order}/${pix}`; }
   allskyUrl() {
     const s = this.depth > 1 && this.slice > 0 ? `_${this.slice}` : "";
     return `${this.url}/Norder3/Allsky${s}.${this.ext}`;

@@ -26,6 +26,8 @@ SURVEYS = {
     "spherex-live": [],
     # T82: one layer per survey pass, live orders only (the IRSA cube below them combines passes)
     **{f"spherex-live-p{n}": [] for n in range(1, 7)},
+    # T89: the same in false colour (R = D5+D6, G = D3+D4, B = D1+D2), composed from the 6 grey tiles
+    **{f"spherex-live-p{n}-rgb": [] for n in range(1, 7)},
     "2mass": ["https://irsa.ipac.caltech.edu/data/hips/CDS/2MASS/Color"],
     "allwise": ["https://irsa.ipac.caltech.edu/data/hips/CDS/AllWISE/RGB-W4-W2-W1"],
 }
@@ -33,6 +35,20 @@ TILE_RE = re.compile(r"^Norder(\d+)/Dir(\d+)/Npix(\d+)(_\d+)?\.(png|jpg|jpeg)$")
 ALLSKY_RE = re.compile(r"^Norder3/Allsky(_\d+)?\.(png|jpg|jpeg)$")
 MISSING = b"MISSING"
 TIMEOUT_S = 30
+
+
+def live_path(path: str) -> str:
+    """T89: at the live orders a tile only depends on the detector (slice // 17; SPHEREx's filter puts a
+    wavelength gradient across each detector, so one image is not one channel): ask for one slice per
+    detector, (d - 1) * 17, so the 17 channels of a detector share one cached tile. Lower orders (the
+    IRSA cube) keep their slice."""
+    from tilegen.render import LIVE_ORDERS
+
+    m = TILE_RE.match(path)
+    if not m or int(m.group(1)) not in LIVE_ORDERS or not m.group(4):
+        return path
+    canon = (min(101, int(m.group(4)[1:])) // 17) * 17
+    return f"Norder{m.group(1)}/Dir{m.group(2)}/Npix{m.group(3)}{f'_{canon}' if canon else ''}.{m.group(5)}"
 
 
 class SkyCache:
@@ -52,6 +68,7 @@ class SkyCache:
         # T55: a pass tile asked for -> the same tile of the other passes is rendered right away too
         # (the browser blinks them together, but only opens a few connections at a time)
         self._passes = ThreadPoolExecutor(12, thread_name_prefix="sky-passes")
+        self._rgb = ThreadPoolExecutor(18, thread_name_prefix="sky-rgb")   # T89: the 6 grey tiles of a colour tile
 
     def _http(self):
         if self._session is None:
@@ -71,6 +88,7 @@ class SkyCache:
     def get(self, survey: str, path: str) -> bytes | None:
         """Bytes of the file (from disk or upstream), or None if upstream doesn't have it."""
         if survey.startswith("spherex-live"):
+            path = live_path(path)                    # T89: one tile per detector at the live orders
             live = self._live_route(path, survey)
             if live is not None:
                 return live()
@@ -105,11 +123,18 @@ class SkyCache:
         from tilegen.render import LIVE_ORDERS, survey_passes
 
         if survey != "spherex-live":
-            n = survey.rsplit("-p", 1)[1]
+            rgb = survey.endswith("-rgb")
+            n = survey.removesuffix("-rgb").rsplit("-p", 1)[1]
             if path == "properties":            # the live map's (102-band cube depth etc.), relabelled
                 def props():
                     live = (self._live_route("properties")() or b"").decode("utf-8", "replace").splitlines()
-                    keep = [l for l in live if not l.startswith(("obs_title", "creator_did", "hips_order_min"))]
+                    drop = ("obs_title", "creator_did", "hips_order_min") + (("hips_cube", "data_cube", "dataproduct_type", "custom_tile_format") if rgb else ())
+                    keep = [l for l in live if not l.startswith(drop)]
+                    if rgb:                     # T89: one colour image, no band slices
+                        keep += [f"obs_title            = SPHEREx survey pass {n}, false colour (R = D5+D6, G = D3+D4, B = D1+D2)",
+                                 f"creator_did          = ivo://spherex-blink/live-p{n}-rgb",
+                                 f"hips_order_min       = {min(LIVE_ORDERS)}"]
+                        return ("\n".join(keep) + "\n").encode()
                     keep += [f"obs_title            = SPHEREx survey pass {n}: live tiles from that pass's level-2 images",
                              f"creator_did          = ivo://spherex-blink/live-p{n}",
                              f"hips_order_min       = {min(LIVE_ORDERS)}"]
@@ -139,10 +164,12 @@ class SkyCache:
         return None                                   # live order: cached on disk like any tile
 
     def _fetch(self, survey: str, path: str) -> bytes | None:
+        if survey.endswith("-rgb"):                   # T89: false colour from the 6 per-detector tiles
+            return self._compose_rgb(survey[:-4], path)
         if survey.startswith("spherex-live"):         # live order: tile generator (local or remote)
             m = TILE_RE.match(path)
             slice_ = int(m.group(4)[1:]) if m.group(4) else 0
-            pass_ = int(survey.rsplit("-p", 1)[1]) if survey != "spherex-live" else None
+            pass_ = int(survey.rsplit("-p", 1)[1]) if survey != "spherex-live" else None   # (-rgb handled above)
             if pass_:
                 return self.tiles.get(slice_, int(m.group(1)), int(m.group(3)), pass_=pass_)
             return self.tiles.get(slice_, int(m.group(1)), int(m.group(3)))
@@ -169,14 +196,15 @@ class SkyCache:
         from tilegen.render import LIVE_ORDERS
 
         m = TILE_RE.match(path)
-        return bool(m) and int(m.group(1)) in LIVE_ORDERS and not (self.root / survey / path).exists()
+        return bool(m) and int(m.group(1)) in LIVE_ORDERS and not (self.root / survey / live_path(path)).exists()
 
     def prefetch_around(self, survey: str, path: str) -> None:
         m = TILE_RE.match(path)
         if not m:
             return
         if survey.startswith("spherex-live-p"):     # T82: pass layers: nothing below the live orders
-            self.prefetch_passes(survey, path)
+            if not survey.endswith("-rgb"):
+                self.prefetch_passes(survey, live_path(path))
             return
         if survey == "spherex-live":
             # Never prefetch into live orders: each is a slow render that would take a slot from a
@@ -201,6 +229,36 @@ class SkyCache:
             sub = f"Norder{k}/Dir{(p // 10000) * 10000}/Npix{p}{sl}.{ext}"
             if not (self.root / survey / sub).exists():
                 self._prefetch.submit(self._quiet_get, survey, sub)
+
+    def _compose_rgb(self, grey_survey: str, path: str) -> bytes | None:
+        """RGBA PNG: R = mean(D5, D6), G = mean(D3, D4), B = mean(D1, D2) of the grey live tiles."""
+        import io
+
+        import numpy as np
+        from PIL import Image
+
+        m = TILE_RE.match(path)
+        base = f"Norder{m.group(1)}/Dir{m.group(2)}/Npix{m.group(3)}"
+        paths = [f"{base}{f'_{(d - 1) * 17}' if d > 1 else ''}.png" for d in range(1, 7)]
+        tiles = list(self._rgb.map(lambda p: self.get(grey_survey, p), paths))      # rendered side by side
+        if not any(tiles):
+            return None
+        grey, alpha = [], []
+        for t in tiles:
+            if t is None:
+                grey.append(np.zeros((512, 512), np.float32)); alpha.append(np.zeros((512, 512), bool))
+                continue
+            a = np.asarray(Image.open(io.BytesIO(t)).convert("LA"), np.float32)
+            grey.append(a[..., 0]); alpha.append(a[..., 1] > 0)
+        chans = []
+        for pair in ((5, 6), (3, 4), (1, 2)):
+            acc = sum(np.where(alpha[d - 1], grey[d - 1], 0) for d in pair)
+            cnt = sum(alpha[d - 1].astype(np.float32) for d in pair)
+            chans.append(np.divide(acc, cnt, out=np.zeros_like(acc), where=cnt > 0).astype(np.uint8))
+        a = np.where(np.any(alpha, axis=0), 255, 0).astype(np.uint8)
+        buf = io.BytesIO()
+        Image.fromarray(np.dstack(chans + [a]), "RGBA").save(buf, "PNG", compress_level=3)
+        return buf.getvalue()
 
     def prefetch_passes(self, survey: str, path: str) -> None:
         """T55: the same tile of every other survey pass, in the background (once each)."""

@@ -124,7 +124,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T86 | B: Spectral outliers: sources whose spectral shape is out of distribution for their field (field's own model of an ordinary star, calibrated scatter, only consistent deviations), ranked with a plain-words reason; second opinion from the catalogue prediction (idea I23) | Joerg | done | `joerg/T85-field-spectra` | [tasks/T86](tasks/T86-spectral-outliers.md). Needs T85 |
 | T87 | B: What it is, from the bands: temperature, IR excess, ices (3.0 / 4.27 / 4.67 µm), CH4 3.3 and H2O 1.4 / 1.9 µm (brown dwarfs), CO 2.3 µm, PAH 3.3, Pa-α / Br-α, galaxy 1.6 µm bump; per source a class or hint | Joerg | open | | [tasks/T87](tasks/T87-band-features.md). Needs T85; after T86 |
 | T88 | C: Unusual spectra on the map: "Unusual spectra" toggle in the map bar (measures the field if needed), rings + rank on the outliers, click → card with the reason, spectrum and charts; linked to the T86 panel | Joerg | done | `joerg/T88-outliers-map` | [tasks/T88](tasks/T88-outliers-map.md). Uses explore.js's public draw hook only, no change to the map code |
-| T89 | C/A: Band switching that works on the map (passes per detector, instant within a detector; field epochs per band, builds only the shown detector) + a false-colour layer of all bands (passes and field epochs) | Jonathan | doing | `main` | [tasks/T89](tasks/T89-bands-false-colour.md). `app/` + tilegen/server; per-detector builds touch the build filter |
+| T89 | C/A: Band switching that works on the map (passes per detector, instant within a detector; field epochs per band, builds only the shown detector) + a false-colour layer of all bands (passes and field epochs) | Jonathan | done | `main` | [tasks/T89](tasks/T89-bands-false-colour.md). `app/` + tilegen/server; per-detector builds touch the build filter |
 
 ## Decisions
 
@@ -247,6 +247,7 @@ Dated, one line each, with why.
 - 2026-11-14 [Jonathan] `/app/` chooses what blinks by itself: survey passes; resting on one HiPS order-6 tile builds its field in the background (no progress popup) and blinks its epochs while the view stays on that tile; leaving the tile or zooming out goes back to passes. A text indicator shows which. Why: no buttons, and fields on the tile grid are built once and reused.
 - 2026-11-14 [Mati] CONTRACTS v0.18 (T64): frames carry `collection` (SPHEREx release), target.json `source_exposures` (images known at build time), new `GET /api/targets/<id>/updates` (newer images / new release → the viewer offers Rebuild). Image searches no longer use a fixed list of four collections: `pipeline/releases.py` lists the bucket's release folders (cached a day) and adds new ones (`spherex_<rel>`, `_deep`), duplicates across releases dedupe to the newest. Why: the challenge asks for a tool that is easy to update with the latest data releases; with the fixed list a QR4 / DR2 would never have appeared.
 - 2026-11-14 [Jonathan] CONTRACTS v0.19: `visits` per pass in `/api/pass-dates`. Why: near a pass boundary a pass holds two visits half a year apart (Epsilon Indi B: Apr & Oct 2025); the map labels them separately.
+- 2026-11-14 [Jonathan] CONTRACTS v0.20 (T89): `&detector=` on `/api/target`, epoch layers `e<n>d<det>` / `e<n>c`, sky layers `spherex-live-p<n>-rgb`, live-order slices rounded to the detector. Why: the band slider did nothing for field epochs (mean of all detectors) and re-rendered identical pass tiles for each of a detector's 17 channels; a one-detector field builds in 31 s instead of ~100 s.
 
 ## Ideas
 
@@ -738,3 +739,8 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Jonathan (Claude): T55: the map's Debug overlay describes the layer on top (the blinking survey pass or
   field epoch), not the capped base map under it ("map order 6 · MAX ZOOM" while the passes drew order 7).
 - 2026-11-14 [Joerg] T88 done: "Unusual spectra" toggle in the map bar of `/web/`: rings the open field's spectral outliers on the map (measures the field first if needed), click a ring for a card with the reason and band chart; panel, colour diagram and map share one selection.
+- 2026-11-14 Jonathan (Claude): T89 (band switching + false colour) in `/app/` + server: pass tiles one per detector
+  (the 17 channels of a detector share a tile: switch within a detector in 0.01 s instead of a new render); field
+  epochs per band (auto builds only the band's detector, 31 s instead of ~100 s; another detector = another
+  cached build); "false colour" switch next to the band: passes from `spherex-live-p<n>-rgb`, field epochs from
+  `e<n>c` (all-detector build). `pipeline/build.py` gained `detectors=` (my T02-T04 code; [FYI Joerg]).

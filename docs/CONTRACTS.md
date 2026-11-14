@@ -1,4 +1,9 @@
-# Contracts (v0.19)
+# Contracts (v0.20)
+
+v0.20 (T89): bands on the map. `GET /api/target` takes `&detector=<1-6>` (only that detector's images, id
+`…-d<n>`); epoch layers `e<n>d<det>` (one detector) and `e<n>c` (false colour); sky layers
+`spherex-live-p<n>-rgb` (false colour); at the live orders (6-7) a tile's slice is rounded down to its
+detector's first slice (`(d-1)*17`), since the image only depends on the detector. Additive otherwise.
 
 v0.19 (T55): `GET /api/pass-dates` gains `visits` per pass (its images grouped by gaps > 30 d). Additive only.
 
@@ -317,7 +322,7 @@ open (`Access-Control-Allow-Origin: *`), so the static site can live on a differ
 ### Request a field
 
 ```
-GET /api/target?ra=<ra>&dec=<dec>&size=<arcmin>[&refresh=1]
+GET /api/target?ra=<ra>&dec=<dec>&size=<arcmin>[&refresh=1][&detector=<1-6>]
 ```
 
 - `ra`, `dec`: decimal degrees (`133.795`, `-7.245`) or sexagesimal (`08h55m10.831s`,
@@ -325,6 +330,9 @@ GET /api/target?ra=<ra>&dec=<dec>&size=<arcmin>[&refresh=1]
 - `size`: side of the square field in arcmin, default `15`, allowed `5`–`210` (210′ ≈ one SPHEREx
   detector image, 2040 px × 6.15″; was `5`–`60` until 2026-11-14, see TEAM.md Decisions). Larger = slower.
 - `refresh=1`: ignore the cache and rebuild (to pick up a new data release).
+- `detector` (v0.20, T89): only images from this SPHEREx detector (1: 0.75–1.09 µm … 6: 4.42–5.00 µm), e.g. the
+  band shown on the map: ~1/6 of the cutouts (an 86′ field: 31 s instead of ~100 s). The target id gets `-d<n>`
+  and is cached apart from the all-detector field.
 
 Responses:
 
@@ -470,10 +478,13 @@ grey + alpha, alpha 0 = no data), rendered on demand. Only tiles that touch the 
 elsewhere).
 
 ```
-GET /api/hips/<id>                         → {"id", "synthetic", "layers": [{"epoch", "id": "e<n>", "label", "url", "n_frames"}]}
+GET /api/hips/<id>                         → {"id", "synthetic", "layers": [{"epoch", "id": "e<n>", "label", "url", "n_frames", "detectors"}]}
 GET /api/hips/<id>/e<n>/properties         → HiPS properties (order 7, 512 px PNG tiles, equatorial)
 GET /api/hips/<id>/e<n>/Norder<k>/Dir<d>/Npix<p>.png
 ```
+
+v0.20 (T89): `e<n>d<det>` = only that detector's frames of the epoch; `e<n>c` = false colour, RGBA tiles,
+R = mean of detectors 5+6, G = 3+4, B = 1+2 (each frame's own grey stretch); `detectors` lists the epoch's.
 
 `url` is relative to the API base. Tile pixel (row from top, col) ↔ HEALPix NESTED index at
 nside 2^(k+9): `p * 512² + interleave(row → even bits, col → odd bits)` (checked against IRSA's
@@ -492,7 +503,9 @@ GET /api/sky/<survey>/Norder3/Allsky[_<slice>].png|jpg
 `survey`: `spherex-cube` (IRSA's SPHEREx all-sky cube, one slice per band), `spherex-d1` … `spherex-d6`
 (CDS, one per detector), `spherex-live` (the cube up to order 5, then order 6-7 tiles we render from the
 level-2 images in the AWS bucket, `tilegen/`), `spherex-live-p<n>` (T82: the same live tiles from survey
-pass n's images only, orders 6-7; pass n = images from 2025-05-01 + (n-1) x 182.625 d), `2mass`, `allwise`.
+pass n's images only, orders 6-7; pass n = images from 2025-05-01 + (n-1) x 182.625 d), `spherex-live-p<n>-rgb`
+(v0.20: the same in false colour, RGBA, R = D5+D6, G = D3+D4, B = D1+D2, composed from the 6 grey tiles), `2mass`, `allwise`.
+At the live orders a requested slice is rounded down to its detector's first, `(d-1)*17` (v0.20).
 404 = upstream has no such tile; 503 + `Retry-After` = the local image index is still being built;
 502 = upstream or tile generator down. `spherex-live/properties` lists the passes the image index has
 images from: `x_survey_passes = 1 2 3` (v0.14).

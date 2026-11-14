@@ -164,13 +164,13 @@ def test_pass_tile_renders_the_other_passes_too(tmp_path, monkeypatch):
     sky = SkyCache(tmp_path, tiles=Gen())
     assert sky.get("spherex-live-p2", "Norder7/Dir0/Npix5_20.png") == b"png"
     sky.prefetch_around("spherex-live-p2", "Norder7/Dir0/Npix5_20.png")
-    done = tmp_path / "spherex-live-p3/Norder7/Dir0/Npix5_20.png"
+    done = tmp_path / "spherex-live-p3/Norder7/Dir0/Npix5_17.png"
     for _ in range(250):
-        if len(asked) == 3 and done.exists() and (tmp_path / "spherex-live-p1/Norder7/Dir0/Npix5_20.png").exists():
+        if len(asked) == 3 and done.exists() and (tmp_path / "spherex-live-p1/Norder7/Dir0/Npix5_17.png").exists():
             break
         time.sleep(0.02)
     assert sorted(asked) == [1, 2, 3]
-    assert (tmp_path / "spherex-live-p3/Norder7/Dir0/Npix5_20.png").exists()
+    assert (tmp_path / "spherex-live-p3/Norder7/Dir0/Npix5_17.png").exists()   # T89: slice per detector
 
 
 def test_api_pass_dates(tmp_path, monkeypatch):
@@ -233,3 +233,39 @@ def test_client_balanced_falls_back_when_the_vm_fails(monkeypatch):
     assert g.get(20, 7, 1) == b"local"                              # remote chosen (prior), failed, local
     assert g.sides["remote"].failed == 1 and g.sides["remote"].rate < 0.5
     assert g.get(20, 7, 2) == b"local" and g.sides["remote"].failed == 1   # failing side avoided now
+
+
+def test_live_tiles_one_per_detector_and_false_colour(tmp_path, monkeypatch):
+    """T89: the 17 channels of a detector share one live tile; -rgb composes the 6 detectors."""
+    import io
+
+    import numpy as np
+    from PIL import Image
+
+    from server.skycache import SkyCache, live_path
+
+    assert live_path("Norder7/Dir0/Npix5_20.png") == "Norder7/Dir0/Npix5_17.png"
+    assert live_path("Norder7/Dir0/Npix5_16.png") == "Norder7/Dir0/Npix5.png"
+    assert live_path("Norder7/Dir0/Npix5_101.png") == "Norder7/Dir0/Npix5_85.png"
+    assert live_path("Norder5/Dir0/Npix5_20.png") == "Norder5/Dir0/Npix5_20.png"     # cube order: unchanged
+
+    def png(v):
+        b = io.BytesIO()
+        Image.fromarray(np.dstack([np.full((512, 512), v, np.uint8), np.full((512, 512), 255, np.uint8)]), "LA").save(b, "PNG")
+        return b.getvalue()
+
+    asked = []
+
+    class Gen:
+        def get(self, sl, o, n, pass_=None):
+            asked.append(sl)
+            return png(10 * (sl // 17 + 1))          # detector d -> grey 10 d
+    sky = SkyCache(tmp_path, tiles=Gen())
+    for sl in (3, 9, 16):
+        sky.get("spherex-live-p1", f"Norder7/Dir0/Npix5_{sl}.png")
+    assert asked == [0]                                  # one render for all of detector 1
+    rgb = sky.get("spherex-live-p1-rgb", "Norder7/Dir0/Npix5.png")
+    px = np.asarray(Image.open(io.BytesIO(rgb)).convert("RGBA"))[0, 0]
+    assert tuple(px) == (55, 35, 15, 255)                # R = (50+60)/2, G = (30+40)/2, B = (10+20)/2
+    props = sky.get("spherex-live-p1-rgb", "properties").decode()
+    assert "false colour" in props and "hips_cube_depth" not in props
