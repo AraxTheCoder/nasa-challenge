@@ -396,6 +396,7 @@ Things waiting on a human.
      None of that needs T06's extractor or linking.
   Still useful later for slow distant bodies (T10 Planet X mode) with shift-and-stack (T69), and for the
   "follows the detector" artifact rule (T67).
+- 2026-11-14 [Joerg → Jonathan] T89: proposal to feed your false colour / band layers with deep per-detector (and per-epoch) stacks from the T85 cutouts (~40 exposures per detector instead of 2); details in tasks/T89 "Notes from others". Your call; I won't touch it unless you say so.
 
 ## Log
 

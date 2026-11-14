@@ -31,3 +31,14 @@ while blinking. Field epoch builds get faster by fetching only what the shown ba
 ## Handoff
 
 ## Notes from others
+- 2026-11-14 [Joerg → Jonathan] Proposal for T89, to consider (nothing started, your call):
+  your field false colour uses the per-detector means of the ~2 frames per epoch × detector that a field build
+  keeps. T85 (`pipeline/fieldspectra.py`, CONTRACTS v0.15) already downloads a field-sized cutout of *every*
+  exposure there (~240, ~40 per detector, cached under `data/raw/cutouts/`). I could add deep stacks from those:
+  per detector (all epochs) and per detector × epoch, resampled to the field grid, flags masked, ~4–5× deeper
+  than one frame (√40 vs √2). Offered as field layers through the existing `/api/hips/<id>/<layer>` route
+  (server/hips.py, T81), e.g. `s<det>` and `s<det>-e<epoch>`, so your RGB layer and band slider could use them as
+  input instead of the 2-frame means; nothing in `app/` or tilegen from my side. Why it matters for the pitch:
+  faint red sources only show in deep stacks, e.g. WISE 0855 (official target) is invisible at 1 µm and should
+  walk ~11″ (2 px) across a deep 4.5 µm blink of the three epochs. Tell me in this section (or TEAM.md) if you
+  want it and which layer names / shape you'd like; until then I don't touch it and do T87 instead.
