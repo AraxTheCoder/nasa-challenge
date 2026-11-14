@@ -93,7 +93,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T56 | All: Docs match the code (idea I2): README status/run/how-it-works, CONTRACTS without pre-baked `web/targets/` + `pipeline.publish`, undocumented API routes, a schema-0.2 fixture with pairs/labels/varied detections | Mati | done | `mati/T52-docs-current` | [tasks/T56](tasks/T56-docs-current.md). Was claimed as T52, then T55 (ID clashes with Joerg's T52, Jonathan's T55). Also: classify fix for SkyBoT/MPC, tilegen tests in CI |
 | T55 | C: UI redesign under `/app/` (copy of `web/`); `web/` and `/web/` stay as they are for all other work | Jonathan | doing | `main` | [tasks/T55](tasks/T55-app-ui.md). UI work only; everyone else keeps working in `web/` |
 | T57 | A: Faster "Show": the US VM (tilegen, `us-east4`) reads + cuts the SPHEREx images next to the bucket and sends only the small cutout FITS (gzip); build/photometry/caches stay local; fallback S3, then IRSA | Jonathan | done | `jonathan/T57-vm-cutouts` | [tasks/T57](tasks/T57-vm-cutouts.md). Fresh 15' field: 52.8 s → 19.9 s. Default on; `--cutouts-remote none` turns it off |
-| T58 | All: Limits before a public deploy: rate limit per IP, cap on concurrent builds, `refresh=1` only with a token, cache size cap with eviction (idea I1) | | open | | [tasks/T58](tasks/T58-public-limits.md). Server side, ~1 h. Suggested owner: Jonathan (server). |
+| T58 | All: Limits before a public deploy: rate limit per IP, cap on concurrent builds, `refresh=1` only with a token, cache size cap with eviction (idea I1) | Joerg | doing | `joerg/T58-public-limits` | [tasks/T58](tasks/T58-public-limits.md). Server side, ~1 h. Suggested owner: Jonathan (server). |
 | T59 | A/C: Per-detector co-adds per epoch: mean/median of the aligned frames per detector and epoch as extra frames, for faint red sources (idea I3) | Mati | done | `mati/T59-stacks` | [tasks/T59](tasks/T59-coadds.md). A ~2 h + C ~0.5 h. Works best together with T66 (more frames per field). |
 | T60 | A/C: Contamination flags in the viewer: per-frame FLAGS bits exported with the frame, overlay toggle, flag names at the inspected pixel (idea I5) | | open | | [tasks/T60](tasks/T60-contamination-flags.md). A ~1.5 h + C ~1 h. |
 | T61 | B: Appear / disappear / brightness change between epochs, not only motion: sources present in one epoch and not another, or much brighter / fainter (idea I6a) | | open | | [tasks/T61](tasks/T61-appear-vanish-brighten.md). Needs T06 source extraction. |
@@ -126,6 +126,8 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T88 | C: Unusual spectra on the map: "Unusual spectra" toggle in the map bar (measures the field if needed), rings + rank on the outliers, click → card with the reason, spectrum and charts; linked to the T86 panel | Joerg | done | `joerg/T88-outliers-map` | [tasks/T88](tasks/T88-outliers-map.md). Uses explore.js's public draw hook only, no change to the map code |
 | T89 | C/A: Band switching that works on the map (passes per detector, instant within a detector; field epochs per band, builds only the shown detector) + a false-colour layer of all bands (passes and field epochs) | Jonathan | done | `main` | [tasks/T89](tasks/T89-bands-false-colour.md). `app/` + tilegen/server; per-detector builds touch the build filter |
 | T90 | C: Merge `/app/` (T55 redesign) back into `/web/`: first screen = the app/ map (automatic blink, floating panels), scroll down for every web/ widget (frame viewer, analysis, spectra, candidates, outliers…); nothing dropped from either | Jonathan | doing | `jonathan/T90-merge-app-web` | [tasks/T90](tasks/T90-merge-app-into-web.md). Touches all of web/ |
+| T91 | A: Measured motion of the official targets: each star's position fitted in every epoch (deep per-epoch stacks of its own exposures), proper motion with error from SPHEREx alone, compared with Gaia / the catalogue ("SPHEREx says 10.3″/yr, Gaia 10.4") | Joerg | doing | `joerg/T91-measured-motion` | [tasks/T91](tasks/T91-measured-motion.md). Barnard, Eps Indi B, WISE 0855 |
+| T92 | C: Guided tour of the five official targets: one click per stop opens the field, sets the layer, starts the blink and shows one sentence of what to watch | Joerg | open | | [tasks/T92](tasks/T92-guided-tour.md). After T90 (web/ layout) lands |
 
 ## Decisions
 
@@ -400,6 +402,7 @@ Things waiting on a human.
   Still useful later for slow distant bodies (T10 Planet X mode) with shift-and-stack (T69), and for the
   "follows the detector" artifact rule (T67).
 - 2026-11-14 [Joerg → Jonathan] T89: proposal to feed your false colour / band layers with deep per-detector (and per-epoch) stacks from the T85 cutouts (~40 exposures per detector instead of 2); details in tasks/T89 "Notes from others". Your call; I won't touch it unless you say so.
+- 2026-11-14 [Joerg → all] T14 public deploy: which host? Options: the us-east4 VM (already serves tiles, next to the data), a new small VM, or this host behind a tunnel. Needs a decision before Sunday noon; T58 limits are being added now.
 
 ## Log
 
@@ -749,3 +752,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Jonathan (Claude): T89 follow-up: false colour now at every zoom (base map `spherex-live-rgb`: IRSA cube
   one channel per detector to order 5, live tiles above); cube slices 50/51 (blank at IRSA) from 49/52; Debug says
   "NO DATA" instead of "SHARP" when no visible tile has data.
+- 2026-11-14 [Joerg] Claimed T58 (limits before a public deploy) and T91 (measured motion of the official targets); added T92 (guided tour), starts after T90 lands. T14 (deploy) needs a host decision from the humans: under Questions.

@@ -1,7 +1,7 @@
 # T58: All: Limits before a public deploy: rate limit per IP, cap on concurrent builds, `refresh=1` only with a token, cache size cap with eviction
 
-- **Owner:** –  ·  **Status:** open
-- **Branch:** –
+- **Owner:** Joerg  ·  **Status:** doing
+- **Branch:** `joerg/T58-public-limits`
 - **Depends on / feeds:** T14 (deploy), T47
 
 ## Goal
