@@ -4,6 +4,7 @@
     python web/dev.py --fixture       # always the synthetic demo field, no network needed
     python web/dev.py --live          # real SPHEREx data from IRSA (needs pipeline.build)
     python web/dev.py --lan           # let teammates on the same network open it too
+    python web/dev.py --host 10.0.0.2 # listen on one address only, e.g. a WireGuard interface
 
 Starts `python -m server` (the Live API) and a small static server for the viewer, prints the URL,
 opens it, and stops both on Ctrl+C. Works on Linux, macOS, Windows and WSL.
@@ -134,6 +135,7 @@ def main() -> int:
     ap.add_argument("--api-port", type=int, default=8000)
     ap.add_argument("--web-port", type=int, default=8080)
     ap.add_argument("--lan", action="store_true", help="listen on all interfaces so others on your network can open it")
+    ap.add_argument("--host", help="listen on this address only (e.g. a WireGuard IP like 10.0.0.2); overrides --lan")
     ap.add_argument("--no-browser", action="store_true")
     ap.add_argument("--warm", action="store_true",
                     help="also pre-build the official test fields (web/warm.py) once the API is up")
@@ -154,7 +156,8 @@ def main() -> int:
     else:
         fixture = not has_module("pipeline.build")
 
-    host = "0.0.0.0" if args.lan else "127.0.0.1"
+    host = args.host or ("0.0.0.0" if args.lan else "127.0.0.1")
+    local = "127.0.0.1" if host == "0.0.0.0" else host  # where this script itself reaches the API
     # T44: a taken port is common (an old server, another tool): move on to the next free one instead of failing
     for name, attr in (("API", "api_port"), ("viewer", "web_port")):
         port = getattr(args, attr)
@@ -185,11 +188,11 @@ def main() -> int:
     threading.Thread(target=web.serve_forever, daemon=True).start()
 
     try:
-        if not wait_for_api(f"http://127.0.0.1:{args.api_port}/api/health", api):
+        if not wait_for_api(f"http://{local}:{args.api_port}/api/health", api):
             print("The Live API did not start; see the error above.", file=sys.stderr)
             return 1
 
-        shown_host = lan_ip() if args.lan else "localhost"
+        shown_host = lan_ip() if host == "0.0.0.0" else ("localhost" if host == "127.0.0.1" else host)
         url = f"http://{shown_host}:{args.web_port}/web/"
         if args.api_port != 8000:  # the viewer looks for the API on port 8000 of the page's host
             url += f"?api=http://{shown_host}:{args.api_port}"
@@ -197,13 +200,13 @@ def main() -> int:
         print(f"  Viewer:   {url}")
         print(f"  Live API: http://{shown_host}:{args.api_port}  "
               f"({'fixture mode: every field is the synthetic demo' if fixture else 'live SPHEREx data'})")
-        if args.lan:
+        if host != "127.0.0.1":
             print("  Others on your network can open the viewer URL (allow it in your firewall if asked).")
         print("  Ctrl+C stops both.\n")
         if not args.no_browser:
             open_browser(url)
         if args.warm:
-            subprocess.Popen([sys.executable, str(REPO / "web" / "warm.py"), "--api", f"http://127.0.0.1:{args.api_port}"])
+            subprocess.Popen([sys.executable, str(REPO / "web" / "warm.py"), "--api", f"http://{local}:{args.api_port}"])
         api.wait()
         return api.returncode or 0
     except KeyboardInterrupt:
