@@ -520,3 +520,11 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   permission denial). Reload the viewer to use it. Repeated live-tile HTTP 502 responses on Joerg's
   machine are missing `data/mirror/index.npz`, not measured S3 failures: initialize the local mirror
   before expecting sharp live imagery. Queue contention diagnosis above remains a separate issue.
+
+- 2026-11-14 [Joerg + Codex] Local mirror initialized on Joerg's machine: `pipeline.mirror harvest`
+  completed all six detector CSVs + URI sample (one dropped response recovered), then
+  `pipeline.mirror build` produced 1,628,230 rows / 43.2 MiB with six query/timestamp provenance
+  records and 20 known processing-week paths. Barnard lookup: 299 images in 2.5 ms (index load
+  0.287 s). Running API now generates live tile Norder6/Npix31792_1: HTTP 200, 291,326 bytes,
+  99.8% coverage, 45.1 s cold / 17.2 ms cached. No restart required; reload the browser to retry
+  previously failed tiles. Catalogue and cache files stay gitignored under data/.

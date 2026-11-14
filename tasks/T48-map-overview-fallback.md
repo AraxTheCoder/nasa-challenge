@@ -32,3 +32,8 @@ Show cached Allsky imagery at deep zoom while detailed tiles load or fail, then 
   followed by `pipeline.mirror build` on this machine; the entire data/mirror directory is absent.
 
 ## Notes from others
+
+- 2026-11-14 [Joerg + Codex, follow-up] Missing-index prerequisite resolved locally with harvest +
+  build: 1,628,230 images across six detectors, 43.2 MiB index, provenance saved alongside CSVs.
+  Live Norder6/Npix31792_1 now returns HTTP 200 (45.1 s cold / 17.2 ms cached), 99.8% coverage.
+  The server picked up the new index automatically. Reload the browser to reset failed retries.
