@@ -413,6 +413,49 @@ function syncExplore(target) {
   if (!c) return;
   explore.goTo(c.ra_deg, c.dec_deg, Math.max(0.25, (target.size_arcmin * 3) / 60));
   explore.markField(c.ra_deg, c.dec_deg, target.size_arcmin);
+  showEpochLayers(target);
+}
+
+// T32: the field's epochs as map layers, with buttons + blink, so epochs can be compared in the map.
+let epochTimer = null;
+let epochShown = 0;
+
+async function showEpochLayers(target) {
+  const box = $("#explore-epochs");
+  clearInterval(epochTimer);
+  box.replaceChildren();
+  box.hidden = true;
+  if (app.dataRoot) return;                       // offline mode: no tile server
+  let info;
+  try {
+    const res = await fetch(`${app.api}/api/hips/${encodeURIComponent(target.id)}`);
+    if (!res.ok) return;
+    info = await res.json();
+  } catch { return; }
+  if (app.shownTarget !== target || !info.layers?.length) return;
+  const layers = explore.setEpochLayers(info.layers.map((l) => ({ ...l, url: new URL(l.url, app.api).href })));
+  if (!layers.length) return;
+  const buttons = layers.map((l, i) => el("button", { type: "button", class: "link", title: l.label,
+    "aria-pressed": String(i === 0) }, `Ep. ${l.epoch}`));
+  const pick = (i) => {
+    epochShown = i;
+    explore.showEpoch(i);
+    buttons.forEach((b, j) => b.setAttribute("aria-pressed", String(j === i)));
+  };
+  buttons.forEach((b, i) => b.addEventListener("click", () => pick(i)));
+  const blink = el("button", { type: "button", class: "link", "aria-pressed": "false",
+    title: "Flip through the epochs in the map" }, "▶ Blink epochs");
+  blink.addEventListener("click", () => {
+    const on = blink.getAttribute("aria-pressed") !== "true";
+    blink.setAttribute("aria-pressed", String(on));
+    blink.textContent = on ? "❚❚ Stop" : "▶ Blink epochs";
+    clearInterval(epochTimer);
+    if (on) epochTimer = setInterval(() => pick((epochShown + 1) % layers.length), 700);
+  });
+  box.append(el("span", { class: "muted small" }, info.synthetic ? "Epochs (synthetic):" : "SPHEREx epochs here:"),
+    ...buttons, blink);
+  box.hidden = false;
+  pick(0);
 }
 
 function updateExplorePos() {
@@ -424,6 +467,7 @@ function updateExplorePos() {
 async function startExplore() {
   const sel = $("#explore-survey");
   explore.SURVEYS.forEach((s) => sel.append(el("option", { value: s.id }, s.label)));
+  sel.value = explore.DEFAULT_SURVEY;
   sel.addEventListener("change", () => explore.setSurvey(sel.value));
   $("#explore-gaia").addEventListener("change", (e) => explore.toggleCatalog("gaia", e.target.checked));
   $("#explore-simbad").addEventListener("change", (e) => explore.toggleCatalog("simbad", e.target.checked));

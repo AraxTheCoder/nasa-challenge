@@ -33,24 +33,16 @@ let aladin = null;     // the instance
 const catalogs = {};   // name -> catalog layer
 let epochLayers = [];  // T32: [{epoch, layer}]
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = src;
-    s.charset = "utf-8";
-    s.onload = resolve;
-    s.onerror = () => reject(new Error(`could not load ${src}`));
-    document.head.append(s);
-  });
-}
+// IRSA-hosted, so the map works even while the CDS tile servers are down (as on 2026-11-14).
+export const DEFAULT_SURVEY = "https://irsa.ipac.caltech.edu/data/hips/SPHEREx/spherex_allsky_cube";
 
 /** Create the sky view. opts: {ra, dec, fovDeg, onBlink(ra, dec, fovArcmin)} */
 export async function initExplore(container, opts) {
-  await loadScript(ALADIN_JS);
-  A = window.A;
+  // The npm build is an ES module (default export), it does not set window.A.
+  A = (await import(ALADIN_JS)).default;
   await A.init;
   aladin = A.aladin(container, {
-    survey: SURVEYS[0].id,
+    survey: DEFAULT_SURVEY,
     target: `${opts.ra ?? 269.4463} ${opts.dec ?? 4.7682}`,
     fov: opts.fovDeg ?? 2,
     cooFrame: "ICRSd",
@@ -108,19 +100,26 @@ export function markField(ra, dec, sizeArcmin) {
   fieldOverlay.add(A.polyline(pts));
 }
 
-/** T32: per-epoch HiPS from our Live API. layers: [{epoch, label, url}] */
+/** T32: per-epoch HiPS from our Live API. layers: [{epoch, label, url (absolute)}].
+ * All epochs are added as overlay layers at once and switched by opacity, so blinking is instant
+ * once their tiles are loaded (requirement R2). */
 export function setEpochLayers(layers) {
-  epochLayers = layers.map((l) => ({ ...l, layer: A.HiPS(l.url, { name: l.label, imgFormat: "png" }) }));
+  hideEpochs();
+  const make = A.HiPS || A.imageHiPS;
+  epochLayers = layers.map((l, i) => {
+    const layer = make(l.url, { name: l.label, imgFormat: "png" });
+    aladin.setOverlayImageLayer(layer, `epoch${i}`);
+    aladin.getOverlayImageLayer(`epoch${i}`)?.setOpacity(i === 0 ? 1 : 0);
+    return { ...l, name: `epoch${i}` };
+  });
   return epochLayers;
 }
 
 export function showEpoch(i) {
-  const l = epochLayers[i];
-  if (!aladin || !l) return;
-  aladin.setOverlayImageLayer(l.layer, "epoch");
-  aladin.getOverlayImageLayer("epoch")?.setOpacity(1);
+  epochLayers.forEach((l, j) => aladin?.getOverlayImageLayer(l.name)?.setOpacity(j === i ? 1 : 0));
 }
 
 export function hideEpochs() {
-  aladin?.removeImageLayer?.("epoch");
+  epochLayers.forEach((l) => aladin?.removeImageLayer?.(l.name));
+  epochLayers = [];
 }

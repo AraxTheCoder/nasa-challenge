@@ -66,9 +66,11 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T27 | A: Cache the IRSA exposure list per position (disk, TTL) and drop the server's duplicate query, so FOV changes skip TAP | Jonathan | done | `jonathan/T26-T28-speed` | TAP took 19 s for a trivial query today |
 | T28 | A: Reuse cached cutouts across FOV changes (a larger cached cutout serves a smaller FOV; minimum size bucket) | Jonathan | done | `jonathan/T26-T28-speed` | 82% of each 4.6 MB cutout is the EPSF table, independent of FOV |
 | T29 | C: RA/Dec help as a popup bubble under the form (built, switched off for now; on for the demo) | Mati | done | `mati/T29-form-tip` | [tasks/T29](tasks/T29-form-tip.md). Off: `FORM_TIP_ENABLED` in `web/app.js`; preview `?tip=1`; switch on for T16 |
-| T30 | C: Explore mode (R1): Aladin Lite v3 in the viewer with the CDS SPHEREx HiPS (`CDS/P/SPHEREx/QR2/D1`..`D6`, all-sky, combined epochs) + Gaia/WISE overlays; click a spot → per-epoch blink via the Live API | Jonathan | doing | `jonathan/T30-explore` | Instant pan/zoom today; HiPS is not split by epoch |
-| T31 | A: Local mirror of the SPHEREx image index (1.6 M ObsCore rows: footprint, time, detector, wavelength, FITS URL) in SQLite with a HEALPix index, refreshed per data release (R4) | Jonathan | doing | `jonathan/T31-index-mirror` | TAP: 9-19 s per search today, 136 s for a COUNT(*) |
-| T32 | A: Per-epoch HiPS tiles (R2/R3): build HEALPix tiles per epoch x detector from full images for chosen regions (warm the 5 official fields first), served by `server/` as extra Aladin layers, epoch switch = blink | Jonathan | doing | `jonathan/T32-epoch-hips` | Full images cover ~12 deg2 each, far less waste than 36 cutouts per 15' |
+| T30 | C: Explore mode (R1): Aladin Lite v3 in the viewer with the CDS SPHEREx HiPS (`CDS/P/SPHEREx/QR2/D1`..`D6`, all-sky, combined epochs) + Gaia/WISE overlays; click a spot → per-epoch blink via the Live API | Jonathan | done | `jonathan/T30-explore` | Instant pan/zoom today; HiPS is not split by epoch |
+| T31 | A: Local mirror of the SPHEREx image index (1.6 M ObsCore rows: footprint, time, detector, wavelength, FITS URL) in SQLite with a HEALPix index, refreshed per data release (R4) | Jonathan | done | `jonathan/T31-index-mirror` | TAP: 9-19 s per search today, 136 s for a COUNT(*) |
+| T32 | A: Per-epoch HiPS tiles (R2/R3): build HEALPix tiles per epoch x detector from full images for chosen regions (warm the 5 official fields first), served by `server/` as extra Aladin layers, epoch switch = blink | Jonathan | done | `jonathan/T32-epoch-hips` | Full images cover ~12 deg2 each, far less waste than 36 cutouts per 15' |
+| T33 | A: Read SPHEREx images from the AWS Open Data bucket (`nasa-irsa-spherex`, same paths as IRSA) with HTTP Range: only headers + the rows around the field of IMAGE/FLAGS + WCS-WAVE, no EPSF; IRSA cutouts as fallback | Jonathan | doing | `jonathan/T33-s3-range` | Measured S3 5-7 MB/s, 0 errors vs IRSA 0.31 MB/s, >50% 503 |
+| T34 | C: Label priority: always show only the most important names (field's object, movers, known asteroids, notable motion), the rest on hover; cap + "show all" toggle | Joerg | doing | `joerg/T34-label-priority` | [tasks/T34](tasks/T34-label-priority.md). Mati: labels too crowded on real fields. Builds on T23 `paths.js` |
 
 ## Decisions
 
@@ -132,6 +134,9 @@ Dated, one line each, with why.
   direction, class `still` / `proper motion` / `fast mover` / `distant body?`, plain-words note) from
   the new `pipeline/motion.py`. Why: the viewer can say *how* something moves, not just where it is
   (T23). `summarize()` takes any per-frame positions, so B can reuse it for detections.
+- 2026-11-14 [Jonathan] CONTRACTS v0.6: Live API serves per-epoch HiPS tiles (`/api/hips/...`, T32) so
+  Aladin Lite can blink epochs in the map. Why: requirement R2 (epoch switch <= 0.1 s) in the
+  explore view; additive, nothing existing changes.
 
 ## Ideas
 
@@ -329,3 +334,12 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   reuses the names: Mati saw 4 old synthetic frames among 36 real ones. (2) Objects headline no longer
   claims "no moving objects found" when detection never ran. First real field checked in the viewer:
   Barnard's Star, 36 frames / 3 epochs / 6 detectors, all images load, no errors. T30 report in Questions.
+- 2026-11-14 [Jonathan + Claude] Done: T30 explore map (Aladin Lite 3.8.2 from jsDelivr; CDS SPHEREx
+  HiPS D1-D6 + IRSA DR1 cube + 2MASS/AllWISE/unWISE/DSS, Gaia DR3 + SIMBAD layers, "Blink this spot"),
+  T31 local index mirror (`python -m pipeline.mirror harvest|build`, 1.63 M images, 45 MB, search
+  8-33 ms vs 9-19 s via TAP; first search in an unseen week resolves paths via TAP once), T32
+  per-epoch HiPS (`/api/hips/...`, epoch buttons + blink in the map). Measured: more parallel
+  cutout downloads make it slower (8 threads 0.31 MB/s, 16: 0.24, 32: 0.20; >50% `503 busy`), so
+  8 stays. Gotchas: alasky.cds.unistra.fr down today (CDS SPHEREx HiPS may not load; IRSA-hosted
+  layers still work); mirror uses a 1.74 deg circle around image centres (corners skipped, ~17%
+  fewer images than TAP); ~1% of images are `l2b_retry` paths, fixed by a TAP lookup on 404.

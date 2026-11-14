@@ -1,4 +1,7 @@
-# Contracts (v0.5)
+# Contracts (v0.6)
+
+v0.6 adds per-epoch HiPS tiles to the Live API (see "Per-epoch HiPS"), additive. See TEAM.md Decisions.
+
 
 v0.5 adds an optional `motion` summary to each label (see "Label"), from `pipeline.motion`.
 Additive; `schema_version` stays `"0.2"`. See TEAM.md Decisions, 2026-11-14.
@@ -268,6 +271,22 @@ them against `target_url`.
   not committed. That is still live data, only cached.
 - Until `pipeline.build` exists, the server can run with `--fixture` and answers every request
   with `fixtures/targets/demo-synthetic`, which is `"synthetic": true` and must be shown as such.
+
+### Per-epoch HiPS (v0.6, T32)
+
+For Aladin Lite: each epoch of a built target as a HiPS layer (frames of that epoch averaged,
+grey + alpha, alpha 0 = no data), rendered on demand. Only tiles that touch the field exist (404
+elsewhere).
+
+```
+GET /api/hips/<id>                         → {"id", "synthetic", "layers": [{"epoch", "id": "e<n>", "label", "url", "n_frames"}]}
+GET /api/hips/<id>/e<n>/properties         → HiPS properties (order 7, 512 px PNG tiles, equatorial)
+GET /api/hips/<id>/e<n>/Norder<k>/Dir<d>/Npix<p>.png
+```
+
+`url` is relative to the API base. Tile pixel (row from top, col) ↔ HEALPix NESTED index at
+nside 2^(k+9): `p * 512² + interleave(row → even bits, col → odd bits)` (checked against IRSA's
+2MASS HiPS).
 
 ### Frontend URL
 
