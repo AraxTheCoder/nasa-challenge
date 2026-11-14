@@ -1,0 +1,47 @@
+# T46: run the tests on every push to main and on every pull request.
+# Python tests (offline), the contract checks, and the browser test in fixture mode with ?explore=0,
+# so nothing here depends on IRSA, AWS, JPL or map tile servers being up.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+
+      - name: Install (exact pins) + Chromium
+        run: |
+          python -m pip install -r requirements-dev.lock
+          python -m playwright install --with-deps chromium
+
+      - name: Python tests + contract checks
+        run: python -m pytest detect server pipeline tests -q
+
+      - name: Browser test (fixture mode, no external servers)
+        run: python web/tests/browser_test.py browser-test-out
+
+      - name: Screenshots of the browser test
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-screenshots
+          path: browser-test-out/
+          if-no-files-found: ignore
+          retention-days: 7
