@@ -101,6 +101,7 @@ async function openTarget(targetUrl, expectedId, token, signal) {
   showTarget(app.labelsOn ? target : { ...target, labels: [] }, targetUrl);
   syncExplore(target);
   if (app.labelsOn && !target.labels_requested) setLabels(true);
+  loadObjects(target);
   warnings.forEach((w) => showMessage(w, "warn"));
 }
 
@@ -600,6 +601,35 @@ async function setLabels(on) {
   } catch (err) {
     note.textContent = "";
     showMessage(`Labels unavailable: ${err.message}`, "warn");
+  }
+}
+
+/**
+ * T51: known asteroids and comets (JPL) arrive after the field: the Live API asks JPL in the
+ * background (rate-limited, minutes per field). Poll /objects, then reload target.json.
+ */
+async function loadObjects(target) {
+  const note = $("#objects-note");
+  note.textContent = "";
+  if (target.synthetic || target.objects_requested || app.dataRoot || !app.shownTargetUrl) return;
+  const id = target.id;
+  note.textContent = "Asking JPL for known asteroids and comets (can take a few minutes)…";
+  try {
+    for (let i = 0; i < 360; i++) {   // up to ~30 min; JPL allows 20 searches per 5 min
+      const res = await fetch(`${app.api}/api/targets/${encodeURIComponent(id)}/objects`);
+      const body = await res.json();
+      if (app.shownTarget?.id !== id) return;
+      if (body.status === "ready") break;
+      if (body.status !== "building") throw new Error(body.message ?? `HTTP ${res.status}`);
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+    const fresh = await fetchJson(app.shownTargetUrl);
+    if (app.shownTarget?.id !== id) return;
+    note.textContent = "";
+    app.shownTarget = fresh;
+    showTarget(app.labelsOn ? fresh : { ...fresh, labels: [] }, app.shownTargetUrl);
+  } catch (err) {
+    if (app.shownTarget?.id === id) note.textContent = `Known objects unavailable: ${err.message}`;
   }
 }
 
