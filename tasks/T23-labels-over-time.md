@@ -31,7 +31,8 @@ visible without blinking: a trail image and, later, shift-and-stack along a moti
       coordinate with Mati's objects list (T13)
 - [ ] Cleaner labels: avoid overlapping names (shift or hide lower-priority ones), show catalogue
       numbers only on hover, fewer rings at wide fields
-- [ ] Trail image: one burst or one epoch summed into one picture, movers as dot rows or streaks
+- [x] Trail view in the viewer (`web/trail.js`): frames of this epoch or all epochs stacked with
+      "brightest pixel wins"; steady stars stay dots, movers leave rows of dots. Browser-only, no pipeline change
 - [ ] Shift-and-stack prototype along a known motion (Barnard's Star first), then along guessed
       motions as a search tool for T10
 - [ ] Try it on the official test targets once `build_target` produces real frames (T02–T04)

@@ -38,3 +38,8 @@
 .paths-tip dt { color: var(--muted); }
 .paths-tip dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .paths-tip-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 11px; }
+
+/* Trail view (T23, web/trail.js): sits between the frames and the overlay. */
+.trail-canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.trail-row { margin-top: 4px; align-items: center; }
+.trail-row select { font: inherit; color: inherit; background: var(--panel-2); border: 1px solid var(--border); border-radius: 4px; }
