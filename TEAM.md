@@ -128,6 +128,10 @@ Dated, one line each, with why.
   full view live would take hours: ~10^4x too slow. Pan/zoom must come from pre-tiled HiPS
   (12-30 tiles of 512 px, ~150 KB each per view, ~5 MB/s while panning); live cutouts only for
   the per-epoch detail. Plan: T30-T32.
+- 2026-11-14 [Joerg] CONTRACTS v0.5: labels carry an optional `motion` summary (shift, reach, rate,
+  direction, class `still` / `proper motion` / `fast mover` / `distant body?`, plain-words note) from
+  the new `pipeline/motion.py`. Why: the viewer can say *how* something moves, not just where it is
+  (T23). `summarize()` takes any per-frame positions, so B can reuse it for detections.
 
 ## Ideas
 

@@ -173,6 +173,10 @@ def add_labels(target: dict) -> dict:
         labels += found
         if prov:
             target.setdefault("provenance", []).append(prov)
+    from .motion import summarize  # T23: motion summary + class per label
+    scale = target["image"]["pixel_scale_arcsec"]
+    for l in labels:
+        l["motion"] = summarize(l["positions"], target["frames"], scale)
     labels.sort(key=lambda l: (not l["named"], l["source"] != "simbad", l["mag"] if l["mag"] is not None else 99))
     for i, l in enumerate(labels):
         l["id"] = f"l{i:03d}"
