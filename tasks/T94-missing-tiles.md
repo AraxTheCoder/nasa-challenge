@@ -30,6 +30,12 @@ again later; false-colour field epochs load; no holes at the poles when zooming 
 - 2026-11-14 a pole tile (order 6, Npix 4095) renders locally in 10.6 s: no pole-specific bug found.
 - 2026-11-14 `hips.py` crashed on frames with `"detector": null` (fixture) in the colour layers: fixed.
 
+- 2026-11-14 "queued 233 visible" at whole-sky zoom: a survey-pass layer (orders 6-7 only) was drawn at
+  "screen wants -1", clamped up to order 6 over 240° of sky. sky.js skips (draws / preloads nothing of) an overlay
+  while the view is more than one order coarser than its first order; zooming out stops at order 0 (no order -1).
+  Both checked in web/tests/overview_check.mjs (each fails without its fix).
+- 2026-11-14 the local chunk cache had 17 GB: the Live API's janitor trims it to 10 GB.
+
 ## Questions / needs from others
 
 ## Handoff

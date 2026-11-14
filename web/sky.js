@@ -541,6 +541,12 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     }
   }
 
+  /** T94: zoomed out at most until the screen wants HiPS order 0 (one order-0 texel per device pixel): further
+   *  out it would want order -1, which no map has. Never more than MAX_FOV. */
+  function maxFov() {
+    return Math.min(MAX_FOV, (TEXEL_ARCSEC_ORDER0 * st.w * st.dpr) / 3600);
+  }
+
   /** Order the screen would need for 1 texel per device pixel (may exceed what the map has). */
   function wantedOrder() {
     const arcsecPerPx = (st.fov * 3600) / (st.w * st.dpr);
@@ -599,6 +605,9 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     gl.clear(gl.COLOR_BUFFER_BIT);
     drawLayer(st.base, 1);
     st.overlays.forEach((l, i) => {
+      // T94: an overlay that starts at a deep order (survey passes: 6) has nothing at a much coarser view;
+      // drawing it there asked for its first order over the whole sky (233 tiles queued at "screen wants -1")
+      if (wantedOrder() < l.minOrder - 1) return;
       if (i === st.shown) drawLayer(l, 1);
       else prefetch(l);                 // keep the other epochs loaded, so a switch is instant
     });
@@ -688,6 +697,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       c.width = Math.round(st.w * st.dpr);
       c.height = Math.round(st.h * st.dpr);
     }
+    st.fov = Math.min(st.fov, maxFov());   // T94: a smaller window must not leave it below order 0
     st.dirty = false;
     markDirty();
   }
@@ -729,7 +739,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   /** Zoom by factor, keeping the sky point under (px, py) in place. */
   function zoomAt(factor, px, py) {
     const before = fromScreen(px, py);
-    st.fov = Math.max(MIN_FOV, Math.min(MAX_FOV, st.fov * factor));
+    st.fov = Math.max(MIN_FOV, Math.min(maxFov(), st.fov * factor));
     const after = fromScreen(px, py);
     if (before && after) rotateCentre(vec(before), vec(after));
     changed();
@@ -854,7 +864,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     },
     goTo(ra, dec, fov) {
       setFrame(((Number(ra) % 360) + 360) % 360, Math.max(-90, Math.min(90, Number(dec))));
-      if (fov) st.fov = Math.max(MIN_FOV, Math.min(MAX_FOV, fov));
+      if (fov) st.fov = Math.max(MIN_FOV, Math.min(maxFov(), fov));
       changed();
     },
     /** T55: like goTo, but the sky point (ra, dec) ends up under screen point (x, y) instead of the centre. */

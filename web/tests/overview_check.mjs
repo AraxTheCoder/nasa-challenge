@@ -94,4 +94,23 @@ assert.ok(draws.some((d) => d.url?.includes('/Npix') && d.url.endsWith('_17.png'
 assert.ok(sky.stats().sharp > 0, 'loaded detail replaces the blurry fallback');
 assert.ok(!draws.some((d) => d.url?.includes('/Npix') && /Npix\d+\.png$/.test(d.url)), 'old-band (detector 1) imagery is not drawn after a band switch');
 assert.ok(!draws.some((d) => d.url?.endsWith('Allsky_1.png')), 'old-band overview is not drawn after a band switch');
+// T94: zooming out stops where the screen wants order 0, and a deep-only overlay (survey pass: order 6+) asks
+// for nothing there
+sky._zoomAt(1e6, 600, 400);
+await settle();
+assert.ok(sky.stats().wanted >= 0, `zoomed out no further than order 0 (wants ${sky.stats().wanted})`);
+assert.ok(sky.view().fov <= sky.fovForOrder(0) + 1e-9, `field of view ${sky.view().fov} stops at order 0's ${sky.fovForOrder(0)}`);
+const passProps = props.replace('hips_cube_depth = 102', 'hips_cube_depth = 102' + String.fromCharCode(10) + 'hips_order_min = 6');
+const before = globalThis.fetch;
+const asked = [];
+globalThis.fetch = async (url) => {
+  if (url.endsWith('/properties')) return { ok: true, status: 200, text: async () => passProps, blob: async () => ({ url }) };
+  asked.push(url);
+  return before(url);
+};
+await sky.setOverlays([{ url: 'http://test/pass1', eager: true }, { url: 'http://test/p2' }]);
+sky.showOverlay(1);
+await settle();
+assert.equal(asked.filter((u) => u.includes('/pass1/') || u.includes('/p2/')).length, 0, 'no pass tiles asked for at whole-sky zoom');
+globalThis.fetch = before;
 console.log('PASS deep zoom: overview covers centre while detail loads/fails; correct atlas UVs; band switch and sharp replacement');
