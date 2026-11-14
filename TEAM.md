@@ -75,6 +75,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T36 | C: Own sky map as the main view (no Aladin, no dependency): WebGL HiPS renderer (HEALPix tiles, SIN projection), drag/zoom/pinch like Google Earth, SPHEREx epochs as layers, blink in the map; frame viewer stays below as detail | Jonathan | done | `jonathan/T36-sky-map` | Replaces the T30 Aladin panel |
 | T37 | A/C: Catalogue labels only on request: builds skip labels; `GET /api/targets/<id>/labels` computes them in the background; viewer has a Labels switch | Jonathan | done | `jonathan/T36-sky-map` | SIMBAD labels cost 30 s in deep fields (labels.py untouched) |
 | T38 | A: Fast labels: vectorised tracks (all objects x frames at once), ranked cap of 400 SIMBAD + 400 Gaia per field, grid-based duplicate merge, SIMBAD + Gaia in parallel, 15 s per mirror | Joerg | done | (merged as e715788) | Deep field (COSMOS, 30,785 SIMBAD objects): 23 s -> 5.5 s, labels 50+ MB -> 1.2 MB. Official fields: same important labels |
+| T39 | A: Wide per-epoch stitch test (reference): full 3.5° images from AWS, one mosaic per epoch over ~6°, HiPS, page with region-wide labels + traces | Joerg | done | `joerg/T39-wide-stitch` | `pipeline/reference/wide_stitch/` (README, `run.sh`). Input for T32/T36 (Jonathan) |
 
 ## Decisions
 
@@ -388,3 +389,8 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   LRU), `web/healpix.js` (matches astropy_healpix on 1848 cases: `node web/tests/healpix_check.mjs`).
   Default map = IRSA SPHEREx DR1 cube with a 102-band slider; CDS D1-D6 + 2MASS/AllWISE selectable.
   T37 labels on request (Labels switch). Not seen in a browser by Claude; Jonathan tests visually.
+- 2026-11-14 [Joerg → Jonathan, for T32/T36] Wide per-epoch stitching works as a reference
+  (`pipeline/reference/wide_stitch/`): 2 full D1 images per epoch from the AWS mirror (~3 min for 6),
+  stitched onto one 5.5 x 6.8 deg grid in 3 s per epoch, HiPS in 6 s, 22 deg² per epoch. Per-field
+  epoch tiles (T32) only cover the built 15' field, so the map shows no per-epoch sky around it;
+  full images (or Range reads of their region, T33) would give real stitching. Numbers in its README.

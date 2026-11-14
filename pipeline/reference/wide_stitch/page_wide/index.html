@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wide stitched epochs test</title>
+<style>
+  :root { color-scheme: dark; --bg: #0b0d12; --panel: #141821; --line: #2a3142; --text: #e6e9ef; --muted: #8b93a7; --a: #6cb4ff; --hot: #ffd27a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+  header { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  h1 { font-size: 16px; margin: 0; }
+  .muted { color: var(--muted); font-size: 12px; }
+  button { font: inherit; color: var(--text); background: #1b2030; border: 1px solid var(--line); border-radius: 6px; padding: 5px 11px; cursor: pointer; }
+  button[aria-pressed="true"] { border-color: var(--a); background: #1d2a44; }
+  #aladin { width: 100%; height: 100%; }
+  #status { font: 12px ui-monospace, Menlo, monospace; color: var(--hot); }
+  label { display: inline-flex; gap: 6px; align-items: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SPHEREx wide stitch test · full images per epoch · Barnard’s Star region</h1>
+  <span id="epochs"></span>
+  <button id="blink" aria-pressed="false">▶ Blink</button>
+  <label class="muted">opacity <input id="op" type="range" min="0" max="100" value="100"></label>
+  <label class="muted"><input id="mk" type="checkbox" checked> labels + traces</label>
+  <label class="muted">colour <select id="cm">
+    <option value="grayscale">grey (true intensity)</option><option value="magma">magma</option>
+    <option value="viridis">viridis</option><option value="cubehelix">cubehelix</option><option value="rainbow">rainbow</option>
+  </select></label>
+  <span class="muted">false colour: one detector, 0.75–1.1 µm</span>
+  <span id="status">loading Aladin Lite…</span>
+  <span class="muted">Background: CDS SPHEREx QR2 all-sky colour map (all epochs combined). On top: our D1 mosaic per epoch, stitched from 2 full 3.5° images at different pointings. Drag to pan, scroll to zoom.</span>
+</header>
+<div id="aladin"></div>
+<script type="module">
+const status = (t) => { document.getElementById("status").textContent = t; };
+window.addEventListener("error", (e) => status("error: " + e.message));
+// same pinned ES-module build as web/explore.js (T30): the classic script no longer works
+const A = (await import("https://cdn.jsdelivr.net/npm/aladin-lite@3.8.2/dist/aladin.js")).default;
+const summary = await (await fetch("summary.json")).json();
+// Barnard's Star, SIMBAD J2000 + proper motion (mas/yr; pmra includes cos dec)
+const B = { ra: 269.4520769586187, dec: 4.693364966576667, pmra: -801.551, pmdec: 10362.394 };
+const posAt = (iso) => {
+  const yr = (Date.parse(iso) - Date.parse("2000-01-01T12:00:00Z")) / (365.25 * 864e5);
+  return [B.ra + B.pmra * yr / 3.6e6 / Math.cos(B.dec * Math.PI / 180), B.dec + B.pmdec * yr / 3.6e6];
+};
+await A.init;
+const aladin = A.aladin("#aladin", { survey: "CDS/P/SPHEREx/QR2/color", fov: summary.field_deg * 0.9,
+  target: `${summary.ra_deg} ${summary.dec_deg}`, cooFrame: "ICRSd", showReticle: false, showCooGrid: false });
+const base = new URL(".", location.href).href;
+const layers = summary.epochs.map((e) => {
+  const url = base + `epoch${e.epoch}`;
+  const opts = { name: `epoch ${e.epoch}`, imgFormat: "fits" };
+  const l = typeof A.imageHiPS === "function" ? A.imageHiPS(url, opts)
+          : aladin.createImageSurvey(`proto-epoch${e.epoch}`, opts.name, url, "equatorial", 9, opts);
+  aladin.setOverlayImageLayer(l, `epoch${e.epoch}`);
+  try { l.setColormap("grayscale", { stretch: "asinh" }); } catch {}
+  try { l.setCuts(summary.cuts[0], summary.cuts[1]); } catch {}
+  return l;
+});
+// T35-style labels + traces over the whole stitched region (labels_wide.json, SIMBAD, moved to each epoch)
+const LW = await (await fetch("labels_wide.json")).json();
+const objs = LW.objects.filter((o) => !o.otype.startsWith("Pl"));
+const named = (o) => o.name === "Barnard's star" || o.pm_arcsec_yr >= 0.5 || (o.V != null && o.V < 5);
+const COL = ["#6cb4ff", "#9be38a", "#ffd27a", "#ff9a6c"];
+const K = 100;                                 // arrow = K years of motion: same factor for all, not to scale
+const traces = A.graphicOverlay({ name: "traces", color: "#ffd27a", lineWidth: 2 });
+aladin.addOverlay(traces);
+const namesCat = A.catalog({ name: "named", color: "#ffd27a", sourceSize: 14, shape: "circle", displayLabel: true,
+  labelColumn: "name", labelColor: "#ffe2a8", labelFont: "13px sans-serif", onClick: "showPopup" });
+const dotsCat = A.catalog({ name: "notable objects", color: "#9ec9ff", sourceSize: 7, shape: "circle", onClick: "showPopup" });
+aladin.addCatalog(dotsCat); aladin.addCatalog(namesCat);
+function drawLabels(ep) {
+  traces.removeAll(); namesCat.removeAll?.() ?? namesCat.clear?.(); dotsCat.removeAll?.() ?? dotsCat.clear?.();
+  if (!document.getElementById("mk").checked) return;
+  const eps = Object.keys(LW.epoch_mjd).map(Number).sort((a, b) => a - b);
+  const nm = [], dots = [];
+  for (const o of objs) {
+    const p = o.pos[ep] ?? o.pos[eps[eps.length - 1]];
+    const desc = [o.kind, o.pm_arcsec_yr ? `${o.pm_arcsec_yr.toFixed(2)}″/yr` : "", o.V != null ? `V = ${o.V}` : ""].filter(Boolean).join(" · ");
+    if (o.pm_arcsec_yr >= 0.2) {
+      // real trace through the epochs (tiny at this scale) + common-factor arrow
+      for (let i = 1; i < eps.length; i++) {
+        const a = o.pos[eps[i - 1]], b = o.pos[eps[i]];
+        traces.add(A.polyline([a, b], { color: COL[(eps[i] - 1) % 4], lineWidth: 2 }));
+      }
+      const a = o.pos[eps[0]], b = o.pos[eps[eps.length - 1]];
+      const yrs = (LW.epoch_mjd[eps[eps.length - 1]] - LW.epoch_mjd[eps[0]]) / 365.25 || 1;
+      const tip = [p[0] + (b[0] - a[0]) / yrs * K, p[1] + (b[1] - a[1]) / yrs * K];
+      traces.add(A.polyline([p, tip], { color: named(o) ? "#ffd27a" : "#9ec9ff", lineWidth: named(o) ? 2 : 1, lineDash: [6, 4] }));
+    }
+    const src = A.source(p[0], p[1], { name: o.name, popupTitle: o.name, popupDesc: desc });
+    (named(o) ? nm : dots).push(src);
+  }
+  namesCat.addSources(nm); dotsCat.addSources(dots);
+}
+document.getElementById("cm").onchange = (e) => layers.forEach((l) => { try { l.setColormap(e.target.value, { stretch: "asinh" }); } catch (err) { status("colour map: " + err.message); } });
+let cur = 0, timer = null;
+function show(i) {
+  cur = i;
+  layers.forEach((l, k) => { try { l.setOpacity(k === i ? +document.getElementById("op").value / 100 : 0); } catch {} });
+  document.querySelectorAll("#epochs button").forEach((b, k) => b.setAttribute("aria-pressed", k === i));
+  drawLabels(summary.epochs[i].epoch);
+  const e = summary.epochs[i];
+  status(`epoch ${e.epoch}: ${e.dates.join(' – ')}, ${e.n_images} full images stitched, ${e.area_deg2} deg² · ${objs.length} notable objects, arrows = ${K} yr of motion (not to scale)`);
+}
+document.getElementById("epochs").append(...summary.epochs.map((e, i) => {
+  const b = document.createElement("button"); b.textContent = `Epoch ${e.epoch} · ${e.dates[0].slice(0, 7)}`;
+  b.onclick = () => { stop(); show(i); }; return b;
+}));
+const stop = () => { clearInterval(timer); timer = null; document.getElementById("blink").setAttribute("aria-pressed", "false"); document.getElementById("blink").textContent = "▶ Blink"; };
+document.getElementById("blink").onclick = () => {
+  if (timer) return stop();
+  timer = setInterval(() => show((cur + 1) % layers.length), 700);
+  document.getElementById("blink").setAttribute("aria-pressed", "true"); document.getElementById("blink").textContent = "❚❚ Pause";
+};
+document.getElementById("op").oninput = () => show(cur);
+document.getElementById("mk").onchange = () => show(cur);
+show(0);
+</script>
+</body>
+</html>
