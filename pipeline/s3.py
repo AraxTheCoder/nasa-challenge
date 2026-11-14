@@ -350,15 +350,15 @@ class S3Image:
             hflags, sflags = _header_at(self.url, off_flags, 8)
             meta = {"himg": himg.tostring(), "data0": data0, "off_flags": off_flags,
                     "hflags": hflags.tostring(), "sflags": sflags}
-            self.dir.mkdir(parents=True, exist_ok=True)
             tmp = meta_f.with_name(f"meta.{threading.get_ident()}.part")
-            tmp.write_text(json.dumps(meta), encoding="utf-8")
             try:
+                self.dir.mkdir(parents=True, exist_ok=True)
+                tmp.write_text(json.dumps(meta), encoding="utf-8")
                 tmp.replace(meta_f)
             except PermissionError:          # Windows: another thread wrote / is reading it right now
                 tmp.unlink(missing_ok=True)
-                if not meta_f.exists():
-                    raise
+            except OSError:                  # T94: disk full: work without the cached header
+                tmp.unlink(missing_ok=True)
         self.himg = fits.Header.fromstring(meta["himg"])
         self.hflags = fits.Header.fromstring(meta["hflags"])
         self.data0, self.off_flags, self.sflags = meta["data0"], meta["off_flags"], meta["sflags"]
@@ -429,8 +429,8 @@ class S3Image:
             tmp = f.with_name(f"{f.stem}.{threading.get_ident()}.part.npz")
             np.savez(tmp, img=img, bad=bad, med=med, sig=sig)
             tmp.replace(f)
-        except OSError:
-            pass
+        except OSError:                              # disk full (T94): no cached copy, no half file
+            tmp.unlink(missing_ok=True)
 
 
 HW_MASK = sum(1 << b for b in (0, 1, 2, 6, 9, 10, 11, 14, 17, 25, 26, 27, 28))   # as pipeline.build

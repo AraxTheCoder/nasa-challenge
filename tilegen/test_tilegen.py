@@ -231,7 +231,7 @@ def test_client_balanced_falls_back_when_the_vm_fails(monkeypatch):
     g._session = Down()
     g.sides["local"].last = g.sides["remote"].last = __import__("time").time()
     assert g.get(20, 7, 1) == b"local"                              # remote chosen (prior), failed, local
-    assert g.sides["remote"].failed == 1 and g.sides["remote"].rate < 0.5
+    assert g.sides["remote"].failed == 1 and g.sides["remote"].rate <= 0.75
     assert g.get(20, 7, 2) == b"local" and g.sides["remote"].failed == 1   # failing side avoided now
 
 
@@ -329,3 +329,28 @@ def test_chroma_takes_the_childs_part_of_the_order5_colour_tile(tmp_path):
     ch = sky.chroma(7, parent * 16 + 1)
     assert ch[256, 256].argmax() == 2                                # bluish
     assert sky.chroma(5, parent).shape == (512, 512, 3)
+
+
+
+def test_janitor_trims_oldest_first_and_keeps_free_space(tmp_path, monkeypatch):
+    """T94: caches stay under their cap (oldest written files go first); low disk space trims further."""
+    import os
+    import shutil
+    from collections import namedtuple
+
+    from tilegen import janitor
+
+    a, b = tmp_path / "chunks", tmp_path / "tiles"
+    for d in (a, b):
+        d.mkdir()
+    for i in range(10):
+        f = a / f"c{i}.npz"
+        f.write_bytes(b"x" * 100)
+        os.utime(f, (1000 + i, 1000 + i))
+    (b / "t.png").write_bytes(b"y" * 50)
+    assert janitor.trim([(a, 450), (b, 1000)]) == 600            # 10 x 100 bytes -> 4 newest kept
+    assert sorted(p.name for p in a.iterdir()) == ["c6.npz", "c7.npz", "c8.npz", "c9.npz"]
+    Usage = namedtuple("Usage", "total used free")
+    monkeypatch.setattr(shutil, "disk_usage", lambda p: Usage(10_000, 9_900, 100))
+    janitor.trim([(a, 1e9), (b, 1e9)], keep_free=300)            # needs 200 more bytes: two oldest go
+    assert sorted(p.name for p in a.iterdir()) == ["c8.npz", "c9.npz"] and (b / "t.png").exists()

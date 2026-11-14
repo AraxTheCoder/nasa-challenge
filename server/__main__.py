@@ -55,6 +55,12 @@ def main() -> None:
     if not args.fixture and not args.no_data_setup:
         from . import data_setup
         data_setup.start(REPO / "data")     # T71: background; the fallbacks serve until it is done
+    if not args.fixture:   # T94: caps on the local disk caches (row chunks for local tiles, map tiles)
+        from tilegen import janitor
+        gb = lambda name, default: float(os.environ.get(name, default)) * 1e9   # noqa: E731
+        janitor.start([(REPO / "data" / "raw" / "s3chunks", gb("SPHEREX_CHUNK_CACHE_GB", 10)),
+                       (REPO / "data" / "hips_cache", gb("SPHEREX_TILE_CACHE_GB", 10))],
+                      keep_free=gb("SPHEREX_KEEP_FREE_GB", 5))
     uvicorn.run(create_app(args.cache, fixture=args.fixture, tiles_remote=args.tiles_remote,
                            use_remote=args.use_remote, cutouts_remote=args.cutouts_remote),
                 host=args.host, port=args.port)

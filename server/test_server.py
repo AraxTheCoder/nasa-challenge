@@ -525,3 +525,23 @@ def test_motion_endpoint(tmp_path, monkeypatch):
     assert by_pos["status"] == "ready" and by_pos["name"] == "Fast Star"          # the moving star at that spot
     r = client.get(url, params={"ra": 10.1, "dec": 20.0, "start": 0})
     assert r.status_code == 404 and r.json()["status"] == "none"
+
+
+def test_hips_colour_and_detector_epoch_layers_over_http(client):
+    """T94: /api/hips/<id>/e1c and /e1d<n> are layers (the epoch route took "1c" for a number: 422)."""
+    import astropy.units as u
+    from astropy_healpix import HEALPix
+
+    body = _wait_ready(client, client.get("/api/target", params={"ra": "150", "dec": "2.2", "size": "5"}).json())
+    t = client.get(body["target_url"]).json()
+    tid = t["id"]
+    dets = sorted({int(f["detector"]) for f in t["frames"] if int(f["epoch"]) == 1 and f.get("detector")})
+    for layer in ["e1c"] + ([f"e1d{dets[0]}"] if dets else []):
+        r = client.get(f"/api/hips/{tid}/{layer}/properties")
+        assert r.status_code == 200, (layer, r.status_code)
+    c = t["center"]
+    npix = int(HEALPix(nside=2 ** 7, order="nested").lonlat_to_healpix(c["ra_deg"] * u.deg, c["dec_deg"] * u.deg))
+    r = client.get(f"/api/hips/{tid}/e1c/Norder7/Dir{(npix // 10000) * 10000}/Npix{npix}.png")
+    assert r.status_code == 200 and r.content[:4] == b"\x89PNG"
+    assert client.get(f"/api/hips/{tid}/e1x/properties").status_code == 404
+    assert client.get(f"/api/hips/{tid}/e1/properties").status_code == 200

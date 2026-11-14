@@ -22,6 +22,7 @@ const MIN_FOV = 1 / 60;                   // 1 arcmin
 const MAX_TEXTURES = 200;           // 1 MB of GPU memory each
 const MAX_PARALLEL_LOADS = 6;             // = what a browser opens per host over HTTP/1.1
 const MAX_SLOW_LOADS = 4;                 // live-rendered tiles; leaves 2 connections for the rest
+const FAILED_RETRY_MS = 30000;            // T94: a tile that failed 5 times is asked again after this
 const PRELOAD = 1e6;                      // prio >= PRELOAD: preload (other epochs, parent tiles)
 const MAX_PRELOADS = 3;                   // preloads in flight at once, and only when nothing visible waits
 // Preload tiers, in this order after every visible tile: parent (zoom out), ring around the view
@@ -365,7 +366,15 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       }
       t.tries = (t.tries ?? 0) + 1;
       st.errors++;
-      if (t.tries >= 5) { t.state = "failed"; t.error = String(e.message ?? e); }
+      if (t.tries >= 5) {
+        // T94: not given up for good (a restarted or briefly busy server left holes until a reload): after a
+        // pause the tile is forgotten, so the next frame that still shows it asks again from scratch
+        t.state = "failed";
+        t.error = String(e.message ?? e);
+        setTimeout(() => {
+          if (t.state === "failed" && job.layer.tiles.get(t.key) === t) { job.layer.tiles.delete(t.key); markDirty(); }
+        }, FAILED_RETRY_MS);
+      }
       else {
         t.state = "retry";
         setTimeout(() => { if (t.state === "retry") { t.state = "queued"; st.queue.push(job); pump(); markDirty(); } },

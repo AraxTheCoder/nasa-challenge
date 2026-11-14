@@ -9,16 +9,26 @@ No tile stays missing when its data exists: a tile that failed (server restart, 
 again later; false-colour field epochs load; no holes at the poles when zooming in.
 
 ## Plan
-- [ ] sky.js: a tile that failed 5 times is not given up for good: asked again after a pause (and on the
+- [x] sky.js: a tile that failed 5 times is not given up for good: asked again after a pause (and on the
       next view change), so a restarted or briefly busy server never leaves holes until a reload
-- [ ] Live API: `/api/hips/<id>/e<n>c` and `e<n>d<det>` answer (the epoch route took `e1c` as epoch "1c": 422)
-- [ ] Holes near the poles when zooming in: find and fix
+- [x] Live API: `/api/hips/<id>/e<n>c` and `e<n>d<det>` answer (the epoch route took `e1c` as epoch "1c": 422)
+- [x] Holes near the poles when zooming in: found (not the poles: the VM's disk was full); caches capped
+- [ ] Free the VM's disk and deploy (needs Jonathan's OK: deleting cache on the VM was blocked)
 
 ## Findings
 - 2026-11-14: Jonathan's screenshot (order 3, false colour): "errors 30", 8 tiles blurry. The Live API served no
   error; the API was restarted several times while the page was open: those tiles failed 5 times and were never
   asked again (`t.state = "failed"`).
 - 2026-11-14: `GET /api/hips/<id>/e1c/properties` -> 422 (39 times in the log): false-colour field epochs never showed.
+
+- 2026-11-14 root cause of the holes (also near the poles): the tile VM's 30 GB disk was full (data/raw/s3chunks
+  19 GB, vm_cutouts 4.6 GB, no cap): every tile needing new rows -> HTTP 500 (513 in 2 h, "No space left on device").
+  The balancer then pushed the VM to 0.0 tiles/s for good and this PC took every tile (12 at once, ~300 s each).
+  Fixes: `tilegen/janitor.py` caps the caches (VM: chunks 8 GB, cutouts 4 GB, tiles 4 GB, 3 GB kept free; Live API:
+  chunks 10 GB, map tiles 10 GB, 5 GB free; env vars to change); a full disk only costs the cache now (tile still
+  served, header cache skipped); the balancer backs off by halving with a floor (0.2 tiles/s) and recovers.
+- 2026-11-14 a pole tile (order 6, Npix 4095) renders locally in 10.6 s: no pole-specific bug found.
+- 2026-11-14 `hips.py` crashed on frames with `"detector": null` (fixture) in the colour layers: fixed.
 
 ## Questions / needs from others
 
