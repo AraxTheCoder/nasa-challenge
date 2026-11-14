@@ -84,7 +84,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T46 | All: tests on every push (GitHub Actions): pytest + browser test (fixture mode) + fixture schema check | Mati | done | `mati/T46-ci` | [tasks/T46](tasks/T46-ci.md). `.github/workflows/tests.yml`; first run: check the Actions tab |
 | T47 | All: Host Live API + viewer on Google Cloud `us-east4` next to the AWS SPHEREx bucket: VM, Docker/systemd, mirror + warm-up, HTTPS via Caddy on `<ip>.sslip.io` | Jonathan | doing | `jonathan/T47-gcp` | From Jonathan's idea. Measure S3 throughput on the VM first |
 
-| T48 | C: Cached Allsky fallback at deep zoom so pending/failed live tiles never erase available overview imagery | Joerg | doing | `joerg/T48-map-overview-fallback` | [tasks/T48](tasks/T48-map-overview-fallback.md). User approved implementation + push; investigate repeated tile errors |
+| T48 | C: Cached Allsky fallback at deep zoom so pending/failed live tiles never erase available overview imagery | Joerg | done | `joerg/T48-map-overview-fallback` | [tasks/T48](tasks/T48-map-overview-fallback.md). User approved implementation + push; investigate repeated tile errors |
 
 ## Decisions
 
@@ -513,3 +513,10 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 [Mati + Claude] Done: T45 "▶ Play all" (`P`): the series as a little film (core Objective), all
   frames in the filter or 1 per epoch at A's λ, loops, shares the Interval slider; ends blink / difference /
   trail view. 7 browser checks; all tests green. Idea added: split `viewer.js` / `app.js` (size check).
+
+- 2026-11-14 [Joerg + Codex] T48: cached overview now stays beneath deep-zoom tiles, using the
+  detailed mesh to sample the correct Allsky atlas region. Offline renderer regression, 80 Python
+  tests, projection and HEALPix checks pass; browser suite cannot launch Chromium (macOS Mach-port
+  permission denial). Reload the viewer to use it. Repeated live-tile HTTP 502 responses on Joerg's
+  machine are missing `data/mirror/index.npz`, not measured S3 failures: initialize the local mirror
+  before expecting sharp live imagery. Queue contention diagnosis above remains a separate issue.

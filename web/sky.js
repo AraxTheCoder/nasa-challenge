@@ -343,10 +343,10 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     if (!layer) return;
     const order = pickOrder(layer);
     gl.uniform1f(G.loc.alpha, alpha);
-    if (order <= 3) {                        // zoomed out: whole sky at once, sharper tiles on top
-      const all = requestAllsky(layer);
-      if (all.state === "ok") drawAllsky(layer, all);
-    }
+    // The base overview stays underneath at every zoom. Overlay layers are small fields and
+    // have no Allsky endpoint; their transparent pixels must keep revealing the base sky.
+    const all = layer === st.base || order <= 3 ? requestAllsky(layer) : null;
+    if (order <= 3 && all?.state === "ok") drawAllsky(layer, all);
     const n = order <= 4 ? 8 : 4;
     const isBase = layer === st.base;
     const stats = isBase ? { order, wanted: wantedOrder(), maxOrder: layer.maxOrder, visible: 0, sharp: 0,
@@ -356,11 +356,21 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       const sp = [];
       for (let i = 0; i < g.length; i += 2) sp.push(toScreen(g[i], g[i + 1]));
       const mid = sp[Math.floor(sp.length / 2)];
+      // At deep zoom an order-3 tile's coarse mesh can miss the entire viewport. Use the
+      // detailed tile's mesh and the matching sub-rectangle of its order-3 Allsky atlas cell.
+      let overview = null;
+      if (order > 3 && all?.state === "ok") {
+        const d = order - 3, m = 2 ** d, parent = Math.floor(pix / 4 ** d);
+        const { ix, iy } = nest2xyf(order, pix);
+        overview = { tex: all.tex, d, aOff: ix % m, bOff: iy % m,
+          atlasCol: parent % 27, atlasRow: Math.floor(parent / 27), atlasCols: 27, atlasRows: 29 };
+        drawTile(overview, sp, n);
+      }
       const tx = textureFor(layer, order, pix, Math.hypot(mid.x - st.w / 2, mid.y - st.h / 2));
       if (stats) {
         stats.visible++;
         const own = layer.tiles.get(layer.key(order, pix));
-        const kind = tx && tx.d === 0 ? "sharp" : own?.state === "missing" ? "empty" : tx ? "blurry" : "empty";
+        const kind = tx && tx.d === 0 ? "sharp" : tx || overview ? "blurry" : "empty";
         stats[kind]++;
         if (st.debug) {
           const edge = [];
@@ -399,7 +409,10 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       const vtx = (a, b) => {
         const s = sp[a * (n + 1) + b];
         pos.push((s.x / st.w) * 2 - 1, 1 - (s.y / st.h) * 2);
-        uv.push((tx.bOff + b / n) / m, (tx.aOff + a / n) / m);   // s <- iy (col), t <- ix (row)
+        const u = (tx.bOff + b / n) / m, v = (tx.aOff + a / n) / m;
+        // s <- iy (col), t <- ix (row); an Allsky texture packs 768 order-3 cells in 27 columns.
+        uv.push((u + (tx.atlasCol ?? 0)) / (tx.atlasCols ?? 1),
+          (v + (tx.atlasRow ?? 0)) / (tx.atlasRows ?? 1));
       };
       for (let a = 0; a < n; a++) {
         for (let b = 0; b < n; b++) {
