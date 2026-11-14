@@ -17,7 +17,7 @@ distant body would look across epochs, demonstrated on a real dwarf planet.
 |---|---|---|---|
 | A | Data pipeline | `pipeline/` | Joerg |
 | B | Detection & science | `detect/` | Jonathan |
-| C | Frontend & submission | `web/` | Mati |
+| C | Frontend & submission | `web/` | Mati, Jonathan |
 
 ## Timeline
 
@@ -75,6 +75,8 @@ Dated, one line each, with why.
 - 2026-11-14 **PROPOSED**: v0.2 pair tolerance is 0.5 x bandwidth, not 0.25. Why: on COSMOS D2,
   0.25 gives 7 pairs, 0.5 gives 21, 0.75 adds none; the remaining offsets are ~1/3 channel and the
   pair differences still cancel stars cleanly (checked by eye on 5 pairs).
+- 2026-11-14 Jonathan also works on track C (alongside B). Why: people claim tasks, not tracks;
+  the track only says which folder a task lives in.
 
 ## Ideas
 
