@@ -42,7 +42,7 @@ Mati). When you finish a task, move its row to Done in the same commit.
 
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
-| T89 | C/A: Band switching that works on the map (passes per detector, instant within a detector; field epochs per band, builds only the shown detector) + a false-colour layer of all bands (passes and field epochs) | Jonathan | doing | `main` | [tasks/T89](tasks/T89-bands-false-colour.md). Reopened: faster false colour (LRGB). `app/` + tilegen/server; per-detector builds touch the build filter |
+| T89 | C/A: Band switching that works on the map (passes per detector, instant within a detector; field epochs per band, builds only the shown detector) + a false-colour layer of all bands (passes and field epochs) | Jonathan | done | `main` | [tasks/T89](tasks/T89-bands-false-colour.md). Reopened: faster false colour (LRGB). `app/` + tilegen/server; per-detector builds touch the build filter |
 | T06 | B: Mover detection v0 on the fixture: source extraction per frame, match across frames, keep what moves | Jonathan | doing | `jonathan/T06-mover-detection` | Start on `fixtures/`, switch to real data after T04 |
 | T10 | B: "Planet X mode": pick a slow distant body (dwarf planet), check it's detectable across epochs, propose the demo target list | Jonathan | doing | `jonathan/T10-test-targets` | Reworded 2026-11-14 for the official text: check SPHEREx multi-epoch coverage of the five official test fields (Barnard, Eps Indi B, WISE 0855, RW Aur, R Dra) + maybe one dwarf planet; feeds T05 warm-up |
 | T14 | C: Deploy: static viewer (e.g. GitHub Pages) + Live API on a host that runs Python, viewer pointed at it (contracts v0.3) | | open | | Needs T11, T18, T20. Reworded 2026-11-14 for live data (was: pre-baked targets, no live API calls) |
@@ -280,6 +280,7 @@ Dated, one line each, with why.
 - 2026-11-14 [Mati] CONTRACTS v0.23: `GET /api/discoveries` and the discovery index format (v0.13, T76) removed, with the Candidates panel. Why: the scope Decision above (visualization only); nothing else used them.
 - 2026-11-14 [Mati] Board layout: three tables under "Board": **Active** (open / doing / review / blocked), **Parked** (set aside by a Decision), **Done**. Rows themselves unchanged; each owner moves their row to Done when finishing. Why: 70 of 91 rows were done, the open work was hard to find.
 - 2026-11-14 [Joerg] CONTRACTS v0.24 (T91): `GET /api/targets/<id>/motion?name=` (a star's motion, and distance when reliable, measured from SPHEREx alone). Why: the official targets' motion as a result, not only the catalogue path; new endpoint only.
+- 2026-11-14 [Jonathan] CONTRACTS v0.25 (T89): false colour at orders 6-7 is LRGB (detail from the chosen band, colour from the all-band cube at order 5); colour layers keep their band slices. Why: one render per colour tile instead of six; switching to false colour took ~25 s for 12 pass tiles, now 2.6 s (and a cold colour tile costs about what a grey one does). Trade-off: the colour is coarser (13″) and from all passes together; the detail (what moves) stays sharp and per pass.
 
 ## Ideas
 
@@ -798,3 +799,7 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Mati (Claude): T76 Candidates panel removed (Mati): panel, `/api/discoveries`, sample, schema, tests; CONTRACTS v0.23. Quick picks + Surprise me stay as the way to start. [→ Joerg] `web/outliers.js` placed its panel after `#discoveries`; it falls back to `#explore` now, no change needed.
 - 2026-11-14 Mati (Claude): Board split into Active / Parked / Done (Mati's Decision; rows unchanged, only moved). **Joerg, Jonathan: pull before editing your Board rows**; on a TEAM.md conflict keep the moved layout and re-apply your change. New task T93 (Mati): chemistry maps, continuum-subtracted feature images (ices, PAH, hydrogen lines) for the shown field, visualization only.
 - 2026-11-14 [Joerg] T91 done (CONTRACTS v0.24): a moving star's motion measured from SPHEREx alone, on demand from the spectrum panel. Barnard's Star 10.46 ± 0.19″/yr (catalogue 10.39); eps Ind B 4.60 ± 0.26″/yr and a parallax of 0.286 ± 0.022″ = 3.49 pc (Gaia 3.64 pc); WISE 0855 too faint in single exposures (says so). Fits the visualization-only Decision: on demand, for the star the user clicks.
+- 2026-11-14 Jonathan (Claude): T89 faster false colour (LRGB): colour tiles = grey tile of the band x colour of the
+  cube; field epochs in colour from the fast one-detector build (`e<n>c` via `hips.CHROMA`); the band slider stays
+  active in false colour and picks the detail band. 12 pass tiles after grey: 25.5 s -> 2.6 s; cold ≈ grey.
+  Old colour tiles in data/hips_cache (6-detector composites) deleted. CONTRACTS v0.25.

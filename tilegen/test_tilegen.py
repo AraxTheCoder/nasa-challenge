@@ -264,11 +264,14 @@ def test_live_tiles_one_per_detector_and_false_colour(tmp_path, monkeypatch):
     for sl in (3, 9, 16):
         sky.get("spherex-live-p1", f"Norder7/Dir0/Npix5_{sl}.png")
     assert asked == [0]                                  # one render for all of detector 1
-    rgb = sky.get("spherex-live-p1-rgb", "Norder7/Dir0/Npix5.png")
+    # LRGB: detail = the grey tile of the band in the path (detector 3 here: grey 30), colour from the cube
+    sky.chroma = lambda order, npix: np.broadcast_to(np.array([1.5, 1.0, 0.5], np.float32), (512, 512, 3))
+    rgb = sky.get("spherex-live-p1-rgb", "Norder7/Dir0/Npix5_40.png")
     px = np.asarray(Image.open(io.BytesIO(rgb)).convert("RGBA"))[0, 0]
-    assert tuple(px) == (55, 35, 15, 255)                # R = (50+60)/2, G = (30+40)/2, B = (10+20)/2
+    assert tuple(px) == (45, 30, 15, 255)
+    assert asked == [0, 34]                              # one render (detector 3), not one per detector
     props = sky.get("spherex-live-p1-rgb", "properties").decode()
-    assert "false colour" in props and "hips_cube_depth" not in props
+    assert "false colour" in props
 
 
 def test_blank_cube_slices_and_false_colour_map(tmp_path):
@@ -302,3 +305,27 @@ def test_blank_cube_slices_and_false_colour_map(tmp_path):
     px = np.asarray(Image.open(io.BytesIO(rgb)).convert("RGBA"))[0, 0]
     assert tuple(px) == ((76 + 93) // 2, (42 + 59) // 2, (8 + 25) // 2, 255)
     assert sorted(asked) == sorted(f"Norder2/Dir0/Npix7_{s}.png" for s in (8, 25, 42, 59, 76, 93))
+
+
+def test_chroma_takes_the_childs_part_of_the_order5_colour_tile(tmp_path):
+    """T89 LRGB: an order-7 tile's colour is its 128 x 128 part of the order-5 cube colour tile, stretched."""
+    import io
+
+    import numpy as np
+    from PIL import Image
+
+    from server.skycache import SkyCache
+
+    sky = SkyCache(tmp_path)
+    img = np.zeros((512, 512, 3), np.uint8)
+    img[:128, 128:256] = (200, 100, 0)                   # row block 0, col block 1 of the parent tile
+    img[128:256, :128] = (0, 100, 200)                   # row block 1, col block 0
+    b = io.BytesIO(); Image.fromarray(img, "RGB").save(b, "PNG")
+    sky.get = lambda survey, path, _png=b.getvalue(): _png if survey == "spherex-live-rgb" else None
+    parent = 7
+    # child bits: row in even bits, col in odd bits -> (row 0, col 1) = 0b10 = 2; (row 1, col 0) = 0b01 = 1
+    ch = sky.chroma(7, parent * 16 + 2)
+    assert ch[256, 256].argmax() == 0 and ch[256, 256][2] < 0.1      # reddish
+    ch = sky.chroma(7, parent * 16 + 1)
+    assert ch[256, 256].argmax() == 2                                # bluish
+    assert sky.chroma(5, parent).shape == (512, 512, 3)

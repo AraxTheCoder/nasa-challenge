@@ -702,12 +702,13 @@ function updateExplorePos(_view, cursor) {
 
 const FIELD_ORDER = 6;
 const AUTO_BUILD_MS = 2000;
-// keys "<tile>|<variant>": variant d<n> = only the band's detector (fast, ~1/6 of the cutouts), rgb = all six
-// (false colour); ready: key -> its target, kept so returning to a tile or band shows it at once
+// keys "<tile>|d<n>": only the band's detector (fast, ~1/6 of the cutouts); false colour uses the same field
+// (T89 LRGB: its detail x the colour of the all-band cube, layer e<n>c); ready: key -> its target, kept so
+// returning to a tile or band shows it at once
 const autoField = { key: null, building: null, ready: new Map(), explicit: null, progress: null, error: null, timer: null };
 
-/** T89: what a field must hold for the current band setting. */
-const fieldVariant = () => (passes.colour() ? "rgb" : `d${explore.detector()}`);
+/** T89: what a field must hold for the current band setting: the band's detector (also for false colour). */
+const fieldVariant = () => `d${explore.detector()}`;
 
 /** Order-6 tile under the view centre (null when not at level 7 or no map). */
 function centreTile() {
@@ -772,7 +773,7 @@ function decideSource() {
 function buildTile(key) {
   if (fieldKey() !== key || app.manualMap) return;
   const [pix, variant] = key.split("|");
-  const req = { ...tileField(Number(pix)), auto: true, ...(variant === "rgb" ? {} : { detector: Number(variant.slice(1)) }) };
+  const req = { ...tileField(Number(pix)), auto: true, detector: Number(variant.slice(1)) };
   autoField.building = key;
   autoField.progress = null;
   loadField(req, { quiet: true });
@@ -819,10 +820,11 @@ function setupBand(layer) {
     const w = waves[Number(input.value)];
     lamBox.value = Number.isFinite(w) ? w.toFixed(3) : "";
     const d = explore.detector(), [lo, hi] = DETECTOR_UM[d - 1];
-    input.disabled = lamBox.disabled = colour.checked;
-    $("#explore-band-out").textContent = colour.checked ? "all bands: B 0.75–1.62 · G 1.63–3.82 · R 3.83–5.0 µm"
+    $("#explore-band-out").textContent = colour.checked
+      ? `µm · detail D${d} ${lo.toFixed(2)}–${hi.toFixed(2)} µm · colour: all bands`
       : `µm · ch. ${Number(input.value) + 1}/${layer.depth} · D${d} ${lo.toFixed(2)}–${hi.toFixed(2)} µm`;
-    $("#explore-band-out").title = colour.checked ? "False colour: blue = detectors 1+2, green = 3+4, red = 5+6"
+    $("#explore-band-out").title = colour.checked
+      ? "False colour (LRGB): the detail (what moves, sharp, per pass / epoch) comes from this band; the colour from all bands of SPHEREx's all-sky cube (blue = detectors 1+2, green = 3+4, red = 5+6; coarser, all passes together)"
       : "Blinking images show this detector's whole range: SPHEREx's filter changes wavelength across each detector, so one image is not one channel. Zoomed out (IRSA cube) the map shows the exact channel.";
   };
   const toBand = (i) => { input.value = String(i); explore.setBand(i); show(); decideSource(); };
@@ -838,7 +840,7 @@ function setupBand(layer) {
     show();
     // the base map too, so false colour shows at every zoom (zoomed out: IRSA cube, one channel per detector)
     await explore.setSurvey(currentSurvey());
-    if (!colour.checked) explore.setBand(Number(input.value));     // the grey map starts on its default band
+    explore.setBand(Number(input.value));          // the new base map starts on its default band
     await passes.setColour(colour.checked);
     decideSource();
   };

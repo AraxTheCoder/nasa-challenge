@@ -198,6 +198,7 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
     from tilegen.client import TileGenerator
 
     sky = SkyCache(cache_root.parent / "hips_cache", TileGenerator(tiles_remote, use_remote))
+    hips.CHROMA = None if fixture else sky.chroma     # T89 LRGB: field epochs in false colour from one detector
     if not fixture:
         sky.warm()
     _MEDIA = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}

@@ -52,6 +52,10 @@ LAYER_RE = r"^(e\d+(d[1-6]|c)?|f\d{3,}|d-f\d{3,}-f\d{3,})$"
 # T89: e<ep>d<n> = the epoch's frames of detector n only (one band of the map); e<ep>c = false colour of
 # all of them: blue = D1+D2 (0.75-1.62 µm), green = D3+D4 (1.63-3.82 µm), red = D5+D6 (3.83-5.0 µm).
 COLOUR = ((5, 6), (3, 4), (1, 2))          # R, G, B detector pairs
+# T89 LRGB: set by the Live API (server/app.py) to SkyCache.chroma: (order, npix) -> (512, 512, 3) colour of
+# that HEALPix tile from the all-band cube (RGB / mean). Then e<ep>c = the epoch's detail x that colour, so a
+# one-detector field can be shown in false colour; without it, e<ep>c composes the field's own detectors.
+CHROMA = None
 _EP_RE = __import__("re").compile(r"^e(\d+)(?:d([1-6])|(c))?$")
 
 
@@ -277,11 +281,23 @@ def _render_tile(target_dir: Path, ep, order: int, npix: int) -> bytes | None:
     ok = (col >= 0) & (col < w) & (row >= 0) & (row < h)
     if not ok.any():
         return None
-    mean, cov = layer_image(str(target_dir), (target_dir / "target.json").stat().st_mtime, key)
+    lrgb = key.startswith("e") and epoch_key(key)[2] and CHROMA is not None
+    mean, cov = layer_image(str(target_dir), (target_dir / "target.json").stat().st_mtime,
+                            f"e{epoch_key(key)[0]}" if lrgb else key)
+    if lrgb:                                           # T89: detail of the epoch x colour of the cube there
+        ch = CHROMA(order, npix)
+        if ch is not None:
+            lum = np.zeros(TILE * TILE, np.float32)
+            lum[ok] = mean[row[ok], col[ok]]
+            mean = None
+            rgb = np.clip(lum.reshape(TILE, TILE, 1) * ch, 0, 255).reshape(TILE * TILE, 3)
     alpha = np.zeros(TILE * TILE, np.uint8)
     rr, cc = row[ok], col[ok]
     alpha[ok] = np.where(cov[rr, cc], 255, 0)
     buf = io.BytesIO()
+    if lrgb and mean is None:
+        Image.fromarray(np.dstack([rgb.astype(np.uint8).reshape(TILE, TILE, 3), alpha.reshape(TILE, TILE)]), "RGBA").save(buf, "PNG")
+        return buf.getvalue()
     if mean.ndim == 3:                                 # T89 false colour: RGBA
         rgb = np.zeros((TILE * TILE, 3), np.uint8)
         rgb[ok] = mean[rr, cc].astype(np.uint8)
