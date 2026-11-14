@@ -65,7 +65,9 @@ CSA (Canadian Space Agency)
 
 ## Judging criteria
 
-_TODO: paste verbatim._
+The challenge page has no separate judging section. Team decision (Jonathan, 2026-11-14): we
+treat the **Objectives** and the **Potential Considerations** above as what the judges look for.
+_TODO: also paste the general Space Apps judging criteria (they apply to all challenges) if found._
 
 ## Submission requirements and deadline
 

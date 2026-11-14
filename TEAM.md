@@ -83,6 +83,11 @@ Dated, one line each, with why.
   pre-baked targets. Why: the official Objectives say users enter coordinates and get that patch
   as a video; pre-baked only would miss the core requirement. Replaces "no live API calls" in the
   PROPOSED architecture; CONTRACTS needs a v0.3 (request API + cache) before code depends on it.
+- 2026-11-14 [Jonathan] Live data is **final**, no ack needed. CONTRACTS v0.3 adds the Live API
+  (`server/`, T18): `GET /api/target?ra=&dec=&size=` → build or cache hit, `/api/jobs/<id>`
+  progress, `/api/targets/<id>/...` serves the unchanged target folder. Why: official Objectives
+  require user-entered coordinates; target folder format stays as-is so A/B code is unaffected.
+  Impact: T05 becomes cache warm-up of the five named test fields, T14 needs a host that runs Python.
 
 ## Ideas
 

@@ -1,4 +1,8 @@
-# Contracts (v0.2, PROPOSED)
+# Contracts (v0.3)
+
+v0.3 makes the tool **live**: any RA/Dec a user enters is built on request from IRSA and cached
+(see "Live API" below). The target folder format is unchanged. See TEAM.md Decisions, 2026-11-14.
+
 
 v0.2 adds `pairs`, `bandwidth_um` and transparent no-data pixels. All three are optional and
 additive: a v0.1 reader keeps working. See TEAM.md Decisions, 2026-11-14.
@@ -9,12 +13,17 @@ TEAM.md "Decisions" that says why.
 ## Data flow
 
 ```
+                      server/ (T18): GET /api/target?ra=&dec=&size=
+                        │ cache hit → serve data/targets/<id>/
+                        │ cache miss → build in background, report progress
+                        ▼
 pipeline/ (A)                detect/ (B)                       web/ (C)
-IRSA → cutouts → aligned  →  adds known_objects + detections →  reads index.json + target.json
-frames + target.json         to the same target.json            and the frame images, nothing else
+IRSA → cutouts → aligned  →  adds known_objects + detections →  calls the Live API, then reads
+frames + target.json         to the same target.json            target.json + frame images
 ```
 
-The frontend never calls IRSA or JPL. Everything it shows comes from a target folder.
+The frontend never calls IRSA or JPL directly; it only talks to the Live API, which serves target
+folders. Data is live (fetched from IRSA when first requested) and cached, not pre-baked.
 
 ## Folder layout
 
@@ -22,6 +31,7 @@ The frontend never calls IRSA or JPL. Everything it shows comes from a target fo
 pipeline/                      A: Python package, data access + frame building
 detect/                        B: Python package, mover detection + cross-match
 web/                           C: static site, deployed to GitHub Pages
+server/                        T18: Live API (Python), builds and caches target folders
 web/targets/                   baked targets for the demo (committed, see size budget)
 data/                          gitignored: downloads, caches, work in progress
 data/raw/                      cached downloads (FITS)
@@ -141,6 +151,7 @@ from the geocentre.
 ## Entry points
 
 ```
+python -m server [--port 8000] [--fixture]            # Live API (T18)
 python -m pipeline.build --id <id> --ra <deg> --dec <deg> --size <arcmin> [--out data/targets]
 python -m detect.run <target_dir>
 python -m pipeline.publish <id> [--to web/targets]      # copies a target and updates index.json
@@ -160,6 +171,71 @@ def detect(target_dir: Path) -> dict:
 
 `detect` works on the rendered frames and the JSON. If B needs the aligned FITS data as well,
 that is a contract change: raise it in TEAM.md first.
+
+## Live API (v0.3)
+
+Base URL is configurable in the frontend (`?api=` URL parameter or a constant); default for local
+development `http://localhost:8000`. All responses are JSON unless they are frame images. CORS is
+open (`Access-Control-Allow-Origin: *`), so the static site can live on a different host.
+
+### Request a field
+
+```
+GET /api/target?ra=<ra>&dec=<dec>&size=<arcmin>[&refresh=1]
+```
+
+- `ra`, `dec`: decimal degrees (`133.795`, `-7.245`) or sexagesimal (`08h55m10.831s`,
+  `-7d14m42.53s`, `08:55:10.831`, `-07:14:42.53`). ICRS.
+- `size`: side of the square field in arcmin, default `15`, allowed `5`–`60`. Larger = slower.
+- `refresh=1`: ignore the cache and rebuild (to pick up a new data release).
+
+Responses:
+
+| HTTP | Body | Meaning |
+|---|---|---|
+| 200 | `{"status": "ready", "id": "...", "target_url": "/api/targets/<id>/target.json"}` | built, fetch `target_url` |
+| 202 | `{"status": "building", "id": "...", "progress": {...}, "poll_url": "/api/jobs/<id>"}` | build running, poll every 2 s |
+| 400 | `{"status": "error", "message": "..."}` | bad coordinates or size |
+| 404 | `{"status": "no_data", "id": "...", "message": "..."}` | SPHEREx has no images here |
+| 500 | `{"status": "error", "id": "...", "message": "..."}` | build failed |
+
+`progress`: `{"step": "query|download|align|render|detect", "done": 12, "total": 39, "message": "..."}`
+(`done`/`total` may be `null`).
+
+### Poll a build
+
+```
+GET /api/jobs/<id>          → same body as /api/target (ready / building / no_data / error)
+```
+
+### Serve a built target
+
+```
+GET /api/targets/<id>/target.json
+GET /api/targets/<id>/frames/<frame_id>.png|webp
+GET /api/targets            → index.json of everything in the cache (same format as above)
+```
+
+Image paths inside `target.json` stay relative to the target folder, so the frontend resolves
+them against `target_url`.
+
+### Target id and cache
+
+- The id is derived from the request, so equal requests hit the same cache entry:
+  `c<RA in 1e-4 deg, 7 digits>-<p|m><|Dec| in 1e-4 deg, 6 digits>-s<size>`,
+  e.g. RA 133.7951, Dec -7.2452, 15' → `c1337951-m072452-s15`. Coordinates are rounded to
+  1e-4 deg (0.36″) before building, and `center` in `target.json` is the rounded position.
+- The cache is the target folder `data/targets/<id>/` (same layout as everywhere else), plus raw
+  downloads in `data/raw/`. A cached target is served as long as it exists; `refresh=1` rebuilds.
+- The demo fields named in `docs/CHALLENGE.md` are warmed by requesting them before the demo,
+  not committed. That is still live data, only cached.
+- Until `pipeline.build` exists, the server can run with `--fixture` and answers every request
+  with `fixtures/targets/demo-synthetic`, which is `"synthetic": true` and must be shown as such.
+
+### Frontend URL
+
+The viewer reads `?ra=&dec=&size=` from its own URL and requests that field on load, so links and
+embeds work (official "Potential Considerations").
 
 ## Validation
 
