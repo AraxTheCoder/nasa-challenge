@@ -750,6 +750,17 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       markDirty();
       return st.overlays.map((l) => l.meta);
     },
+    /** T81: append overlays (e.g. an A − B layer) without reloading the others; returns their indexes. */
+    async addOverlays(layers) {
+      const made = (await Promise.all(layers.map(async (l) => {
+        try { return Object.assign(new Layer(l.url, await readProperties(l.url), l), { meta: l }); }
+        catch (e) { console.warn(e); return null; }
+      }))).filter(Boolean);
+      const first = st.overlays.length;
+      st.overlays.push(...made);
+      markDirty();
+      return made.map((_, k) => first + k);
+    },
     showOverlay(i) { st.shown = i; markDirty(); },
     setDebug(on) { st.debug = !!on; markDirty(); },
     /** {order, wanted, maxOrder, visible, sharp, blurry, empty, atMax, allSharp, loads, queued, errors} */

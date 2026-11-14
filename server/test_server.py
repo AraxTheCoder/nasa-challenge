@@ -371,3 +371,30 @@ def test_photometry_anywhere_no_field_needed(tmp_path, monkeypatch):
         time.sleep(0.02)
     assert r.status_code == 200 and r.json()["ra_deg"] == 10.5 and r.json()["all_exposures"] is True
     assert client.get("/api/photometry", params={"ra": 400, "dec": 0}).status_code == 400
+
+
+def test_hips_frame_and_difference_layers(client):
+    """T81: one layer per frame and A − B layers, same URL scheme as the epochs."""
+    import io
+
+    import astropy.units as u
+    import numpy as np
+    from astropy_healpix import HEALPix
+    from PIL import Image
+
+    body = _wait_ready(client, client.get("/api/target", params={"ra": "150", "dec": "2.2", "size": "5"}).json())
+    t = client.get(body["target_url"]).json()
+    h = client.get(f"/api/hips/{t['id']}").json()
+    assert [l["frame_id"] for l in h["frame_layers"]] == [f["id"] for f in sorted(t["frames"], key=lambda f: f["mjd"])]
+    a, b = h["frame_layers"][0]["frame_id"], h["frame_layers"][-1]["frame_id"]
+    c = t["center"]
+    n = int(HEALPix(nside=2 ** 7, order="nested").lonlat_to_healpix(c["ra_deg"] * u.deg, c["dec_deg"] * u.deg))
+    for layer in (a, f"d-{a}-{b}", f"d-{a}-{a}"):
+        assert "frame" in client.get(f"/api/hips/{t['id']}/{layer}/properties").text or layer.startswith("d-")
+        r = client.get(f"/api/hips/{t['id']}/{layer}/Norder7/Dir{(n // 10000) * 10000}/Npix{n}.png")
+        assert r.status_code == 200 and r.content[:4] == b"\x89PNG", layer
+    same = np.asarray(Image.open(io.BytesIO(r.content)).convert("LA"))       # A − A: everything grey 128
+    grey = same[..., 0][same[..., 1] > 0]
+    assert grey.size and abs(float(np.median(grey)) - 128) <= 1
+    assert client.get(f"/api/hips/{t['id']}/f999/properties").status_code == 404
+    assert client.get(f"/api/hips/{t['id']}/x1/properties").status_code == 404

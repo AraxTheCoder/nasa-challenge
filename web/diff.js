@@ -140,6 +140,7 @@ async function draw() {
 
 function setOn(on) {
   st.on = on;
+  document.dispatchEvent(new CustomEvent("viewer:diff", { detail: { on } }));   // T81: the map follows
   st.drawnFor = null;
   const btn = $("#btn-diff");
   btn.setAttribute("aria-pressed", String(on));

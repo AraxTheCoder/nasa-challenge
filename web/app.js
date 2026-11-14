@@ -12,6 +12,7 @@ import { checkTarget, clearTarget, initViewer, showTarget, stopBlink } from "./v
 import { initObjects } from "./objects.js";
 import { initDiff } from "./diff.js";
 import { initPhotometry } from "./photometry.js";
+import "./mapframes.js"; // T81: the frame viewer's A/B, blink, play and A − B drive the map
 import { initLamPick, lamFromUrl, setLamUrl } from "./lampick.js";
 import { nearestBand, parseLam } from "./lambda.js";
 import * as explore from "./explore.js";
@@ -466,13 +467,17 @@ async function showEpochLayers(target) {
     info = await res.json();
   } catch { return; }
   if (app.shownTarget !== target || !info.layers?.length) return;
-  const layers = await explore.setEpochLayers(info.layers.map((l) => ({ ...l, url: new URL(l.url, app.api).href })));
+  const abs = (l) => ({ ...l, url: new URL(l.url, app.api).href });
+  // T81: the frames as layers too (A/B, blink, play and A − B in the map: mapframes.js)
+  const layers = await explore.setFieldLayers(info.layers.map(abs), (info.frame_layers ?? []).map(abs),
+    new URL(`/api/hips/${encodeURIComponent(target.id)}`, app.api).href);
   if (!layers.length || app.shownTarget !== target) return;
   const buttons = layers.map((l, i) => el("button", { type: "button", class: "link", title: l.label,
     "aria-pressed": String(i === 0) }, `Ep. ${l.epoch}`));
   const pick = (i) => {
     epochShown = i;
     explore.showEpoch(i);
+    document.dispatchEvent(new CustomEvent("explore:epoch-picked"));   // mapframes.js steps aside
     buttons.forEach((b, j) => b.setAttribute("aria-pressed", String(j === i)));
   };
   buttons.forEach((b, i) => b.addEventListener("click", () => pick(i)));

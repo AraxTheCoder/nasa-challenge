@@ -137,7 +137,8 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
         t = _target(tid)
         # T41: render the field's tiles now, in the background, so the map finds them ready
         threading.Thread(target=hips.prerender, args=(builder.target_dir(tid),), daemon=True).start()
-        return {"id": tid, "synthetic": bool(t.get("synthetic")), "layers": hips.layers(tid, t)}
+        return {"id": tid, "synthetic": bool(t.get("synthetic")), "layers": hips.layers(tid, t),
+                "frame_layers": hips.frame_layers(tid, t)}       # T81: f<id>; A − B is d-<a>-<b>
 
     @app.get("/api/hips/{tid}/e{ep}/properties")
     def hips_properties(tid: str, ep: int):
@@ -168,6 +169,30 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
     if not fixture:
         sky.warm()
     _MEDIA = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}
+
+    @app.get("/api/hips/{tid}/{layer}/properties")
+    def hips_layer_properties(tid: str, layer: str):
+        """T81: frames (f003) and differences (d-f003-f017) as layers, like the epochs."""
+        t = _target(tid)
+        if not re.match(hips.LAYER_RE, layer) or not hips.has_layer(t, layer):
+            raise HTTPException(404)
+        return PlainTextResponse(hips.properties(tid, t, layer))
+
+    @app.get("/api/hips/{tid}/{layer}/Norder{order}/Dir{d}/Npix{name}")
+    def hips_layer_tile(tid: str, layer: str, order: int, d: int, name: str):
+        if not re.match(hips.LAYER_RE, layer) or not name.endswith(".png") or not 0 <= order <= hips.HIPS_ORDER:
+            raise HTTPException(404)
+        t = _target(tid)
+        if not hips.has_layer(t, layer):
+            raise HTTPException(404)
+        try:
+            npix = int(name[:-4])
+        except ValueError:
+            raise HTTPException(404) from None
+        png = hips.tile_png(builder.target_dir(tid), layer, order, npix)
+        if png is None:
+            return Response(status_code=404, headers={"Cache-Control": "public, max-age=3600"})
+        return Response(png, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
 
     @app.get("/api/sky/{survey}/{path:path}")
     async def sky_file(survey: str, path: str, request: Request):
