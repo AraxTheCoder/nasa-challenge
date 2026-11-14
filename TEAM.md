@@ -214,46 +214,48 @@ Format: `[name] idea — status: new`. Agents don't act on an idea until a human
   — status: new
 - [Joerg] Draw paths, not just positions: for every label, known object and detection, a line
   through its per-frame positions with a tick per frame and colour from early to late (data is
-  already in the JSON). — status: new
+  already in the JSON). — status: done (T22)
 - [Joerg] Motion classification for detections: from the track, rate + direction + shape, shown as
   a label, e.g. "asteroid-like, 30"/h" (seen in one burst only), "moves between epochs only: nearby
   star / brown dwarf", "large jump between epochs, slow drift within one: distant solar-system body".
   Rough numbers: main belt ~150 px/day; Barnard 1.7 px/yr; a body at 500 AU swings ~+-0.11 deg/yr
   from Earth's orbit, i.e. up to ~14' between epochs (about one default field!), ~1 px/day within
-  an epoch. — status: new
+  an epoch. — status: partly done (classes for labels: T23; detections get status + reason incl. class: T08;
+  real detections wait for T06)
 - [Joerg] Shift-and-stack: add frames after shifting each along a guessed motion; faint movers
   sharpen, stars smear. Standard for distant-object searches; matches the challenge's "add together
-  or subtract images". — status: new
+  or subtract images". — status: partly done (`python -m pipeline.stack`, T23; not in the viewer)
 - [Joerg] Trail image: sum one burst (or one epoch) into a single picture so movers show as dot rows
-  or streaks without playing the blink. — status: new
+  or streaks without playing the blink. — status: done (T23 trail view)
 - [Joerg] Feature list from Joerg (2026-11-14), what's not covered yet. Already covered: timeline
   (T12), blink (T11), matched pairs (T12/T17), layer toggles + motion paths + hover info (T22),
   objects list + status markers (T13), mover detection (T06), all-sky pan/zoom with epochs
-  (T30/T32), Barnard's Star as validation (T19/T23). New: — status: new
-  - Appear / disappear / brightness change between epochs, not only motion (detect side, B).
-  - "Uncatalogued?" check: a detection with no SIMBAD/Gaia label within ~1 px gets flagged
+  (T30/T32), Barnard's Star as validation (T19/T23). New: — status: partly done (see the tags below)
+  - (open, needs T06) Appear / disappear / brightness change between epochs, not only motion (detect side, B).
+  - (open, needs T06) "Uncatalogued?" check: a detection with no SIMBAD/Gaia label within ~1 px gets flagged
     (labels are already in target.json, so this is a cheap cross-match).
-  - Candidate ranking (motion significance, consistency across frames, catalogue match, artifact
+  - (partly: score + reason per detection, T08; the list is open) Candidate ranking (motion significance, consistency across frames, catalogue match, artifact
     probability from the FLAGS bits) and a dedicated candidate list in the viewer.
-  - Photutils for source extraction (not in requirements.lock yet: add with a pin + lock update).
+  - (→ part of T06) Photutils for source extraction (not in requirements.lock yet: add with a pin + lock update).
 - [Joerg] (on the Board as T35) Tracing over the stitched sky: draw labels, paths and motion tracks (and detections) on the
   explore map (T30/T32 per-epoch HiPS), not only on a single field, so a mover can be followed across
   epochs while panning. The data is there: `labels[].positions`, `known_objects`, `detections` carry
-  RA/Dec per frame; Aladin overlays (catalogue + polyline) can draw them. — status: new
+  RA/Dec per frame; Aladin overlays (catalogue + polyline) can draw them. — status: on the Board (T35, in review)
 - [Joerg] Auto target selection: instead of only typed coordinates, propose interesting fields
   automatically, e.g. high-proper-motion stars and brown dwarfs (Gaia/SIMBAD/CatWISE), known asteroids
   passing through SPHEREx frames (JPL, T07), fields where our detection (T06) finds unknown movers,
   or a "surprise me" pick ranked by how much moves there. Shown as a list / quick picks. — status: new
+  (the five official test fields are quick picks already: T20/T25)
 - [Mati] Gap scan vs. the official text (2026-11-14, Claude), highest value first. Each is a proposal; a
-  human moves it to the Board. — status: new
-  1. (→ Board: T45) **Play the series like a video** (core Objective: "a series of images of that patch like a little
+  human moves it to the Board. — status: partly done (1-3 and 9 done; 7 merged into proposal (b); rest open)
+  1. (done: T45) **Play the series like a video** (core Objective: "a series of images of that patch like a little
      video"): today only A/B blink + arrow keys. Autoplay all frames inside the wavelength filter (or one
      per epoch at matched wavelength), speed + loop, timeline cursor follows. C, `viewer.js`, ~1-2 h.
-  2. (→ Board: T49) **Light curves for the variable test stars** (RW Aur, R Dra are official test targets): brightness
+  2. (done: T49) **Light curves for the variable test stars** (RW Aur, R Dra are official test targets): brightness
      over time at (nearly) the same wavelength, since SPHEREx steps in wavelength and blinking mixes
      colour with variability. Needs calibrated photometry per frame at a position (FITS, not the PNGs):
      A/B: `pipeline.photometry` + `GET /api/targets/<id>/photometry?x=&y=`; C: chart on click. ~3 h.
-  3. (→ Board: T49) **Spectra on the fly** ("extra kudos"): same photometry, plotted against wavelength (each epoch
+  3. (done: T49) **Spectra on the fly** ("extra kudos"): same photometry, plotted against wavelength (each epoch
      sweeps 0.75-5 µm), one colour per epoch. Shares the endpoint with 2, so do both together. C ~1 h extra.
   4. **Per-detector co-adds per epoch** (consideration: "add together all the data taken by each of the
      six detector arrays to improve the signal-to-noise"): mean/median of the aligned frames per detector
@@ -266,13 +268,13 @@ Format: `[name] idea — status: new`. Agents don't act on an idea until a human
   6. **Data release in the UI** ("easy to update with the latest data releases"): carry the release
      (DR1 / QR3, from obs_collection) per frame into target.json, show it in frame info + footer, and let
      the API say when a cached field predates the newest release ("newer data available: Rebuild").
-  7. **CatWISE2020 labels on the frames** (consideration: "overlay ... the WISE mission"): positions + proper
+  7. (merged into proposal (b) below) **CatWISE2020 labels on the frames** (consideration: "overlay ... the WISE mission"): positions + proper
      motions of WISE sources, the natural catalogue for brown dwarfs (WISE 0855 was found by WISE). WISE is
      only a sky-map layer today; frame labels come from SIMBAD + Gaia. A (`pipeline.labels`) ~1 h.
   8. **Embed + share** (consideration: "easily embed it in other websites"): `?embed=1` compact layout
      (stage + blink only, for iframes), and export the current frame / difference / series as PNG or GIF.
      C ~1.5 h.
-  9. (→ Board: T46) **CI on every push** (GitHub Actions): pytest + `web/tests/browser_test.py` (fixture mode, `?explore=0`,
+  9. (done: T46) **CI on every push** (GitHub Actions): pytest + `web/tests/browser_test.py` (fixture mode, `?explore=0`,
      ~20 s) + schema validation of fixtures. Three agents push straight to main and one can't run a
      browser; the T30 module bug broke the page for everyone unnoticed. ~1 h, any track.
   10. **Docs out of date** (consistency, CLAUDE.md): README "Status" still says every field is synthetic;
@@ -288,7 +290,7 @@ Format: `[name] idea — status: new`. Agents don't act on an idea until a human
   (GCP e2-medium / Azure B2s), free credits available. Why: from Europe S3 gave 0.04-0.1 MB/s per
   connection in the afternoon (another us-east-1 bucket too), so live deep-zoom tiles take 20-60 s;
   next to the bucket they should take ~1 s. Needs: Dockerfile, warm-up script, HTTPS, guide; would
-  also cover T14. — status: on the Board
+  also cover T14. — status: done (T47; covers much of T14)
 - [Mati] Split the two big web files before they tangle (Claude's size check, 2026-11-14): `web/viewer.js`
   582 lines, `web/app.js` 605. Move filter / pairs / matching / playback out of `viewer.js` into `compare.js`,
   and the sky-map wiring (T30/T36/T42) out of `app.js` into the explore module. Pure refactor, no framework
