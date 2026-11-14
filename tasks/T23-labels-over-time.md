@@ -65,3 +65,7 @@ visible without blinking: a trail image and, later, shift-and-stack along a moti
 - 2026-11-14 [Mati] Real Barnard's Star field (271 labels) still looks crowded. New open task T34: only
   the most important names always visible, the rest on hover (proposal in tasks/T34). It touches
   `paths.js`, so you may want it; otherwise someone from C picks it up later.
+- 2026-11-14 [Mati] `pipeline.motion.summarize` only counts frame pairs > 0.05 h (3 min) apart as
+  "within an epoch", but SPHEREx exposures inside a visit are ~2 min apart, so a fast mover seen in one
+  burst gets `max_rate_within_epoch_arcsec_per_hr = 0` and may not be classed `fast mover`. T08 computes
+  its own within-visit rate; you may want to lower the threshold (or measure first-to-last per visit).

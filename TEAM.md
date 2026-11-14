@@ -44,7 +44,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T05 | A: Pre-build (warm) the five official test fields in the Live API cache so the demo opens them instantly (was: publish to `web/targets/`; changed by the live-data decision) | Mati | done | `mati/T05-warm` | [tasks/T05](tasks/T05-warm-demo-fields.md). `python web/warm.py` (or `dev.py --warm`) on the demo machine |
 | T06 | B: Mover detection v0 on the fixture: source extraction per frame, match across frames, keep what moves | Jonathan | doing | `jonathan/T06-mover-detection` | Start on `fixtures/`, switch to real data after T04 |
 | T07 | B: JPL SB Identification cross-match: known small bodies in the field per frame time → `known_objects` | Mati | done | `mati/T07-jpl-known` | [tasks/T07](tasks/T07-jpl-known-objects.md). `python -m detect.known_objects <dir>`; not yet called by builds (needs detect.run, T06) |
-| T08 | B: Classify detections as known / unknown / artifact and write them into `target.json` | Mati | doing | `mati/T08-classify` | Needs T06 (detections), T07 · [tasks/T08](tasks/T08-classify-detections.md). Built against CONTRACTS until T06 lands |
+| T08 | B: Classify detections as known / unknown / artifact and write them into `target.json` | Mati | done | `mati/T08-classify` | [tasks/T08](tasks/T08-classify-detections.md). `python -m detect.classify <dir>`; waits for T06 detections; CONTRACTS v0.9 `reason` |
 | T09 | B: Sanity check on a known bright asteroid in real SPHEREx data: do we recover it at the JPL position? | | open | | Needs T04, T08 |
 | T10 | B: "Planet X mode": pick a slow distant body (dwarf planet), check it's detectable across epochs, propose the demo target list | Jonathan | doing | `jonathan/T10-test-targets` | Reworded 2026-11-14 for the official text: check SPHEREx multi-epoch coverage of the five official test fields (Barnard, Eps Indi B, WISE 0855, RW Aur, R Dra) + maybe one dwarf planet; feeds T05 warm-up |
 | T11 | C: Static viewer skeleton: load `index.json` + `target.json` from the fixture, show frames, blink between two | Mati | done | `mati/T11-viewer-skeleton` | [tasks/T11](tasks/T11-viewer-skeleton.md). Vanilla JS, no build. Reads static target folders; not yet wired to the Live API (v0.3). Run: see `web/README.md` |
@@ -160,6 +160,10 @@ Dated, one line each, with why.
   labelling 1-7 s and T37 already fetches them in the background without blocking the field; with
   labels off the paths, names, inspector and sky-map traces (T22/T23/T35) showed nothing, so the
   tracking looked missing. The choice is remembered per browser (localStorage `spherex.labels`).
+- 2026-11-14 [Mati] CONTRACTS v0.9: optional `detections[].reason`, one plain-words sentence why a detection
+  is known / unknown / artifact, written by `detect.classify` (T08) and shown in the objects panel. Why: an
+  "artifact" or "unknown" label alone can't be checked by a human; the reason makes it checkable.
+  Additive, `schema_version` stays "0.2".
 
 ## Ideas
 
@@ -257,6 +261,9 @@ Things waiting on a human.
   `known_objects` (JPL sb_ident + Horizons from SPHEREx). Please call it from `detect.run.detect()` (or after
   `add_labels` in `pipeline.build`) so live builds get known asteroids; cost is a few minutes near the
   ecliptic (JPL rate limits), less elsewhere. Details in tasks/T07.
+- 2026-11-14 [Mati → Jonathan, T06] T08 is in too. Suggested `detect.run.detect()`: find tracks →
+  `detect.known_objects.add_known_objects(target)` → `detect.classify.classify_detections(target)`. Tracks need
+  per-frame `frame_id, ra_deg, dec_deg, x, y`; `status` may be left out. Details in tasks/T08.
 
 ## Log
 
@@ -419,3 +426,7 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   warmed at server start. Measured: Allsky 4.3 s -> 12 ms, cached tile 0.7-1.0 s -> ~10 ms. The
   browser now loads the most central wanted tiles first and drops tiles that left the screen. Epoch
   tiles are kept in memory and pre-rendered when the viewer asks for a field's layers.
+- 2026-11-14 [Mati + Claude] Done: T08 (`detect/classify.py`: known via JPL tracks or moving catalogued
+  stars; artifacts with reasons; unknown otherwise; score + motion; CONTRACTS v0.9 `reason`; objects panel
+  shows it). 15 offline tests; all 73 Python tests + browser test green. Waits for real detections (T06).
+  Gotcha: `pipeline.motion.summarize` ignores frame pairs < 0.05 h, SPHEREx visits are ~2 min apart.
