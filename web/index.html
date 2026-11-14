@@ -111,6 +111,7 @@
           <!-- Overlay layer for detections / known objects (T13). Pixel coords per CONTRACTS. -->
           <svg id="overlay" class="overlay" aria-hidden="true"></svg>
           <div id="stage-label" class="stage-label"></div>
+          <div id="stage-diff-label" class="stage-label stage-diff-label" hidden></div>
           <div id="stage-error" class="stage-error" hidden></div>
           <div id="stage-watermark" class="stage-watermark" hidden>SYNTHETIC · NOT SPHEREx DATA</div>
         </div>
@@ -119,11 +120,14 @@
           <button id="btn-a" type="button" class="slot slot-a" title="Show frame A">A</button>
           <button id="btn-play" type="button" class="play" aria-pressed="false" title="Blink A/B (Space)">▶ Blink</button>
           <button id="btn-b" type="button" class="slot slot-b" title="Show frame B">B</button>
+          <button id="btn-diff" type="button" class="diff-btn" aria-pressed="false"
+                  title="Show A − B: steady stars cancel, movers show as a white/black pair (D)">A − B</button>
           <label class="speed">Interval
             <input id="speed" type="range" min="100" max="2000" step="50" value="500">
             <output id="speed-out" for="speed">500 ms</output>
           </label>
         </div>
+        <p id="diff-note" class="diff-note muted small" hidden></p>
         <!-- T12: compare at the same wavelength. SPHEREx sees each spot at a different wavelength on
              every visit, and stars change brightness with wavelength. -->
         <div class="compare" role="group" aria-label="Wavelength filter and matching">
@@ -149,7 +153,7 @@
         </p>
 
         <p class="hint muted">
-          <kbd>Space</kbd> blink on/off · <kbd>X</kbd> flip A/B · <kbd>M</kbd> match B to A's wavelength ·
+          <kbd>Space</kbd> blink on/off · <kbd>X</kbd> flip A/B · <kbd>M</kbd> match B to A's wavelength · <kbd>D</kbd> A − B difference ·
           <kbd>←</kbd>/<kbd>→</kbd> step through frames · <span class="nodata-swatch" aria-hidden="true"></span> hatched = no data
         </p>
       </div>

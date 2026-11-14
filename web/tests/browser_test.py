@@ -140,6 +140,10 @@ try:
         check(all(s.startswith(API + "/api/targets/") and w == 96 for s, w in srcs), "frames load from API, relative to target_url")
         check(all("v=" in s for s, _ in srcs), "frame URLs carry a build stamp (rebuilds must not show cached old frames)")
         check(page.input_value("#preset") != "", "preset select marks the chosen field")
+        page.click("#btn-diff")
+        page.wait_for_selector("#diff-canvas:not([hidden]), #diff-note:has-text('unavailable')", timeout=8000)
+        check(page.is_visible("#diff-canvas"), f"difference view works on frames from the Live API (CORS) {page.text_content('#diff-note')}")
+        page.click("#btn-diff")
         page.screenshot(path=str(out / "t20-loaded.png"), full_page=True)
 
         # 3. same field again = cache hit: no progress panel
@@ -269,6 +273,7 @@ try:
         # T22 paths overlay (Joerg's agent cannot run a browser)
         check(o.locator("#paths-layer").count() == 1 and "Fake asteroid · synthetic" in (o.text_content("#overlay") or ""),
               "T22: paths layer drawn, synthetic object named as such")
+        check(o.is_hidden("#explore"), "offline mode hides the sky map (no tile server)")
         check(not oerr, f"offline: no page errors {oerr}")
 
         # 8b. timeline, wavelength filter, matched pairs (T12) on the multi-epoch target
@@ -319,6 +324,35 @@ try:
         check(sw <= 390 and zp.locator(".tl-panel").count() == 3, f"timeline fits on a phone (scrollWidth={sw})")
         zp.screenshot(path=str(out / "t12-phone.png"), full_page=True)
         check(not zerr, f"T12: no page errors {zerr}")
+
+        # 8b2. difference view A − B (T43) on the multi-epoch target (offline, same origin)
+        g = b.new_page(viewport={"width": 1280, "height": 900})
+        gerr = []
+        g.on("pageerror", lambda x: gerr.append(str(x)))
+        g.goto(WEB + "?explore=0&data=../data/test-targets/")
+        wait_loaded(g)
+        diff_px = lambda x, y: g.evaluate(f"() => Array.from(document.querySelector('#diff-canvas').getContext('2d').getImageData({x}, {y}, 1, 1).data)")
+        g.click("#stage"); g.keyboard.press("d")
+        g.wait_for_selector("#diff-canvas:not([hidden])", timeout=5000)
+        check(g.get_attribute("#btn-diff", "aria-pressed") == "true" and "A − B · f001 − f007" in g.text_content("#stage-diff-label"),
+              f"D shows A − B for the current pair ({g.text_content('#stage-diff-label')})")
+        check(g.is_hidden("#stage-label") and "wavelength-matched" in g.text_content("#diff-note"), "frame label hidden, legend says the pair is matched")
+        # fixture asteroid: at x=26 in A (f001), at x=38 in B (f007 = fixture f003), y=48
+        white, black, sky = diff_px(26, 48)[0], diff_px(38, 48)[0], diff_px(5, 5)[0]
+        check(white > 168 and black < 88 and 96 < sky < 160, f"mover = white in A's place, black in B's, sky grey ({white}, {black}, {sky})")
+        g.select_option("#pair-select", label=g.eval_on_selector("#pair-select", "s => [...s.options].find(o => o.text.startsWith('f000')).text"))
+        g.wait_for_function("document.querySelector('#stage-diff-label').textContent.includes('f000 − f004')")
+        spread = g.evaluate("""() => { const d = document.querySelector('#diff-canvas').getContext('2d').getImageData(0, 0, 96, 96).data;
+            let lo = 255, hi = 0; for (let i = 0; i < d.length; i += 4) if (d[i] === d[i + 1] && d[i] === d[i + 2]) { lo = Math.min(lo, d[i]); hi = Math.max(hi, d[i]); } return [lo, hi]; }""")
+        check(spread[0] >= 124 and spread[1] <= 132, f"identical frames give a flat grey difference ({spread})")
+        g.check("#trail-on")
+        check(g.get_attribute("#btn-diff", "aria-pressed") == "false" and g.is_hidden("#diff-canvas"), "turning the trail view on ends the difference view")
+        g.uncheck("#trail-on")
+        g.click("#btn-diff"); g.wait_for_selector("#diff-canvas:not([hidden])")
+        g.click("#btn-play")
+        check(g.get_attribute("#btn-diff", "aria-pressed") == "false" and g.is_visible("#stage-label"), "starting the blink ends the difference view")
+        g.click("#btn-play")
+        check(not gerr, f"T43: no page errors {gerr}")
 
         # 8c. objects panel (T13) on the multi-epoch target
         q = b.new_page(viewport={"width": 1280, "height": 900})
