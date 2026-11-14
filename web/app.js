@@ -9,6 +9,7 @@
 import { DEFAULT_API, ApiError, health, requestField } from "./api.js";
 import { $, el, fmtElapsed } from "./util.js";
 import { checkTarget, clearTarget, initViewer, showTarget, stopBlink } from "./viewer.js";
+import * as explore from "./explore.js";
 
 const SIZE_MIN = 5;
 const SIZE_MAX = 60;
@@ -86,6 +87,7 @@ async function openTarget(targetUrl, expectedId, token, signal) {
   if (token !== app.loadToken) return;
   const warnings = checkTarget(target, expectedId);
   showTarget(target, targetUrl);
+  syncExplore(target);
   warnings.forEach((w) => showMessage(w, "warn"));
 }
 
@@ -402,6 +404,58 @@ function bindPage() {
   });
 }
 
+// ---------- explore mode (T30) ----------
+
+function syncExplore(target) {
+  app.shownTarget = target;
+  const c = target?.center;
+  if (!c) return;
+  explore.goTo(c.ra_deg, c.dec_deg, Math.max(0.25, (target.size_arcmin * 3) / 60));
+  explore.markField(c.ra_deg, c.dec_deg, target.size_arcmin);
+}
+
+function updateExplorePos() {
+  const v = explore.view();
+  if (!v) return;
+  $("#explore-pos").textContent = `RA ${v.ra.toFixed(4)}° Dec ${v.dec >= 0 ? "+" : ""}${v.dec.toFixed(4)}° · view ${v.fovArcmin >= 120 ? (v.fovArcmin / 60).toFixed(1) + "°" : Math.round(v.fovArcmin) + "′"}`;
+}
+
+async function startExplore() {
+  const sel = $("#explore-survey");
+  explore.SURVEYS.forEach((s) => sel.append(el("option", { value: s.id }, s.label)));
+  sel.addEventListener("change", () => explore.setSurvey(sel.value));
+  $("#explore-gaia").addEventListener("change", (e) => explore.toggleCatalog("gaia", e.target.checked));
+  $("#explore-simbad").addEventListener("change", (e) => explore.toggleCatalog("simbad", e.target.checked));
+  $("#explore-toggle").addEventListener("click", (e) => {
+    const box = $("#explore");
+    box.classList.toggle("collapsed");
+    const open = !box.classList.contains("collapsed");
+    e.target.textContent = open ? "Hide map" : "Show map";
+    e.target.setAttribute("aria-expanded", String(open));
+  });
+  $("#explore-blink").addEventListener("click", () => {
+    const v = explore.view();
+    if (!v) return;
+    const req = { ra: v.ra.toFixed(4), dec: v.dec.toFixed(4), size: clampSize(v.fovArcmin / 3) };
+    fillForm(req);
+    setPageUrl(req, true);
+    loadField(req);
+  });
+  const f = readForm();
+  try {
+    const a = await explore.initExplore($("#aladin"), {
+      ra: Number(f.ra) || undefined, dec: Number(f.dec) || undefined, fovDeg: 2,
+    });
+    a.on("positionChanged", updateExplorePos);
+    a.on("zoomChanged", updateExplorePos);
+    if (app.shownTarget) syncExplore(app.shownTarget);   // a field loaded before the map was ready
+    updateExplorePos();
+  } catch (err) {
+    showMessage(`Sky map unavailable: ${err.message}`, "warn");
+    $("#explore").hidden = true;
+  }
+}
+
 async function main() {
   initViewer();
   bindPage();
@@ -412,6 +466,7 @@ async function main() {
     return;
   }
   await loadPresets();
+  startExplore();   // not awaited: the map loads from CDS in the background
   const requested = loadFromUrl();
   if (!requested) {
     fillDefaults();
