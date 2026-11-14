@@ -503,6 +503,8 @@ body.map-only #ph-measure { display: none !important; }
 .explore-bar .spacer { flex: 1; }
 .explore-note { margin: 6px 0; }
 .build-bar { margin-top: 12px; }
+/* T91: motion measured by SPHEREx */
+.ph-motion-big { font-size: 1.35em; font-weight: 600; margin: 4px 0; }
 
 /* ---------- T93: chemistry map of the shown field ---------- */
 .chem-note { margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--accent); color: var(--muted); max-width: 520px; }

@@ -17,6 +17,7 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `paths.js`, `paths.css` | names and motion paths on the image, label priority + hover (T22, T34) |
 | `inspector.js` | side panel for a clicked object: what it is, how it moves, frame by frame (T23) |
 | `objects.js` | objects panel: known / unknown / artifact detections, known objects, synthetic badge (T13) |
+| `chemistry.js` | Chemistry (T93): for the shown field, the map of a chemical feature (ices, PAH, hydrogen lines) minus its continuum, as a map layer, with a plain-words note; takes the map from the automatic blink (`map:take`) |
 | `photometry.js` | spectrum + change-at-same-wavelength charts from `/api/targets/<id>/photometry` (T49) |
 | `explore.js`, `sky.js`, `healpix.js` | sky map: own WebGL HiPS renderer, surveys, the field's epochs (T30, T36, T41, T42) |
 | `traces.js` | the field's objects drawn on the sky map (T35) |

@@ -26,7 +26,8 @@ Notes for other tracks:
   message="")`, the server forwards it to the UI's progress bar. Optional, but users wait 1-2 min.
 - **B:** `detect.run.detect_target(target)` runs when the viewer asks `GET /api/targets/<id>/objects`
   (T51), in the background; same for catalogue labels via `GET /api/targets/<id>/labels` (T37).
-- Also served: photometry (`/api/targets/<id>/photometry`, T49), newer data for a field (`/api/targets/<id>/updates`, T64, `server/updates.py`), per-epoch HiPS (`/api/hips/…`, T32),
+- Also served: photometry (`/api/targets/<id>/photometry`, T49), newer data for a field (`/api/targets/<id>/updates`, T64, `server/updates.py`), chemistry maps
+  (`/api/targets/<id>/chemistry`, T93, `server/chemistry.py`), per-epoch HiPS (`/api/hips/…`, T32),
   sky-map tiles (`/api/sky/…`, T41/T42), tile settings (`/api/settings`, T47), `/api/health`.
   All in `docs/CONTRACTS.md` → "Live API".
 - **C:** fetch `/api/target`, poll `poll_url` while 202, then load `target_url`; frame image paths

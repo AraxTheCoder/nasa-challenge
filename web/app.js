@@ -564,6 +564,7 @@ function bindPage() {
     setManual(true);
   };
   document.addEventListener("pointerdown", takeOver, true);
+  document.addEventListener("map:take", () => setManual(true));   // T93: a tool on the map itself (Chemistry)
   document.addEventListener("keydown", (e) => {
     if (e.target.closest?.("input, select, textarea, .sky-stage")) return;
     if ([" ", "p", "P", "x", "X", "m", "M", "d", "D", "ArrowLeft", "ArrowRight"].includes(e.key) && app.shownTarget) setManual(true);

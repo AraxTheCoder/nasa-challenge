@@ -46,6 +46,7 @@ async function pick(id) {
   if (token !== st.token) return;
   if (body.status !== "ready") { note([`${f.name}: ${body.message ?? body.status}`]); return; }
   st.shown = body.layer;
+  document.dispatchEvent(new CustomEvent("map:take"));          // the automatic blink leaves the map alone
   const ok = await explore.showLayer(body.layer);
   if (token !== st.token) return;
   const png = `${st.api}/api/targets/${encodeURIComponent(t.id)}/chemistry/${id}.png`;

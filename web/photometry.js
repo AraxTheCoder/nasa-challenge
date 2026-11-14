@@ -15,6 +15,7 @@ import { currentTarget, targetBase } from "./viewer.js";
 import { getApiBase, getSky } from "./explore.js";
 import { nearestLabel } from "./skylabels.js";
 import { analyse, FEATURES, FIT_MAX_UM, fmtT } from "./spectrum.js";
+import { motionBox } from "./motion.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const TRANSITION_COLOURS = ["#3987e5", "#d95926", "#199e70"]; // categorical slots 1-3, dark mode, validated
@@ -218,8 +219,9 @@ function render() {
         "(within half a channel). Near 0% = constant; clearly above or below at several wavelengths = the star changed." +
         (changes.omitted ? ` ${changes.omitted} more epoch pair(s) with fewer matches not shown.` : "")));
   }
+  parts.push(motionBox(d.ra_deg, d.dec_deg));      // T91: a moving catalogued star: its motion measured by SPHEREx
   parts.push(el("p", { class: "muted small" }, d.note ?? ""));
-  body.replaceChildren(...parts);
+  body.replaceChildren(...parts.filter(Boolean));     // null = a box with nothing to say (T91)
   box.hidden = false;
 }
 
@@ -480,3 +482,6 @@ export function initPhotometry() {
     if (w !== lastW && st.data) { lastW = w; render(); }
   }).observe($("#ph-body"));
 }
+
+// for web/tests and the console: open the spectrum panel at a sky position, as a map click there would
+globalThis.spherexSpectrumAt = (ra, dec, name = null) => loadSky(ra, dec, name);
