@@ -81,7 +81,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T42 | A/C: Live deep zoom everywhere: order 6-7 SPHEREx tiles computed on demand from AWS level-2 images (band's detector, 3 images, cached row chunks, noise-normalised stretch); IRSA cube up to order 5; S3 404 -> resolve real path, not IRSA cutouts | Jonathan | doing | `jonathan/T42-live-zoom` | Red box = orientation only |
 | T43 | C: Difference view A − B in the viewer (challenge: "subtract images taken at different times"): stars cancel for matched pairs, movers show as white/black pairs | Mati | done | `mati/T43-difference` | [tasks/T43](tasks/T43-difference-view.md). Button "A − B" / key `D`; best with a matched pair |
 | T45 | C: Play the series like a video (core Objective): Play/Pause through all frames in the filter or one per epoch at matched wavelength, speed + loop | Mati | open | `mati/T45-play` | [tasks/T45](tasks/T45-play-series.md). From gap-scan idea #1; after T46 |
-| T46 | All: tests on every push (GitHub Actions): pytest + browser test (fixture mode) + fixture schema check | Mati | doing | `mati/T46-ci` | [tasks/T46](tasks/T46-ci.md). From gap-scan idea #9 |
+| T46 | All: tests on every push (GitHub Actions): pytest + browser test (fixture mode) + fixture schema check | Mati | done | `mati/T46-ci` | [tasks/T46](tasks/T46-ci.md). `.github/workflows/tests.yml`; first run: check the Actions tab |
 
 ## Decisions
 
@@ -486,3 +486,8 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   brighter in A/B, blue = no data; B fitted to A first; exclusive with the trail view. On the real
   Barnard's Star matched pair (371 d) stars cancel and Barnard's proper motion shows as a white/dark pair.
   Also: offline mode hides the empty sky-map box. Covers the challenge's "subtract images" consideration.
+- 2026-11-14 [Mati + Claude] Done: T46 CI. Every push to main / PR runs `pytest detect server pipeline tests`
+  (new `tests/test_contract.py`: fixtures validate against the schema, frame files exist, presets sane) and
+  `web/tests/browser_test.py` (fixture mode, `?explore=0`, no external servers). Rehearsed in a fresh clone +
+  venv: 80 tests + browser test green. For everyone: run the same two commands before pushing; keep tests
+  offline. Repo is private and no `gh` here, so the first GitHub run needs a human look at the Actions tab.
