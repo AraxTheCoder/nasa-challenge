@@ -317,3 +317,41 @@ def test_sky_labels_endpoint_caches(tmp_path, monkeypatch):
     assert a == b and len(calls) == 1                     # same grid cell: computed once
     assert a["labels"] == [{"name": "M 31"}] and list((tmp_path / "sky_labels").glob("*.json"))
     assert client.get("/api/sky-labels", params={"ra": 1, "dec": 95}).status_code == 400
+
+
+def test_photometry_all_exposures_job(tmp_path, monkeypatch):
+    """T66: ?all=1 runs in the background (202 with progress), then 200 with every exposure."""
+    import json
+    import threading
+
+    import pipeline.photometry as ph
+
+    monkeypatch.setattr(ph, "SPECTRA_ROOT", tmp_path / "spectra")
+    gate = threading.Event()
+
+    def fake_all(ra, dec, progress=None):
+        progress(1, 2)
+        gate.wait(5)
+        return {"ra_deg": ra, "dec_deg": dec, "frames": [{"frame_id": "o1-D1"}], "all_exposures": True, "n_exposures": 2}
+
+    monkeypatch.setattr(ph, "measure_all", fake_all)
+    tid = "c1800000-p000000-s15"
+    (tmp_path / tid).mkdir()
+    (tmp_path / tid / "target.json").write_text(json.dumps({"id": tid, "synthetic": False,
+        "center": {"ra_deg": 180.0, "dec_deg": 0.0}, "frames": []}))
+    client = TestClient(create_app(tmp_path))
+    url = f"/api/targets/{tid}/photometry"
+    r = client.get(url, params={"ra": 180.0, "dec": 0.0, "all": 1})
+    for _ in range(50):
+        if r.json().get("done"):
+            break
+        time.sleep(0.02)
+        r = client.get(url, params={"ra": 180.0, "dec": 0.0, "all": 1})
+    assert r.status_code == 202 and r.json()["status"] == "building" and r.json()["total"] == 2
+    gate.set()
+    for _ in range(100):
+        r = client.get(url, params={"ra": 180.0, "dec": 0.0, "all": 1})
+        if r.status_code == 200:
+            break
+        time.sleep(0.02)
+    assert r.status_code == 200 and r.json()["all_exposures"] is True and r.json()["frames"] == [{"frame_id": "o1-D1"}]

@@ -147,3 +147,38 @@ def test_api_route(tmp_path, monkeypatch):
     (cache / "t" / "target.json").write_text(json.dumps(target))
     r = client.get("/api/targets/t/photometry")
     assert r.status_code == 200 and r.json()["status"] == "no_data"
+
+
+def test_measure_all_every_exposure_retry_moved_path_and_cache(tmp_path, monkeypatch):
+    """T66: all exposures at a position; a moved (reprocessed) image is looked up and retried; cached."""
+    from types import SimpleNamespace
+
+    from pipeline import mirror, photometry
+
+    exps = [SimpleNamespace(fits_url=f"u{i}", obs_id=f"o{i}", detector=1 + i % 6, epoch=1 + i // 3,
+                            mjd_mid=60800.0 + i, time_utc=f"t{i}", publisher_did=f"did{i}") for i in range(6)]
+    monkeypatch.setattr(photometry, "SPECTRA_ROOT", tmp_path)
+    monkeypatch.setattr(build, "cached_exposures", lambda ra, dec: (exps, {}))
+    fetched = []
+
+    def fake_fetch(url, ra, dec, size, min_deg=None):
+        fetched.append((url, min_deg))
+        if url == "u2":
+            raise RuntimeError("404")          # moved
+        if url == "u4":
+            raise LookupError("not on the image")
+        return url
+
+    monkeypatch.setattr(build, "fetch", fake_fetch)
+    monkeypatch.setattr(mirror, "resolve_urls", lambda dids: {"did2": "u2-retry"})
+    monkeypatch.setattr(photometry, "measure_cutout", lambda path, ra, dec: {
+        "flux_ujy": 1.0, "err_ujy": 0.1, "wavelength_um": 1.0, "bandwidth_um": 0.02, "masked_fraction": 0.0, "masked": False})
+    seen = []
+    res = photometry.measure_all(10.0, 20.0, progress=lambda d, n: seen.append((d, n)), threads=2)
+    assert res["n_exposures"] == 6 and res["all_exposures"] is True
+    assert sorted(f["frame_id"] for f in res["frames"]) == ["o0-D1", "o1-D2", "o2-D3", "o3-D4", "o5-D6"]
+    assert res["missing"] == ["o4-D5"]
+    assert seen[-1] == (6, 6)
+    assert all(m == photometry.SPECTRUM_CUT_DEG for _, m in fetched)     # tiny cutouts, not the 0.4 deg default
+    fetched.clear()
+    assert photometry.measure_all(10.0, 20.0)["frames"] == res["frames"] and not fetched   # from the cache

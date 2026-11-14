@@ -122,12 +122,14 @@ def cached_cutout(fits_url: str, ra: float, dec: float, size_deg: float,
     return best[1] if best else None
 
 
-def fetch(fits_url: str, ra: float, dec: float, size_deg: float, raw_root: Path = RAW_ROOT) -> Path:
-    """Return a cached cutout covering size_deg, downloading one (>= MIN_CUTOUT_DEG) if needed."""
+def fetch(fits_url: str, ra: float, dec: float, size_deg: float, raw_root: Path = RAW_ROOT,
+          min_deg: float = MIN_CUTOUT_DEG) -> Path:
+    """Return a cached cutout covering size_deg, downloading one (>= min_deg) if needed.
+    min_deg: builds keep MIN_CUTOUT_DEG so FOV changes reuse it; T66 spectra fetch tiny cutouts."""
     hit = cached_cutout(fits_url, ra, dec, size_deg, raw_root)
     if hit:
         return hit
-    size = round(max(size_deg, MIN_CUTOUT_DEG), 4)
+    size = round(max(size_deg, min_deg), 4)
     d = _cutout_dir(fits_url, ra, dec, raw_root)
     d.mkdir(parents=True, exist_ok=True)
     path = d / f"{size:.4f}.fits"
