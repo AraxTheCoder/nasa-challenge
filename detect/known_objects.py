@@ -5,9 +5,9 @@ Positions are as seen from SPHEREx (Horizons ID -163182), not from the geocentre
 1. Frames are grouped into visits (bursts of exposures minutes apart; a main-belt asteroid crosses a
    15' field in under a day, so each visit needs its own search).
 2. JPL Horizons: SPHEREx's geocentric state vector (ICRF, km, km/s) at each visit's mid time.
-3. JPL SB Identification (`sb_ident.api`), first pass, with that state vector as the observer
-   (`xobs`): the candidate small bodies near the field, down to `vmag_lim`. The first pass is fast
-   (~20 s) and good to ~20" here; the precise second pass takes minutes per call.
+3. Candidate small bodies near the field, down to `vmag_lim`: IMCCE SkyBoT cone search (T51; all
+   visits in parallel, ~30 s per field). Fallback: JPL SB Identification (`sb_ident.api`, first pass,
+   SPHEREx state vector as observer), which allows only 20 requests per 5 minutes (one per visit).
 4. JPL Horizons again, observer = SPHEREx itself (`CENTER='500@-163182'`): astrometric RA/Dec of
    each candidate at every frame time of the visits it was found in.
 5. Sky → pixel with the target grid (`pipeline.labels.Grid`); objects with at least one position in
@@ -36,6 +36,11 @@ import requests
 
 HORIZONS = "https://ssd.jpl.nasa.gov/api/horizons.api"
 SB_IDENT = "https://ssd-api.jpl.nasa.gov/sb_ident.api"
+# T51: IMCCE SkyBoT cone search finds the candidates (~15 s, no 20-per-5-min limit like sb_ident, so
+# all visits in parallel). Geocentric: SPHEREx is in low Earth orbit, a few arcsec off for main-belt
+# asteroids, well inside SEARCH_MARGIN_DEG; exact positions still come from Horizons, seen from SPHEREx.
+SKYBOT = "https://ssp.imcce.fr/webservices/skybot/api/conesearch.php"
+SKYBOT_WORKERS = 6
 SPHEREX = "-163182"
 MJD_TO_JD = 2400000.5
 VISIT_GAP_DAYS = 0.25      # frames closer than this belong to one visit
@@ -120,6 +125,33 @@ def horizons_command(name: str) -> str:
     if m:
         return f"DES={m.group(1)};"
     return f"{name};"
+
+
+def parse_skybot(text: str, vmag_lim: float) -> list[str]:
+    """Names from a SkyBoT text answer, in the form horizons_command understands.
+
+    '428715 | 2008 RG38' -> '428715 (2008 RG38)';  '- | 2023 UC67' -> '(2023 UC67)';
+    '433 | Eros' -> '433 Eros';  comets keep their designation ('C/2020 F3', '29P')."""
+    names = []
+    for line in text.splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        cols = [c.strip() for c in line.split("|")]
+        if len(cols) < 6:
+            raise ValueError(f"unexpected SkyBoT line: {line[:120]!r}")
+        num, name, cls, mv = cols[0], cols[1], cols[4], cols[5]
+        try:
+            if float(mv) > vmag_lim:
+                continue
+        except ValueError:
+            pass   # no magnitude (some comets): keep
+        if cls.lower().startswith("comet") or "/" in name:
+            names.append(name)
+        elif num and num != "-":
+            names.append(f"{num} ({name})" if re.match(r"^\d{4} [A-Z]", name) else f"{num} {name}")
+        else:
+            names.append(f"({name})")
+    return names
 
 
 def parse_horizons_table(result: str) -> list[list[str]]:
@@ -211,6 +243,40 @@ class Jpl:
 
     def candidates(self, jd: float, state: list[float], ra_deg: float, dec_deg: float,
                    half_width_deg: float, vmag_lim: float) -> list[str]:
+        """Names of small bodies near the field at jd: SkyBoT, or JPL sb_ident if SkyBoT fails."""
+        try:
+            return self.skybot(jd, ra_deg, dec_deg, half_width_deg * 2 ** 0.5, vmag_lim)
+        except (requests.RequestException, ValueError) as e:
+            print(f"known_objects: SkyBoT failed ({e}), asking JPL sb_ident", file=sys.stderr)
+            return self.sb_ident(jd, state, ra_deg, dec_deg, half_width_deg, vmag_lim)
+
+    def skybot(self, jd: float, ra_deg: float, dec_deg: float, radius_deg: float, vmag_lim: float) -> list[str]:
+        """Asteroids and comets within radius_deg of (ra, dec) at jd, brighter than vmag_lim (IMCCE SkyBoT)."""
+        params = {"-ep": f"{jd:.6f}", "-ra": f"{ra_deg:.6f}", "-dec": f"{dec_deg:.6f}", "-rd": f"{radius_deg:.4f}",
+                  "-mime": "text", "-output": "basic", "-loc": "500", "-filter": "0",
+                  "-objFilter": "101", "-from": "spherex-blink"}   # 101 = asteroids + comets, no planets
+        text = self._fetch_text(SKYBOT, params, "IMCCE SkyBoT cone search (geocentric)")
+        return parse_skybot(text, vmag_lim)
+
+    def _fetch_text(self, url: str, params: dict, service: str) -> str:
+        for wait in (*RETRIES, None):
+            try:
+                r = self.s.get(url, params=params, timeout=TIMEOUT)
+                if r.status_code not in (429, 502, 503, 504):
+                    break
+            except (requests.ConnectionError, requests.Timeout):
+                if wait is None:
+                    raise
+            if wait is None:
+                break
+            time.sleep(wait)
+        r.raise_for_status()
+        self.log.append({"service": service, "query": f"{url}?" + "&".join(f"{k}={v}" for k, v in params.items()),
+                         "retrieved_utc": _now()})
+        return r.text
+
+    def sb_ident(self, jd: float, state: list[float], ra_deg: float, dec_deg: float,
+                 half_width_deg: float, vmag_lim: float) -> list[str]:
         """Names of small bodies near the field at jd, seen from `state` (sb_ident first pass)."""
         params = {
             "xobs": ",".join(f"{v:.9f}" for v in state), "obs-time": f"{jd:.6f}",
@@ -261,7 +327,7 @@ def find_known_objects(target: dict, jpl: Jpl | None = None, vmag_lim: float = D
 
     half = grid.radius_deg + SEARCH_MARGIN_DEG
     ra0, dec0 = target["center"]["ra_deg"], target["center"]["dec_deg"]
-    with ThreadPoolExecutor(max_workers=1) as pool:  # T51: JPL rate limit, one sb_ident at a time
+    with ThreadPoolExecutor(max_workers=SKYBOT_WORKERS) as pool:  # T51: SkyBoT, all visits in parallel
         found = list(pool.map(lambda jd: jpl.candidates(jd, states[jd], ra0, dec0, half, vmag_lim), mid_jds))
 
     # candidate name -> frames of the visits it was found in

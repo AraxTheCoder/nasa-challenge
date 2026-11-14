@@ -88,9 +88,9 @@ def test_sb_ident_waits_out_429_then_caches(tmp_path, monkeypatch):
     s = _Session([_Resp(429, headers={"Retry-After": "300"}), _Resp(200, ok)])
     jpl = ko.Jpl(session=s)
     args = (2460900.5, [1, 2, 3, 4, 5, 6], 180.0, 0.0, 0.3, 20)
-    assert jpl.candidates(*args) == ["433 Eros"]
+    assert jpl.sb_ident(*args) == ["433 Eros"]
     assert s.calls == 2 and slept == [301]           # waited as long as JPL said, once
-    assert jpl.candidates(*args) == ["433 Eros"]     # second time from the disk cache
+    assert jpl.sb_ident(*args) == ["433 Eros"]     # second time from the disk cache
     assert s.calls == 2 and len(jpl.log) == 2         # still in provenance
 
 
@@ -105,3 +105,27 @@ def test_sb_ident_rate_window(monkeypatch):
     assert now[0] == 1000.0                           # the first 18 go straight out
     ko._sb_ident_slot()
     assert now[0] > 1000.0 + ko.SB_IDENT_WINDOW_S     # the 19th waits for the window
+
+
+def test_parse_skybot_names_for_horizons():
+    from detect.known_objects import horizons_command, parse_skybot
+    text = """# Flag: 1
+# Num | Name | RA(h) | DE(deg) | Class | Mv | Err(arcsec) | d(arcsec)
+ - | 2023 UC67 | 12 00 1.7 | -00 00 23.0 | MB>Middle | 26.3 | 2750.3 | 34.3
+ 428715 | 2008 RG38 | 12 00 6.1 | +00 01 44.5 | MB>Outer | 18.3 | 0.01 | 139.4
+ 433 | Eros | 12 00 6.1 | +00 01 44.5 | NEA>Amor | 12.3 | 0.01 | 139.4
+ - | 2010 AB | 12 00 6.1 | +00 01 44.5 | MB>Inner | 19.9 | 0.01 | 139.4
+ - | C/2020 F3 | 12 00 6.1 | +00 01 44.5 | Comet | - | 0.01 | 139.4"""
+    names = parse_skybot(text, 20)
+    assert names == ["428715 (2008 RG38)", "433 Eros", "(2010 AB)", "C/2020 F3"]   # V 26.3 dropped
+    assert [horizons_command(n) for n in names] == ["428715;", "433;", "DES=2010 AB;", "DES=C/2020 F3;CAP;"]
+    assert parse_skybot("# Flag: 0\n", 20) == []
+
+
+def test_skybot_failure_falls_back_to_sb_ident(monkeypatch):
+    import requests
+    from detect.known_objects import Jpl
+    jpl = Jpl(session=_Session([]))
+    monkeypatch.setattr(jpl, "skybot", lambda *a: (_ for _ in ()).throw(requests.ConnectionError("down")))
+    monkeypatch.setattr(jpl, "sb_ident", lambda *a: ["433 Eros"])
+    assert jpl.candidates(2460900.5, [0] * 6, 180, 0, 0.3, 20) == ["433 Eros"]
