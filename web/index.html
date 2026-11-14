@@ -121,6 +121,7 @@
           <svg id="overlay" class="overlay" aria-hidden="true"></svg>
           <div id="stage-label" class="stage-label"></div>
           <div id="stage-diff-label" class="stage-label stage-diff-label" hidden></div>
+          <div id="stage-stack-label" class="stage-label stage-diff-label" hidden></div>
           <div id="stage-error" class="stage-error" hidden></div>
           <!-- T49: while "Measure a star" is on, a click here measures that spot -->
           <div id="ph-catcher" class="ph-catcher" hidden title="Click a star to measure it (Esc cancels)"></div>
@@ -133,6 +134,12 @@
           <button id="btn-b" type="button" class="slot slot-b" title="Show frame B">B</button>
           <button id="btn-diff" type="button" class="diff-btn" aria-pressed="false"
                   title="Show A − B: steady stars cancel, movers show as a white/black pair (D)">A − B</button>
+          <label class="stack-pick" title="Add frames together so faint sources stand out: all detectors of the shown frame's epoch, or its detector over all epochs (T59)">Stack
+            <select id="stack-mode">
+              <option value="off">off</option>
+              <option value="epoch">per epoch</option>
+              <option value="detector">per detector</option>
+            </select></label>
           <button id="btn-film" type="button" class="play" aria-pressed="false"
                   title="Play the frames one after another, like a short film (P)">▶ Play all</button>
           <select id="film-mode" aria-label="What Play all shows" title="All frames inside the wavelength filter, or one frame per epoch at the wavelength closest to A">
@@ -145,6 +152,7 @@
           </label>
         </div>
         <p id="diff-note" class="diff-note muted small" hidden></p>
+        <p id="stack-note" class="diff-note muted small" hidden></p>
         <!-- T12: compare at the same wavelength. SPHEREx sees each spot at a different wavelength on
              every visit, and stars change brightness with wavelength. -->
         <div class="compare" role="group" aria-label="Wavelength filter and matching">
