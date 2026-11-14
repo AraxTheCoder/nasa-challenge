@@ -259,9 +259,66 @@ def render_png(img: np.ndarray, path: Path) -> None:
     Image.fromarray(np.dstack([grey, alpha]), "LA").save(path, optimize=True)
 
 
+LABEL_BUDGET_S = 5.0
+
+
+def _labels_with_budget(target: dict, final_json: Path) -> None:
+    """Add catalogue labels (T19), but don't let slow catalogue servers hold up the field.
+
+    SIMBAD/Gaia took ~40 s on 2026-11-14 (CDS partly down). If they need more than LABEL_BUDGET_S,
+    the target is written without labels and a background thread adds them to `final_json` (the
+    folder the target ends up in; the Live API builds in a temp folder and moves it) when done."""
+    import copy
+
+    result: dict = {}
+
+    def work():
+        try:
+            from .labels import add_labels
+            t = copy.deepcopy(target)
+            add_labels(t)
+            result["labels"] = t.get("labels", [])
+            result["prov"] = t["provenance"][len(target["provenance"]):]
+        except Exception as ex:  # noqa: BLE001 - labels are nice to have, frames are the product
+            result["error"] = str(ex)
+
+    th = threading.Thread(target=work, daemon=True, name="labels")
+    th.start()
+    th.join(LABEL_BUDGET_S)
+    if not th.is_alive():
+        target["labels"] = result.get("labels", [])
+        target["provenance"] += result.get("prov", [])
+        if "error" in result:
+            print(f"labels skipped: {result['error']}")
+        return
+    target["labels"] = []
+
+    def finish_later():
+        th.join()
+        if "labels" not in result:
+            print(f"late labels skipped: {result.get('error')}")
+            return
+        for _ in range(120):                      # wait until the build has been moved into place
+            if final_json.exists():
+                break
+            time.sleep(1)
+        try:
+            t = json.loads(final_json.read_text(encoding="utf-8"))
+            t["labels"] = result["labels"]
+            t["provenance"] += result["prov"]
+            tmp = final_json.with_suffix(".labels.part")
+            tmp.write_text(json.dumps(t, indent=1), encoding="utf-8")
+            tmp.replace(final_json)
+        except Exception as ex:  # noqa: BLE001
+            print(f"late labels not written: {ex}")
+
+    threading.Thread(target=finish_later, daemon=True, name="labels-late").start()
+
+
 def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: float,
                  out_root: Path = Path("data/targets"), progress: Progress | None = None,
-                 per_group: int = PER_GROUP, name: str | None = None, refresh: bool = False) -> Path:
+                 per_group: int = PER_GROUP, name: str | None = None, refresh: bool = False,
+                 final_root: Path | None = None) -> Path:
     """Query, download, align, render. Returns the target folder with a valid target.json."""
     def report(step, done=None, total=None, message=""):
         if progress:
@@ -355,12 +412,7 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
         "frames": frames, "known_objects": [], "detections": [],
     }
     report("render", len(frames), len(frames), "adding catalogue labels")
-    try:
-        from .labels import add_labels
-        add_labels(target)
-    except Exception as ex:  # noqa: BLE001 - labels are nice to have, frames are the product
-        target["labels"] = []
-        print(f"labels skipped: {ex}")
+    _labels_with_budget(target, Path(final_root or out_root) / target_id / "target.json")
     from .pairs import add_pairs  # T17: wavelength-matched pairs for the viewer's pairs blink
     add_pairs(target)
     (out / "target.json").write_text(json.dumps(target, indent=1), encoding="utf-8")
