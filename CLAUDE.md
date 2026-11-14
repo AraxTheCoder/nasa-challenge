@@ -97,6 +97,9 @@ section.
 - **Nothing gets pushed before Jonathan has tested and verified it.** Commit locally on the task
   branch; merge to main and push only after his explicit OK. The only exception is Board
   bookkeeping that the team process requires immediately (`board: claim T<id>`).
-- **After every task, start everything needed to test it** (servers, viewer, in the background)
-  and tell him exactly what to test: URLs to open, commands to run, steps to click, and the
-  expected result for each. Then wait for his verdict.
+- **Claude runs all automated checks itself** before handing over: unit tests, API calls (curl),
+  schema validation, linters. Report the results; don't ask Jonathan to do these.
+- **Jonathan does the visual and integration tests.** After every task, start everything needed
+  (servers, viewer, in the background) and tell him exactly what to look at end to end: URLs to
+  open, steps to click, and the expected result for each (what he should see in the UI, how the
+  parts work together). Then wait for his verdict.
