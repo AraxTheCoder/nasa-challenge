@@ -1,7 +1,7 @@
 # T78: C: Type an exact wavelength: a µm input next to the sky map's band slider (snaps to the nearest of the 102 channels, shows its exact centre) and "frames at λ" in the blink viewer (A/B = the frames nearest that wavelength in two epochs)
 
-- **Owner:** –  ·  **Status:** open
-- **Branch:** –
+- **Owner:** Mati  ·  **Status:** doing
+- **Branch:** `mati/T78-wavelength-input`
 - **Depends on / feeds:** T12 (wavelength filter, pairs), T42 (102-band live map), T55 (`app/` redesign)
 
 ## Goal
