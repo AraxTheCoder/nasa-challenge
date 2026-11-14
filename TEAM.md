@@ -113,6 +113,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T74 | A/B: Discovery survey pass 1 next to the bucket: per manifest exposure read IMAGE + FLAGS, extract sources (T06), keep detection lists per tile, drop pixels; runs on the us-east4 VM | Joerg | open | | [tasks/T74](tasks/T74-survey-pass1.md). Suggested owner: Jonathan (T06 extractor, VM). |
 | T75 | B: Discovery survey pass 2 (HPC): flag tiles from the pass-1 lists (moved / appeared / changed at matched λ / odd spectrum), then all exposures there at full resolution, forced photometry, spectra, candidates with class + score + reason | Joerg | open | | [tasks/T75](tasks/T75-survey-pass2.md). Suggested owner: whoever runs the HPC (Joerg or Jonathan). |
 | T76 | C: Discovery index in the viewer: candidates per tile from the survey served by the Live API; "Show me something interesting" + candidate list, each opening its field with blink, spectrum and reason | | open | | [tasks/T76](tasks/T76-discovery-index.md). Suggested owner: Mati. Can start on a synthetic sample index. |
+| T77 | B: Sky survey on the HPC (later): sources in every SPHEREx image, static vs moving per HEALPix tile, movers linked across bursts, score per tile (movers, proper motion, variability), sorted list + map layer. Pilot 1% of the sky first | | open | | [tasks/T77](tasks/T77-sky-survey-hpc.md). Overlaps T06 (Jonathan): same detection code per field and per image; agree before starting |
 
 ## Decisions
 
