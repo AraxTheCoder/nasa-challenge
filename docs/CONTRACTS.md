@@ -99,7 +99,7 @@ Formal schema: `docs/target.schema.json`. Example: `fixtures/targets/demo-synthe
 
 Stars change brightness with wavelength, so only frames at nearly the same wavelength can be
 compared fairly. A pair is two frames from **different epochs**, same detector, with
-`|wavelength a - wavelength b| <= 0.25 * bandwidth`. `a` is the earlier frame. Each frame is in at
+`|wavelength a - wavelength b| <= 0.5 * bandwidth` (smaller of the two). `a` is the earlier frame. Each frame is in at
 most one pair per other epoch (the closest match). Detection (B) and the "matched pairs" blink
 view (C) should prefer pairs over arbitrary frame combinations.
 

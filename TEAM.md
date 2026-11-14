@@ -72,6 +72,9 @@ Dated, one line each, with why.
   pixels. Why: no two SPHEREx frames share a wavelength (LVF stepping), so star brightness changes
   between arbitrary frames; only matched pairs compare like with like. Alpha answers Mati's
   no-data question. Additive only, v0.1 readers keep working; schema accepts "0.1" and "0.2".
+- 2026-11-14 **PROPOSED**: v0.2 pair tolerance is 0.5 x bandwidth, not 0.25. Why: on COSMOS D2,
+  0.25 gives 7 pairs, 0.5 gives 21, 0.75 adds none; the remaining offsets are ~1/3 channel and the
+  pair differences still cancel stars cleanly (checked by eye on 5 pairs).
 
 ## Ideas
 
