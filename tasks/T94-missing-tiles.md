@@ -25,3 +25,9 @@ again later; false-colour field epochs load; no holes at the poles when zooming 
 ## Handoff
 
 ## Notes from others
+- 2026-11-14 [Mati]: one more way tiles stay "loading": `load()` in `web/sky.js` has no time limit on its
+  `fetch`. When the Live API was OOM-killed tonight (twice, 23:1x and 23:27) the downloads in flight never got an
+  answer in Mati's browser (Windows browser -> WSL relay), each kept one of the 6 slots (`st.loads`), and with
+  all 6 taken no tile loaded again until a reload (the log showed no tile requests at all from that tab).
+  Idea: a timeout (e.g. `AbortSignal.any([job.ctrl.signal, AbortSignal.timeout(60000)])`, ~60 s because live
+  renders can be slow) that is retried like any other failure, not treated as "left the screen".
