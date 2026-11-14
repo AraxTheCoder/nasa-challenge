@@ -52,7 +52,20 @@ try:
         check(page.is_visible("#empty"), "empty state shown without coordinates")
         check(page.locator("#preset option").count() == 6, "5 test fields + placeholder in quick picks")
         check("fixture mode" in page.text_content("#source-info"), "footer shows fixture mode")
+        # Default field pre-filled (T25), but nothing is requested until the user presses Show.
+        check(page.input_value("input[name=ra]") == "269.4463" and page.input_value("input[name=dec]") == "4.7682"
+              and page.input_value("input[name=size]") == "15", "form pre-filled with the default field")
+        check(page.eval_on_selector("#preset", "s => s.options[s.selectedIndex].text") == "Barnard's Star",
+              "test-field dropdown shows the default")
+        check(page.is_visible("#form-hint") and "Change RA, Dec" in page.text_content("#form-hint"), "hint that the form can be changed")
+        check(page.is_visible("#empty-default") and "Barnard's Star" in page.text_content("#empty-default"),
+              "empty state names the pre-filled field")
+        check(page.is_hidden("#viewer-body") and page.is_hidden("#job") and "ra=" not in page.url, "default is not loaded automatically")
         page.screenshot(path=str(out / "t20-empty.png"), full_page=True)
+        page.fill("input[name=ra]", "10")
+        check(page.input_value("#preset") == "" and page.is_hidden("#empty-default"), "typing own coordinates clears the default marker")
+        page.fill("input[name=ra]", "269.4463")
+        check(page.input_value("#preset") != "", "typing the default back re-selects it")
 
         # 2. pick a preset -> builds (202, progress) -> ready
         page.select_option("#preset", label="WISE 0855-0714")
@@ -95,6 +108,7 @@ try:
         page.go_back()
         page.wait_for_selector("#empty:not([hidden])")
         check(page.is_hidden("#viewer-body"), "back to bare page shows empty state")
+        check(page.input_value("input[name=ra]") == "269.4463", "back to bare page refills the default field")
 
         # 5. stop waiting
         page.goto(WEB + "?ra=10&dec=20&size=20&" + Q)

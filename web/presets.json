@@ -11,6 +11,7 @@
   "fields": [
     {
       "name": "Barnard's Star",
+      "default": true,
       "simbad_id": "NAME Barnard's star",
       "kind": "Red dwarf with the largest proper motion of any star",
       "pm_arcsec_per_yr": 10.39,
