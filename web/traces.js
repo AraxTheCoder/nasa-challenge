@@ -10,7 +10,7 @@
 import { $, el } from "./util.js";
 import { getSky } from "./explore.js";
 
-const st = { target: null, epoch: null, on: true, layers: null, objs: [] };
+const st = { target: null, epoch: null, on: false, layers: null, objs: [] };   // T55 /app/: traces off by default
 const EPOCH_COLOURS = ["#6cb4ff", "#9be38a", "#ffd27a", "#ff9a6c", "#e88bff", "#7fe3e0"];
 const ARROW_ARCMIN = 1.5;   // drawn length of the exaggerated arrow
 const SLOW_ARCSEC = 30;     // traces shorter than this get the arrow
