@@ -82,6 +82,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T43 | C: Difference view A − B in the viewer (challenge: "subtract images taken at different times"): stars cancel for matched pairs, movers show as white/black pairs | Mati | done | `mati/T43-difference` | [tasks/T43](tasks/T43-difference-view.md). Button "A − B" / key `D`; best with a matched pair |
 | T45 | C: Play the series like a video (core Objective): Play/Pause through all frames in the filter or one per epoch at matched wavelength, speed + loop | Mati | done | `mati/T45-play` | [tasks/T45](tasks/T45-play-series.md). "▶ Play all" / key `P`; modes: all frames in the filter, 1 per epoch at A's λ |
 | T46 | All: tests on every push (GitHub Actions): pytest + browser test (fixture mode) + fixture schema check | Mati | done | `mati/T46-ci` | [tasks/T46](tasks/T46-ci.md). `.github/workflows/tests.yml`; first run: check the Actions tab |
+| T47 | All: Host Live API + viewer on Google Cloud `us-east4` next to the AWS SPHEREx bucket: VM, Docker/systemd, mirror + warm-up, HTTPS via Caddy on `<ip>.sslip.io` | Jonathan | doing | `jonathan/T47-gcp` | From Jonathan's idea. Measure S3 throughput on the VM first |
 
 ## Decisions
 
@@ -248,7 +249,7 @@ Format: `[name] idea — status: new`. Agents don't act on an idea until a human
   (GCP e2-medium / Azure B2s), free credits available. Why: from Europe S3 gave 0.04-0.1 MB/s per
   connection in the afternoon (another us-east-1 bucket too), so live deep-zoom tiles take 20-60 s;
   next to the bucket they should take ~1 s. Needs: Dockerfile, warm-up script, HTTPS, guide; would
-  also cover T14. — status: new
+  also cover T14. — status: on the Board
 - [Mati] Split the two big web files before they tangle (Claude's size check, 2026-11-14): `web/viewer.js`
   582 lines, `web/app.js` 605. Move filter / pairs / matching / playback out of `viewer.js` into `compare.js`,
   and the sky-map wiring (T30/T36/T42) out of `app.js` into the explore module. Pure refactor, no framework
