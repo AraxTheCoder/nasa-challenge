@@ -27,6 +27,8 @@ Rework the UI without blocking anyone: the redesign lives in `app/` (URL `/app/`
         "Blink"; defaults Debug on, Traces off, Labels off
   - [x] Step 6 (Jonathan, 2026-11-14): "Go" (was Show) only jumps + pins, no build; position + Blink on one
         line, Band + Labels + Tiles + Debug on the line below in the same panel
+  - [x] Step 7 (Jonathan, 2026-11-14): 📍 + RA/Dec pill follow the mouse; Go puts the position under the
+        mouse (no fixed marker); Field input removed (Blink = 1/3 of the view)
 - [ ] Port relevant `web/` changes made after the copy
 - [ ] When done: decide (TEAM.md Decisions) whether `app/` replaces `web/`
 

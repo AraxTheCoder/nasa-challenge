@@ -606,3 +606,5 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Jonathan (Claude): T55 step 6 (`app/` only): "Go" jumps to RA/Dec and pins it (no build, Blink builds);
   position + Blink on one line, band + switches below it. `web/` unchanged.
 - 2026-11-14 Mati (Claude): T78 done: type a wavelength instead of dragging/guessing. Map bar: a µm box next to the Band slider jumps to the closest of the 102 channels. Blink viewer: "Frames at λ" sets A/B to the closest frames in the earliest and latest epoch (same detector) and says how far off each is. Feature wavelengths (Br-γ, H₂O ice, …) as suggestions; `?lam=2.17` in links. Jonathan: port the map box to `app/` (tasks/T78). FYI Mati: web/app.js is at 703 lines; T68 (split the big web files) is waiting on T55.
+- 2026-11-14 Jonathan (Claude): T55 step 7 (`app/` only): 📍 + RA/Dec pill follow the mouse; Go puts the typed
+  position under the mouse; Field input removed (Blink builds 1/3 of the view). `web/` unchanged.

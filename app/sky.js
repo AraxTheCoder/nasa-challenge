@@ -765,6 +765,11 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       if (fov) st.fov = Math.max(MIN_FOV, Math.min(MAX_FOV, fov));
       changed();
     },
+    /** T55: like goTo, but the sky point (ra, dec) ends up under screen point (x, y) instead of the centre. */
+    placeAt(ra, dec, x, y, fov) {
+      api.goTo(ra, dec, fov);
+      dragTo([st.w / 2, st.h / 2], [x, y]);
+    },
     /** Level the picture again: north up, east left, same centre and zoom. */
     northUp() { setFrame(st.ra, st.dec); changed(); },
     view: () => {

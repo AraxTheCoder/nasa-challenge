@@ -33,3 +33,7 @@ viewer and the default URL.
   as server/coords.py) and marks it with a pin; no build. Zoom = 3 × Field, so Blink there builds a field
   that size. Blink builds and adds `&blink=1` to the URL (a reload builds again). Panels: under the form one
   panel with position + Blink on one line and Band, Labels, Tiles, Debug on the line below; bottom: epochs.
+- Step 7: a 📍 follows the mouse with the sky position in a pill below (`cursorpin.js`; hidden over panels).
+  No fixed marker. "Go" moves the map so the typed RA/Dec lies under the mouse (`sky.placeAt`), keeps the
+  zoom (zooms to 45′ only from wider than 3°); the Field input is gone, Blink builds 1/3 of the view
+  (shown next to the button). URL: Go = ?ra=&dec=, Blink adds &size=&blink=1.

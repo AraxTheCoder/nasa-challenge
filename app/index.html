@@ -21,15 +21,13 @@
   <!-- go to a position, then progress and messages -->
   <div class="hud" data-hud="field">
     <header class="hud-panel topbar">
-      <!-- "Go" only moves the map there and drops a pin (no build); "Blink" builds the field. -->
+      <!-- "Go" only moves the map: the position ends up under the mouse (no build); "Blink" builds. -->
       <form id="field-form" class="field-form" autocomplete="off" aria-label="Go to a position">
         <label title="Right ascension: decimal degrees (133.795) or hours (08h55m10.8s, 08:55:10.8)">RA
           <input name="ra" type="text" required placeholder="08h55m10.8s or 133.795" spellcheck="false"></label>
         <label title="Declination: decimal degrees (-7.245) or -7d14m42.5s, -07:14:42.5">Dec
           <input name="dec" type="text" required placeholder="-7d14m42.5s or -7.245" spellcheck="false"></label>
-        <label title="Side of the square field, 5–60 arcmin: Go zooms so that Blink then builds a field this size.">Field
-          <input name="size" type="number" min="5" max="60" step="1" value="15" required> ′</label>
-        <button type="submit" class="primary" title="Move the map to this position and mark it with a pin">Go</button>
+        <button type="submit" class="primary" title="Move the map so this position lies under the mouse (📍)">Go</button>
         <select id="preset" aria-label="Test fields" title="The five test fields named in the challenge" hidden>
           <option value="">Test fields…</option>
         </select>
@@ -50,7 +48,8 @@
     <div id="messages" class="messages" role="status" aria-live="polite"></div>
   </div>
 
-  <!-- line 1: where the map looks + build the blink there; line 2: band of the 102 + switches -->
+  <!-- line 1: how much the map shows + build the blink there; line 2: band of the 102 + switches.
+       The sky position under the mouse is in the 📍 pill (cursorpin.js). -->
   <div class="hud" data-hud="view">
     <div class="hud-panel hud-stack">
       <div class="hud-row hud-nowrap">

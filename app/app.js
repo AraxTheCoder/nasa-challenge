@@ -14,6 +14,7 @@ import "./traces.js";      // T35: paths + per-epoch positions of the field's ob
 import "./skylabels.js";   // T72: catalogue names anywhere on the map
 import { initHud } from "./hud.js";   // T55: drag the floating panels anywhere
 import { parseDec, parseRa } from "./coords.js";
+import { initCursorPin, pointer as cursorPointer, stickHere } from "./cursorpin.js";   // T55: 📍 + RA/Dec at the mouse
 
 const SIZE_MIN = 5;
 const SIZE_MAX = 60;
@@ -123,14 +124,13 @@ async function openTarget(targetUrl, expectedId, token, signal) {
 
 function readForm() {
   const f = $("#field-form");
-  return { ra: f.ra.value.trim(), dec: f.dec.value.trim(), size: clampSize(Number(f.size.value) || SIZE_DEFAULT) };
+  return { ra: f.ra.value.trim(), dec: f.dec.value.trim() };
 }
 
 function fillForm(req) {
   const f = $("#field-form");
   f.ra.value = req.ra;
   f.dec.value = req.dec;
-  f.size.value = String(req.size);
   syncPresetSelect();
 }
 
@@ -144,20 +144,24 @@ function syncPresetSelect() {
 const presetRequest = (f) => ({ ra: String(f.ra_deg), dec: String(f.dec_deg), size: clampSize(f.size_arcmin ?? SIZE_DEFAULT) });
 const defaultPreset = () => app.presets.find((p) => p.default) ?? app.presets[0] ?? null;
 
-/** Pre-fill the form with the default test field (no request; the user presses Show). */
+/** Pre-fill the form with the default test field (no request; the user presses Go). */
 function fillDefaults() {
   const f = defaultPreset();
   if (f) fillForm(presetRequest(f));
 }
 
-/** ?ra=&dec=&size= (+ &blink=1 when the field was built, so a reload or shared link builds it too). */
+/** ?ra=&dec= after Go; after Blink also &size=&blink=1, so a reload or shared link builds it again. */
 function setPageUrl(req, push, blink = false) {
   const url = new URL(location.href);
   url.searchParams.set("ra", req.ra);
   url.searchParams.set("dec", req.dec);
-  url.searchParams.set("size", String(req.size));
-  if (blink) url.searchParams.set("blink", "1");
-  else url.searchParams.delete("blink");
+  if (blink) {
+    url.searchParams.set("size", String(req.size));
+    url.searchParams.set("blink", "1");
+  } else {
+    url.searchParams.delete("size");
+    url.searchParams.delete("blink");
+  }
   if (url.href === location.href) return;
   if (push) history.pushState(null, "", url);
   else history.replaceState(null, "", url);
@@ -171,14 +175,22 @@ function loadFromUrl() {
   if (!ra || !dec) return false;
   const req = { ra, dec, size: clampSize(Number(p.get("size")) || SIZE_DEFAULT) };
   fillForm(req);
-  if (goTo(req) && p.get("blink") === "1") loadField(req);
+  const blink = p.get("blink") === "1";
+  // a link to a built field shows it like Blink did: view = 3 × field, field centred
+  if (goTo(req, blink ? { fovDeg: (req.size * 3) / 60, centre: true } : { centre: true }) && blink) loadField(req);
   return true;
 }
 
-// ---------- T55 "Go": jump to a position and pin it (no build) ----------
+// ---------- T55 "Go": move the map so the position lies under the mouse (no build) ----------
 
-/** Move the map to req (as typed) and drop a pin; zoomed so that Blink there builds a req.size field. */
-function goTo(req) {
+const GO_MAX_FOV_DEG = 3;      // Go keeps the zoom, unless the view is wider than this ...
+const GO_FOV_DEG = 0.75;       // ... then it zooms to 45′ (Blink there = a 15′ field)
+
+/**
+ * Go to req (as typed). The position ends up under the mouse, so the 📍 pill shows it; with no
+ * mouse yet (page load), or opts.centre, in the middle. Keeps the zoom unless it is very wide.
+ */
+function goTo(req, opts = {}) {
   let ra, dec;
   try {
     ra = parseRa(req.ra);
@@ -189,7 +201,7 @@ function goTo(req) {
     return false;
   }
   clearMessages();
-  app.goal = { ra, dec, fovDeg: (req.size * 3) / 60 };   // Blink uses a third of the view
+  app.goal = { ra, dec, fovDeg: opts.fovDeg ?? null, centre: Boolean(opts.centre) };
   app.goalPending = !explore.getSky();                   // then startExplore shows it once the map is up
   if (!app.goalPending) showGoal();
   return true;
@@ -198,8 +210,16 @@ function goTo(req) {
 function showGoal() {
   const g = app.goal;
   if (!g) return;
-  explore.goTo(g.ra, g.dec, g.fovDeg);
-  explore.setPin(g.ra, g.dec);
+  const v = explore.view();
+  const fov = g.fovDeg ?? (v && v.fovArcmin / 60 > GO_MAX_FOV_DEG ? GO_FOV_DEG : undefined);
+  const at = g.centre ? null : cursorPointer();
+  if (at) {
+    const r = $("#sky").getBoundingClientRect();
+    explore.placeAt(g.ra, g.dec, at[0] - r.left, at[1] - r.top, fov);
+    stickHere();                                         // show the 📍 there, even over the Go button
+  } else {
+    explore.goTo(g.ra, g.dec, fov);
+  }
 }
 
 async function loadField(req) {
@@ -365,12 +385,12 @@ async function showEpochLayers(target) {
   pick(0);
 }
 
-function updateExplorePos(_view, cursor) {
+/** How much the map shows, and the field Blink would build from it (the mouse position is in the 📍 pill). */
+function updateExplorePos() {
   const v = explore.view();
   if (!v) return;
-  const f = (x) => `${x >= 0 ? "+" : ""}${x.toFixed(4)}°`;
-  const where = cursor ? `RA ${cursor[0].toFixed(4)}° Dec ${f(cursor[1])}` : `RA ${v.ra.toFixed(4)}° Dec ${f(v.dec)}`;
-  $("#explore-pos").textContent = `${where} · view ${v.fovArcmin >= 120 ? (v.fovArcmin / 60).toFixed(1) + "°" : Math.round(v.fovArcmin) + "′"}`;
+  const view = v.fovArcmin >= 120 ? `${(v.fovArcmin / 60).toFixed(1)}°` : `${Math.round(v.fovArcmin)}′`;
+  $("#explore-pos").textContent = `view ${view} · Blink builds ${clampSize(v.fovArcmin / 3)}′`;
 }
 
 function setupBand(layer) {
@@ -399,9 +419,11 @@ async function startExplore() {
     loadField(req);
   });
   const f = readForm();
+  let start = {};
+  try { start = { ra: parseRa(f.ra), dec: parseDec(f.dec) }; } catch { /* empty or odd form: default view */ }
   try {
     const sky = await explore.initExplore($("#sky"), {
-      ra: Number(f.ra) || undefined, dec: Number(f.dec) || undefined, fovDeg: 2, api: app.api,
+      ra: start.ra, dec: start.dec, fovDeg: 2, api: app.api,
     });
     sky.on("change", updateExplorePos);
     // Debug overlay (tile outlines, max-zoom / sharp indicator): on by default in /app/; ?debug=0 starts it off
@@ -518,6 +540,7 @@ async function main() {
   queueMicrotask(() => document.dispatchEvent(new CustomEvent("labels:changed", { detail: { on: app.labelsOn } })));
   bindPage();
   initHud();
+  initCursorPin();
   const p = params();
   if (p.get("api")) app.api = p.get("api");
   await loadPresets();
