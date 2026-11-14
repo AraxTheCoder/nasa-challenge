@@ -1,4 +1,8 @@
-# Contracts (v0.7)
+# Contracts (v0.8)
+
+v0.8 makes catalogue labels opt-in: builds write `labels: []`; `GET /api/targets/<id>/labels` adds them
+(see "Labels on request"). See TEAM.md Decisions.
+
 
 v0.7 adds `importance` and `aliases` to each label (see "Label"): which names the viewer shows
 first, and duplicates merged into one label. Additive. See TEAM.md Decisions, 2026-11-14.
@@ -281,6 +285,18 @@ them against `target_url`.
   not committed. That is still live data, only cached.
 - Until `pipeline.build` exists, the server can run with `--fixture` and answers every request
   with `fixtures/targets/demo-synthetic`, which is `"synthetic": true` and must be shown as such.
+
+### Labels on request (v0.8, T37)
+
+Builds no longer ask SIMBAD/Gaia (that took up to 30 s in deep fields). The viewer's Labels switch
+asks for them:
+
+```
+GET /api/targets/<id>/labels   → 202 {"status": "building", "message"} while running,
+                                 200 {"status": "ready", "n"} once target.json has them
+```
+
+When done, `target.json` has `labels` filled (same format as before, T19) and `"labels_requested": true`.
 
 ### Per-epoch HiPS (v0.6, T32)
 

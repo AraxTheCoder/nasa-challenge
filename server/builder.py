@@ -57,6 +57,7 @@ class Builder:
         self.cache_root.mkdir(parents=True, exist_ok=True)
         self.fixture = fixture
         self._jobs: dict[str, Job] = {}
+        self._label_jobs: dict[str, dict] = {}
         self._lock = threading.Lock()
 
     # -- cache ---------------------------------------------------------------------------------
@@ -116,6 +117,47 @@ class Builder:
 
     def _set(self, job: Job, step: str, message: str, done=None, total=None) -> None:
         job.progress = {"step": step, "done": done, "total": total, "message": message}
+
+    # -- T37: catalogue labels on request ------------------------------------------------------
+
+    def labels(self, tid: str) -> dict:
+        """Start (once) or report the label job for a built target: {status, n, message}."""
+        tj = self.target_dir(tid) / "target.json"
+        if not tj.is_file():
+            return {"status": "error", "message": "target not built"}
+        with self._lock:
+            job = self._label_jobs.get(tid)
+            if job is None:
+                t = json.loads(tj.read_text(encoding="utf-8"))
+                if t.get("labels_requested"):
+                    return {"status": "ready", "n": len(t.get("labels", []))}
+                job = {"status": "building", "n": None, "message": "asking SIMBAD and Gaia"}
+                self._label_jobs[tid] = job
+                threading.Thread(target=self._run_labels, args=(tid, job), daemon=True,
+                                 name=f"labels-{tid}").start()
+        return dict(job)
+
+    def _run_labels(self, tid: str, job: dict) -> None:
+        tj = self.target_dir(tid) / "target.json"
+        try:
+            t = json.loads(tj.read_text(encoding="utf-8"))
+            if t.get("synthetic"):
+                t["labels"] = []
+            else:
+                from pipeline.labels import add_labels   # track A (T19), unchanged
+                add_labels(t)
+            t["labels_requested"] = True
+            tmp = tj.with_suffix(".labels.part")
+            tmp.write_text(json.dumps(t, indent=1), encoding="utf-8")
+            tmp.replace(tj)
+            job.update(status="ready", n=len(t["labels"]))
+            job.pop("message", None)
+        except Exception as e:  # noqa: BLE001
+            traceback.print_exc()
+            job.update(status="error", message=f"{type(e).__name__}: {e}")
+        finally:
+            with self._lock:      # done: later requests read labels_requested from target.json
+                self._label_jobs.pop(tid, None)
 
     # -- fixture mode --------------------------------------------------------------------------
 

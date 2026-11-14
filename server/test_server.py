@@ -117,3 +117,19 @@ def test_hips_pixel_lands_on_field_centre(tmp_path):
     row, col = divmod(int(flat[0]), 512)
     lon, lat = HEALPix(nside=2 ** (order + 9), order="nested").healpix_to_lonlat(n * 512 * 512 + int(hips._XY[row, col]))
     assert abs(lon.to_value(u.deg) - ra) < 3 / 3600 and abs(lat.to_value(u.deg) - dec) < 3 / 3600
+
+
+def test_labels_on_request(client):
+    body = _wait_ready(client, client.get("/api/target", params={"ra": "150", "dec": "2.2", "size": "7"}).json())
+    tid = body["id"]
+    r = client.get(f"/api/targets/{tid}/labels")
+    assert r.status_code in (200, 202)
+    for _ in range(100):
+        if r.json()["status"] != "building":
+            break
+        time.sleep(0.05)
+        r = client.get(f"/api/targets/{tid}/labels")
+    assert r.status_code == 200 and r.json() == {"status": "ready", "n": 0}     # synthetic: no labels
+    t = client.get(body["target_url"]).json()
+    assert t["labels_requested"] is True and t["labels"] == []
+    assert client.get("/api/targets/c9999999-p000000-s5/labels").status_code == 404
