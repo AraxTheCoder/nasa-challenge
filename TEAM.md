@@ -42,6 +42,7 @@ Mati). When you finish a task, move its row to Done in the same commit.
 
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
+| T94 | C: Missing tiles on the map: failed tiles never asked again (holes until reload), false-colour field epochs 422, holes near the poles when zooming in | Jonathan | doing | `main` | [tasks/T94](tasks/T94-missing-tiles.md) |
 | T89 | C/A: Band switching that works on the map (passes per detector, instant within a detector; field epochs per band, builds only the shown detector) + a false-colour layer of all bands (passes and field epochs) | Jonathan | done | `main` | [tasks/T89](tasks/T89-bands-false-colour.md). Reopened: faster false colour (LRGB). `app/` + tilegen/server; per-detector builds touch the build filter |
 | T06 | B: Mover detection v0 on the fixture: source extraction per frame, match across frames, keep what moves | Jonathan | doing | `jonathan/T06-mover-detection` | Start on `fixtures/`, switch to real data after T04 |
 | T10 | B: "Planet X mode": pick a slow distant body (dwarf planet), check it's detectable across epochs, propose the demo target list | Jonathan | doing | `jonathan/T10-test-targets` | Reworded 2026-11-14 for the official text: check SPHEREx multi-epoch coverage of the five official test fields (Barnard, Eps Indi B, WISE 0855, RW Aur, R Dra) + maybe one dwarf planet; feeds T05 warm-up |
