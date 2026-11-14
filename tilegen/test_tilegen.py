@@ -11,7 +11,7 @@ from tilegen.client import TileGenerator
 def test_service_renders_once_and_caches(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setattr(render, "render", lambda sl, o, n: calls.append((sl, o, n)) or (None if n == 9 else b"\x89PNGtile"))
-    c = TestClient(create_app(tmp_path))
+    c = TestClient(create_app(tmp_path, prefetch=False))
     r = c.get("/tiles/live/Norder7/Dir0/Npix123_20.png")
     assert r.status_code == 200 and r.content == b"\x89PNGtile"
     assert c.get("/tiles/live/Norder7/Dir0/Npix123_20.png").content == b"\x89PNGtile"
