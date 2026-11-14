@@ -53,6 +53,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T14 | C: Deploy to GitHub Pages with pre-baked targets, target picker, no live API calls | | open | | Needs T11; real targets arrive with T05 |
 | T15 | C: Submission text, data credits and AI-use disclosure | | open | | Needs official text in `docs/CHALLENGE.md` |
 | T16 | C: Demo video and slides | | open | | After feature freeze |
+| T17 | A: Compute wavelength-matched `pairs` across epochs (+ `bandwidth_um`) in `target.json` (contracts v0.2) | Joerg | open | | Part of T03/T04 output. Rule in CONTRACTS "Pair" |
 
 ## Decisions
 
@@ -66,6 +67,11 @@ Dated, one line each, with why.
   folder layout, entry points). Why: gives all tracks a fixed interface from the first hour.
 - 2026-11-14 Tracks for now: Joerg = A (pipeline), Jonathan = B (detection), Mati = C (frontend
   & submission). Why: agreed at kickoff; may change later.
+- 2026-11-14 **PROPOSED** (not agreed yet): CONTRACTS v0.2 adds optional `pairs`
+  (wavelength-matched frames across epochs), per-frame `bandwidth_um`, and alpha 0 for no-data
+  pixels. Why: no two SPHEREx frames share a wavelength (LVF stepping), so star brightness changes
+  between arbitrary frames; only matched pairs compare like with like. Alpha answers Mati's
+  no-data question. Additive only, v0.1 readers keep working; schema accepts "0.1" and "0.2".
 
 ## Ideas
 
@@ -85,6 +91,8 @@ Things waiting on a human.
 - 2026-11-14 [Mati → A/Joerg] For T04: can no-data pixels (grid corners outside a rotated frame)
   be written as fully transparent (alpha 0) in the PNG/WebP? The viewer shows transparent pixels
   as hatched "no data"; black would look like empty sky.
+- 2026-11-14 [Joerg → Mati] Yes: T04 writes no-data pixels with alpha 0 (now in CONTRACTS v0.2,
+  PROPOSED). Masked bad pixels inside the frame get alpha 0 too.
 
 ## Log
 

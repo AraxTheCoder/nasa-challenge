@@ -1,4 +1,7 @@
-# Contracts (v0.1, PROPOSED)
+# Contracts (v0.2, PROPOSED)
+
+v0.2 adds `pairs`, `bandwidth_um` and transparent no-data pixels. All three are optional and
+additive: a v0.1 reader keeps working. See TEAM.md Decisions, 2026-11-14.
 
 Interfaces between the three tracks. This file only changes together with a dated line under
 TEAM.md "Decisions" that says why.
@@ -55,7 +58,7 @@ Formal schema: `docs/target.schema.json`. Example: `fixtures/targets/demo-synthe
 
 | Field | Written by | Meaning |
 |---|---|---|
-| `schema_version` | A | `"0.1"` |
+| `schema_version` | A | `"0.1"` or `"0.2"` |
 | `id` | A | folder name, `[a-z0-9-]+` |
 | `name` | A | display name |
 | `synthetic` | A | `true` if the frames are simulated. Must be shown in the UI |
@@ -66,12 +69,13 @@ Formal schema: `docs/target.schema.json`. Example: `fixtures/targets/demo-synthe
 | `frames` | A | list of frames, sorted by time |
 | `known_objects` | B | catalogued small bodies in the field. A writes `[]` |
 | `detections` | B | moving sources found by us. A writes `[]` |
+| `pairs` | A | optional (v0.2): frames from different epochs at matching wavelength, see below |
 
 ### Frame
 
 ```json
 { "id": "f000", "time_utc": "2026-05-01T00:00:00Z", "mjd": 61161.0, "epoch": 1,
-  "detector": 3, "wavelength_um": 1.52, "image": "frames/f000.png",
+  "detector": 3, "wavelength_um": 1.52, "bandwidth_um": 0.038, "image": "frames/f000.png",
   "obs_id": "…", "source_url": "…" }
 ```
 
@@ -79,8 +83,25 @@ Formal schema: `docs/target.schema.json`. Example: `fixtures/targets/demo-synthe
   the main view.
 - `wavelength_um`: wavelength **at the target centre**. SPHEREx uses linear variable filters, so
   wavelength changes across a single exposure; one number per cutout is an approximation.
+  Consecutive exposures see the same spot about 0.03 µm apart, so no two frames share a wavelength.
+- `bandwidth_um`: optional (v0.2): width of the spectral channel at the target centre (from the
+  `WCS-WAVE` table). Used to decide which frames count as "the same wavelength".
 - `image`: path relative to the target folder. 8-bit PNG or WebP, already stretched for display.
+  From v0.2, pixels with no data (outside the rotated original frame, or masked) are fully
+  transparent (alpha 0), so the viewer can show them as "no data" instead of dark sky.
 - `obs_id`, `source_url`: where the frame came from. `null` for synthetic frames.
+
+### Pair (v0.2, optional)
+
+```json
+{ "a": "f005", "b": "f035", "detector": 2, "dwave_um": 0.0022, "dt_days": 174.1 }
+```
+
+Stars change brightness with wavelength, so only frames at nearly the same wavelength can be
+compared fairly. A pair is two frames from **different epochs**, same detector, with
+`|wavelength a - wavelength b| <= 0.25 * bandwidth`. `a` is the earlier frame. Each frame is in at
+most one pair per other epoch (the closest match). Detection (B) and the "matched pairs" blink
+view (C) should prefer pairs over arbitrary frame combinations.
 
 ### Image and coordinate conventions
 
