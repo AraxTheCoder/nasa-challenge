@@ -319,6 +319,9 @@ body.pin-picking .sky-stage canvas { cursor: crosshair !important; }   /* pick m
   font-size: 12px; line-height: 1.35; font-variant-numeric: tabular-nums;
   background: rgb(20 24 33 / 0.88); border: 1px solid rgb(255 255 255 / 0.15); color: var(--text);
   box-shadow: 0 3px 10px rgb(0 0 0 / 0.5); }
+/* standing still (after Go / a pick): needle tip on the point, RA/Dec centred under it */
+.cursor-pin-standing .cursor-pin-icon { transform: translate(-50%, -94%); }
+.cursor-pin-standing .cursor-pin-pill { left: 0; top: 6px; transform: translateX(-50%); align-items: center; }
 .hud .topbar { border-bottom: none; padding: 10px 12px; gap: 8px 14px; }
 .hud .field-form { flex: 0 1 auto; }
 .hud .job { margin: 0; max-width: none; background: rgb(15 26 43 / 0.9); border-color: var(--accent); }
