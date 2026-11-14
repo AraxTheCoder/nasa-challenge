@@ -283,7 +283,17 @@ body.fullmap { overflow: hidden; height: 100vh; }
   padding: 8px 12px; box-shadow: 0 6px 20px rgb(0 0 0 / 0.45);
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
 }
-.hud-panel:empty, .hud-row:not(:has(> :not([hidden]))) { display: none; }   /* nothing to show yet */
+.hud-panel:empty, .hud-row:not(:has(> :not([hidden]):not(.hud-grip))) { display: none; }   /* nothing to show yet */
+/* T55 drag handles (hud.js): grip, plus any empty part of a panel, moves the whole corner group */
+.hud-panel { cursor: grab; touch-action: none; }
+.hud-panel input, .hud-panel select, .hud-panel button, .hud-panel label, .hud-panel output { cursor: auto; }
+.hud-panel button, .hud-panel select, .hud-panel label { cursor: pointer; }
+.hud-grip { cursor: grab !important; background: none; border: none; padding: 0 2px; margin-right: -4px;
+  color: var(--muted); font-size: 16px; line-height: 1; letter-spacing: -1px; user-select: none; touch-action: none; }
+.hud-grip:hover { color: var(--text); }
+.hud-dragging, .hud-dragging .hud-panel, .hud-dragging .hud-grip { cursor: grabbing !important; }
+.hud-dragging .hud-panel { box-shadow: 0 10px 30px rgb(0 0 0 / 0.6); }
+.hud-moved { max-width: none; }
 .hud-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .hud-row label { display: inline-flex; align-items: center; gap: 6px; }
 #explore-pos { font-variant-numeric: tabular-nums; }

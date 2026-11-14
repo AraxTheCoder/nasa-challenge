@@ -580,3 +580,5 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Mati (Claude): Mati assigns the discovery survey to Joerg: T73, T74 and T75 have Owner Joerg (status open until he claims them with `doing` + a branch). Joerg: design, data volumes and the open questions (HPC link to AWS, lead candidate class) are in tasks/T73; T74 needs Jonathan's T06 extractor per image and the us-east4 VM (T47). T76 (the viewer side: discovery index + "show me something interesting") stays open for Mati.
 - 2026-11-14 Jonathan (Claude): T55 step 2 (`app/` only): the map fills the whole window, controls float over it
   in panels around the edges. `web/` unchanged.
+- 2026-11-14 Jonathan (Claude): T55 step 3 (`app/` only): the panels over the map can be dragged anywhere
+  (grip ⠿ or empty panel area), remembered per browser, double-click ⠿ resets. `web/` unchanged.

@@ -16,6 +16,9 @@ viewer and the default URL.
   glass panels at the edges (`.hud-tl` form + progress + messages, `.hud-tr` labels/tiles/debug,
   `.hud-bl` band + epochs + traces, `.hud-br` position + "Blink this spot", `.hud-bc` hint).
   Drags between the panels reach the map.
+- Step 3 (`hud.js`): every panel group can be dragged anywhere by its grip ⠿ or any empty part of a
+  panel; positions are remembered per browser (localStorage `spherex.app.hud`), double-click ⠿
+  puts a panel back in its corner.
 - Changes made in `web/` after the copy are **not** picked up automatically; the T55 owner ports
   them into `app/` when needed. When the redesign is done, `app/` replaces `web/` (decided then,
   with a line under TEAM.md "Decisions").

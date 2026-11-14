@@ -14,7 +14,7 @@
   <div id="sky" class="sky-stage" aria-label="Sky map: drag to move, scroll or pinch to zoom, double-click to zoom in"></div>
 
   <!-- top left: title + field request, then progress and messages -->
-  <div class="hud hud-tl">
+  <div class="hud hud-tl" data-hud="field">
     <header class="hud-panel topbar">
       <h1>SPHEREx Blink</h1>
       <!-- Ask the Live API for any RA/Dec; the field's epochs then show in the map. -->
@@ -59,7 +59,7 @@
   </div>
 
   <!-- top right: map layers and switches -->
-  <div class="hud hud-tr">
+  <div class="hud hud-tr" data-hud="switches">
     <div class="hud-panel hud-row">
       <span class="muted small" title="SPHEREx all-sky cube (IRSA DR1) up to order 5, deeper: live tiles from the AWS level-2 images">SPHEREx · 102 bands · live deep zoom</span>
       <label title="Names of catalogued stars and objects in the field (SIMBAD, Gaia DR3). Asked only when switched on.">
@@ -74,7 +74,7 @@
   </div>
 
   <!-- bottom left: band of the 102, the field's epochs (+ traces switch, added by traces.js) -->
-  <div class="hud hud-bl">
+  <div class="hud hud-bl" data-hud="epochs">
     <div class="hud-panel hud-row">
       <label id="explore-band-box" hidden title="SPHEREx has 102 spectral channels; pick one">Band
         <input id="explore-band" type="range" min="0" max="101" step="1" value="0">
@@ -84,7 +84,7 @@
   </div>
 
   <!-- bottom right: where the map looks, and blink that spot -->
-  <div class="hud hud-br">
+  <div class="hud hud-br" data-hud="spot">
     <div class="hud-panel hud-row">
       <span id="explore-pos" class="muted small"></span>
       <button id="explore-blink" type="button" class="primary"
@@ -94,6 +94,7 @@
 
   <!-- bottom centre: how to move the map -->
   <p class="hud hud-bc muted small">Drag to move · scroll or pinch to zoom · double-click to zoom in · arrow keys and +/− ·
+    drag a panel by ⠿ to rearrange it (double-click ⠿ puts it back) ·
     the field's epochs appear in the red box after <strong>Show</strong> or <strong>Blink this spot</strong></p>
 </body>
 </html>

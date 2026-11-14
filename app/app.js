@@ -11,6 +11,7 @@ import { $, el, fmtElapsed } from "./util.js";
 import * as explore from "./explore.js";
 import "./traces.js";      // T35: paths + per-epoch positions of the field's objects on the map
 import "./skylabels.js";   // T72: catalogue names anywhere on the map
+import { initHud } from "./hud.js";   // T55: drag the floating panels anywhere
 
 const SIZE_MIN = 5;
 const SIZE_MAX = 60;
@@ -550,6 +551,7 @@ async function main() {
   document.addEventListener("labels:set", (e) => setLabels(Boolean(e.detail?.on)));
   queueMicrotask(() => document.dispatchEvent(new CustomEvent("labels:changed", { detail: { on: app.labelsOn } })));
   bindPage();
+  initHud();
   const p = params();
   if (p.get("api")) app.api = p.get("api");
   await loadPresets();

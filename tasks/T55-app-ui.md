@@ -19,6 +19,8 @@ Rework the UI without blocking anyone: the redesign lives in `app/` (URL `/app/`
   - [x] Step 2 (Jonathan, 2026-11-14): map fills the whole window; controls float over it in panels
         around the edges (top left form/progress/messages, top right switches, bottom left band +
         epochs, bottom right position + Blink this spot, bottom centre hint)
+  - [x] Step 3 (Jonathan, 2026-11-14): panels draggable (grip ⠿ or empty panel area), layout
+        remembered per browser, double-click ⠿ resets a panel (`app/hud.js`)
 - [ ] Port relevant `web/` changes made after the copy
 - [ ] When done: decide (TEAM.md Decisions) whether `app/` replaces `web/`
 
