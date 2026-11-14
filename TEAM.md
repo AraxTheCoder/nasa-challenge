@@ -234,6 +234,7 @@ Dated, one line each, with why.
   Why: the 60′ had no stated reason (set in T18 when cutouts came from IRSA's slow cutout service);
   210′ is the real bound, one SPHEREx detector image (2040 px × 6.15″ = 3.49°). Larger fields build
   slower. The team VM's /cutout accepts up to 6° cutouts. `web/` keeps its own 60′ form limit.
+- 2026-11-14 [Mati] CONTRACTS v0.13 (T76): discovery index = `data/survey/discoveries.json` (schema `docs/discoveries.schema.json`: candidates with class, score 0–1, plain-words reason, known, lam_um, tile) served by `GET /api/discoveries` (filters class / position / score, `random=1`). Until the survey (T75) writes one, the API serves the hand-made sample `fixtures/discoveries-sample.json` (`synthetic: true`, labelled in the viewer). Why: the viewer side (T76) can be built and tested now, and pass 2 has a fixed target format.
 
 ## Ideas
 

@@ -1,4 +1,9 @@
-# Contracts (v0.12)
+# Contracts (v0.13)
+
+v0.13 (T76): the discovery index: `GET /api/discoveries` and its file format
+(`docs/discoveries.schema.json`), written by the survey (T75) to `data/survey/discoveries.json`; until then the
+API serves a hand-made sample (`fixtures/discoveries-sample.json`, `"synthetic": true`). See "Discoveries".
+New endpoint and file only; target.json unchanged.
 
 v0.12 (T52, T51): labels get more sources: `vsx` (variable stars), `catwise2020` (red moving WISE sources,
 brown dwarf candidates), `horizons` (planets and moons, seen from SPHEREx); optional `note` (one line about
@@ -429,6 +434,40 @@ POST /api/settings {"tiles": "remote"} → same body; which generator renders th
 
 `remote` is the team's tile generator on a VM next to the bucket (`deploy/`, T47): seconds instead of
 minutes from Europe. Only the tiles go there; builds, caches and the API stay local.
+
+### Discoveries (v0.13, T76)
+
+The survey's candidates (T73–T75), for the viewer's "Candidates" list and "Show me something interesting":
+
+```
+GET /api/discoveries                              every candidate, best score first
+    ?class=brown_dwarf,variable                   only these classes
+    &ra=<deg>&dec=<deg>&radius=<deg>              only within radius of a position (all three or none)
+    &min_score=0.5 &limit=50                      score floor, at most this many
+    &random=1                                     one candidate at random (after the filters)
+```
+
+Answer (200): the index file's head plus the selection. Bad parameters: 400 `{"status": "error", "message"}`.
+
+```json
+{ "status": "ready", "synthetic": false, "survey": "pilot pass 2, 2026-11-20", "description": "...",
+  "method": "...", "generated_utc": "...", "provenance": [ ... ], "source": "data/survey/discoveries.json",
+  "total": 812, "count": 1,
+  "candidates": [ { "id": "p2-000123", "name": "optional", "ra_deg": 133.7598, "dec_deg": -7.2422,
+                    "size_arcmin": 10, "class": "brown_dwarf", "score": 0.93,
+                    "reason": "Moves 0.6 px between epochs, no Gaia counterpart, bright at 4.5 µm only",
+                    "known": null, "lam_um": 4.5, "mjd": 61000.5, "tile": {"order": 6, "ipix": 40905},
+                    "evidence": { "pm_arcsec_per_yr": 7.9 } } ] }
+```
+
+- The file is `data/survey/discoveries.json` (pass 2 writes it; re-read when it changes) with the fields above
+  except `status`, `source`, `total`, `count`; schema `docs/discoveries.schema.json`. Without it the API serves
+  `fixtures/discoveries-sample.json`: real known objects, class / score / reason by hand, `"synthetic": true`,
+  shown as "Sample · hand-made" in the viewer.
+- `class`: `brown_dwarf` | `variable` | `spectral` (odd spectrum) | `mover` | `other` (T73's candidate classes).
+  `score` 0–1, higher = more interesting. `reason`: plain words, shown to the user as is.
+- `known`: catalogue name when the candidate is a known object (validation / recovery), else null or absent.
+- `lam_um`: where it shows best; the viewer opens the map band there. `size_arcmin`: field to build (default 10).
 
 ### Frontend URL
 
