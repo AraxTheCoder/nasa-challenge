@@ -80,6 +80,8 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T41 | C: Faster map images: server-side HiPS tile cache + prefetch (neighbours, children, Allsky), browser skips stale tiles and loads the centre first, epoch tiles cached and pre-rendered | Jonathan | done | `jonathan/T41-fast-tiles` | IRSA tiles 0.7 s first byte, Allsky 4.3 s, HTTP/1.1 (6 per browser) |
 | T42 | A/C: Live deep zoom everywhere: order 6-7 SPHEREx tiles computed on demand from AWS level-2 images (band's detector, 3 images, cached row chunks, noise-normalised stretch); IRSA cube up to order 5; S3 404 -> resolve real path, not IRSA cutouts | Jonathan | doing | `jonathan/T42-live-zoom` | Red box = orientation only |
 | T43 | C: Difference view A − B in the viewer (challenge: "subtract images taken at different times"): stars cancel for matched pairs, movers show as white/black pairs | Mati | done | `mati/T43-difference` | [tasks/T43](tasks/T43-difference-view.md). Button "A − B" / key `D`; best with a matched pair |
+| T45 | C: Play the series like a video (core Objective): Play/Pause through all frames in the filter or one per epoch at matched wavelength, speed + loop | Mati | open | `mati/T45-play` | [tasks/T45](tasks/T45-play-series.md). From gap-scan idea #1; after T46 |
+| T46 | All: tests on every push (GitHub Actions): pytest + browser test (fixture mode) + fixture schema check | Mati | doing | `mati/T46-ci` | [tasks/T46](tasks/T46-ci.md). From gap-scan idea #9 |
 
 ## Decisions
 
@@ -204,7 +206,7 @@ Format: `[name] idea — status: new`. Agents don't act on an idea until a human
   or a "surprise me" pick ranked by how much moves there. Shown as a list / quick picks. — status: new
 - [Mati] Gap scan vs. the official text (2026-11-14, Claude), highest value first. Each is a proposal; a
   human moves it to the Board. — status: new
-  1. **Play the series like a video** (core Objective: "a series of images of that patch like a little
+  1. (→ Board: T45) **Play the series like a video** (core Objective: "a series of images of that patch like a little
      video"): today only A/B blink + arrow keys. Autoplay all frames inside the wavelength filter (or one
      per epoch at matched wavelength), speed + loop, timeline cursor follows. C, `viewer.js`, ~1-2 h.
   2. **Light curves for the variable test stars** (RW Aur, R Dra are official test targets): brightness
@@ -230,7 +232,7 @@ Format: `[name] idea — status: new`. Agents don't act on an idea until a human
   8. **Embed + share** (consideration: "easily embed it in other websites"): `?embed=1` compact layout
      (stage + blink only, for iframes), and export the current frame / difference / series as PNG or GIF.
      C ~1.5 h.
-  9. **CI on every push** (GitHub Actions): pytest + `web/tests/browser_test.py` (fixture mode, `?explore=0`,
+  9. (→ Board: T46) **CI on every push** (GitHub Actions): pytest + `web/tests/browser_test.py` (fixture mode, `?explore=0`,
      ~20 s) + schema validation of fixtures. Three agents push straight to main and one can't run a
      browser; the T30 module bug broke the page for everyone unnoticed. ~1 h, any track.
   10. **Docs out of date** (consistency, CLAUDE.md): README "Status" still says every field is synthetic;
