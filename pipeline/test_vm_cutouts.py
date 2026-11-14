@@ -105,3 +105,69 @@ def test_gzip_answer_is_the_fits_file(vm):
     r = client.get("/cutout", params={"url": URL, "ra": 1, "dec": 2, "size": 0.4})
     assert r.status_code == 200 and r.headers["content-type"] == "application/gzip"
     assert gzip.decompress(r.content).startswith(b"SIMPLE")
+
+
+class _R:
+    def __init__(self, status, headers=None, text="", content=b""):
+        self.status_code, self.headers, self.text, self.content = status, headers or {}, text, content
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(self.status_code)
+
+
+def _answering(resp):
+    return lambda: type("S", (), {"get": staticmethod(lambda *a, **k: resp)})()
+
+
+def test_missing_in_bucket_skips_s3_and_keeps_the_vm(monkeypatch, tmp_path):
+    """A wrong derived path is one image's problem, not the VM's: no pause, no second S3 read."""
+    monkeypatch.setattr(s3, "_session", _answering(_R(404, {"X-Cutout": s3.MISSING})))
+    monkeypatch.setattr(s3, "REMOTE", "https://vm.example")
+    monkeypatch.setattr(s3, "_remote_down_until", 0.0)
+    monkeypatch.setattr(s3, "fetch_cutout", lambda *a, **k: (_ for _ in ()).throw(AssertionError("S3 read again")))
+    monkeypatch.setattr(build, "_get_with_retry", lambda url: (_ for _ in ()).throw(RuntimeError("IRSA 404")))
+    with pytest.raises(RuntimeError, match="IRSA 404"):
+        build.fetch(URL, 1.0, 2.0, 0.3, raw_root=tmp_path)
+    assert s3.remote_available()
+
+
+def test_vm_s3_error_does_not_pause_the_vm(monkeypatch, tmp_path):
+    monkeypatch.setattr(s3, "_session", _answering(_R(502, {"X-Cutout": s3.S3_ERROR})))
+    monkeypatch.setattr(s3, "REMOTE", "https://vm.example")
+    monkeypatch.setattr(s3, "_remote_down_until", 0.0)
+    monkeypatch.setattr(s3, "fetch_cutout", lambda url, ra, dec, size, dest: dest.write_bytes(b"SIMPLE s3") and dest)
+    assert build.fetch(URL, 1.0, 2.0, 0.3, raw_root=tmp_path).read_bytes() == b"SIMPLE s3"
+    assert s3.remote_available()
+
+
+def test_vm_answers_missing_for_a_404_in_the_bucket(monkeypatch, tmp_path):
+    class NotFound(Exception):
+        response = type("Resp", (), {"status_code": 404})()
+
+    def cut(*a, **k):
+        raise NotFound("404 Client Error")
+    monkeypatch.setattr(s3, "fetch_cutout", cut)
+    c = TestClient(create_app(tmp_path, prefetch=False))
+    r = c.get("/cutout", params={"url": URL, "ra": 1, "dec": 2, "size": 0.4})
+    assert r.status_code == 404 and r.headers["X-Cutout"] == s3.MISSING
+
+
+def test_find_in_bucket_finds_the_retry_version(monkeypatch):
+    week = "dr1/level2/2025W47_2A/"
+    wrong = ("https://irsa.ipac.caltech.edu/ibe/data/spherex/dr1/level2/2025W47_2A/l2b-v27-2026-208/6/"
+             "level2_2025W47_2A_0695_3D6_spx_l2b-v27-2026-208.fits")
+    key = f"{week}l2b_retry-v27-2026-210/6/level2_2025W47_2A_0695_3D6_spx_l2b_retry-v27-2026-210.fits"
+    asked = []
+
+    def get(url, params=None, timeout=None):
+        asked.append(params["prefix"])
+        if params.get("delimiter"):
+            return _R(200, text=f"<Prefix>{week}</Prefix><CommonPrefixes><Prefix>{week}l2b-v27-2026-208/</Prefix>"
+                                f"</CommonPrefixes><CommonPrefixes><Prefix>{week}l2b_retry-v27-2026-210/</Prefix>"
+                                "</CommonPrefixes>")
+        return _R(200, text=f"<Key>{key}</Key>" if "retry" in params["prefix"] else "")
+    monkeypatch.setattr(s3, "_session", lambda: type("S", (), {"get": staticmethod(get)})())
+    assert s3.find_in_bucket(wrong) == s3.IBE_PREFIX + key
+    assert len(asked) == 2                                   # week listing + the retry version, first
+    assert s3.find_in_bucket("https://example.org/x.fits") is None

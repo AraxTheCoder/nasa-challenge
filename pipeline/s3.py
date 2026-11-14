@@ -208,6 +208,41 @@ REMOTE: str | None = os.environ.get("SPHEREX_CUTOUTS_REMOTE") or None   # set by
 REMOTE_RETRY_S = 60          # after a VM failure, go straight to the bucket for this long
 _remote_down_until = 0.0
 OFF_IMAGE = "off-image"      # X-Cutout header value: the field is not on this image (-> LookupError)
+MISSING = "missing"          # X-Cutout: the path is not in the bucket (-> NotInBucket)
+S3_ERROR = "s3-error"        # X-Cutout: the VM is fine, this one read failed (no pause)
+# NotInBucket (defined with S3Image below) is raised for MISSING; find_in_bucket finds the real path.
+
+
+def is_not_found(e: Exception) -> bool:
+    return getattr(getattr(e, "response", None), "status_code", None) == 404
+
+
+def find_in_bucket(fits_url: str) -> str | None:
+    """The real IRSA-style URL of an image whose derived path is wrong (other processing version,
+    e.g. l2b_retry-...), by listing the bucket: one request for the week's versions, one per version.
+    ~0.6 s per request from Europe instead of 20-40 s for a TAP lookup."""
+    import re
+    url = s3_url(fits_url)
+    m = re.match(r"(.*/level2/[^/]+/)([^/]+)/(\d+)/(level2_.+?D\d+)_spx_", url or "")
+    if not m:
+        return None
+    week, old_ver, det, stem = m.groups()
+    rel_week = week[len(S3_ROOT):]
+
+    def listing(prefix: str, delimiter: str | None = None) -> str:
+        params = {"list-type": "2", "prefix": prefix}
+        if delimiter:
+            params["delimiter"] = delimiter
+        r = _session().get(S3_ROOT, params=params, timeout=(5, 30))
+        r.raise_for_status()
+        return r.text
+
+    versions = re.findall(r"<Prefix>" + re.escape(rel_week) + r"([^/<]+)/</Prefix>", listing(rel_week, "/"))
+    for ver in sorted(versions, key=lambda v: (v == old_ver, "retry" not in v)):   # retries first
+        keys = re.findall(r"<Key>([^<]+\.fits)</Key>", listing(f"{rel_week}{ver}/{det}/{stem}_spx_"))
+        if keys:
+            return IBE_PREFIX + keys[0]
+    return None
 
 
 def remote_available() -> bool:
@@ -227,10 +262,13 @@ def fetch_cutout_remote(fits_url: str, ra: float, dec: float, size_deg: float, d
     except Exception as e:  # noqa: BLE001 - connection refused, timeout, DNS
         _remote_down_until = time.time() + REMOTE_RETRY_S
         raise RuntimeError(f"cutout VM unreachable: {e}") from e
-    if r.status_code == 404 and r.headers.get("X-Cutout") == OFF_IMAGE:
+    kind = r.headers.get("X-Cutout")
+    if r.status_code == 404 and kind == OFF_IMAGE:
         raise LookupError("field is not on this image")
+    if r.status_code == 404 and kind == MISSING:
+        raise NotInBucket(f"not in the bucket: {fits_url.rsplit('/', 1)[-1]}")
     if r.status_code != 200:
-        if r.status_code >= 500 or r.status_code == 404:   # 404 without the header: old VM, no /cutout
+        if kind is None:          # no answer from tilegen itself: VM/proxy down, or an old VM without /cutout
             _remote_down_until = time.time() + REMOTE_RETRY_S
         raise RuntimeError(f"cutout VM: HTTP {r.status_code} {r.text[:120]}")
     data = gzip.decompress(r.content)

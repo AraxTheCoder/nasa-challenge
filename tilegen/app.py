@@ -170,8 +170,10 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
                 off.parent.mkdir(parents=True, exist_ok=True)
                 off.touch()
                 return Response(status_code=404, headers={**headers, "X-Cutout": s3.OFF_IMAGE})
-            except Exception as e:  # noqa: BLE001 - e.g. not in the bucket: the client falls back
-                raise HTTPException(502, f"S3 read failed: {e}") from e
+            except Exception as e:  # noqa: BLE001 - the client falls back / looks the path up
+                if s3.is_not_found(e):
+                    return Response(status_code=404, headers={"X-Cutout": s3.MISSING})
+                return Response(f"S3 read failed: {e}"[:300], status_code=502, headers={"X-Cutout": s3.S3_ERROR})
             finally:
                 busy["n"] -= 1
             gz.parent.mkdir(parents=True, exist_ok=True)

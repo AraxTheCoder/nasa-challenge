@@ -134,24 +134,37 @@ def fetch(fits_url: str, ra: float, dec: float, size_deg: float, raw_root: Path 
     from . import s3
     # T57: the team VM next to the bucket cuts it (fastest from Europe), then T33: the AWS bucket
     # directly (HTTP Range, only the rows we need), IRSA cutouts as the last fallback.
+    in_bucket = True
     if s3.remote_available():
         try:
             return s3.fetch_cutout_remote(fits_url, ra, dec, size, path)
         except LookupError:
             raise
+        except s3.NotInBucket:
+            in_bucket = False                  # reading the bucket ourselves would 404 the same way
         except Exception as e:  # noqa: BLE001 - VM down or old: read the bucket ourselves
             print(f"Cutout VM failed, reading S3 directly: {fits_url.rsplit('/', 1)[-1]}: {e}")
-    try:
-        return s3.fetch_cutout(fits_url, ra, dec, size, path)
-    except LookupError:
-        raise
-    except Exception as e:  # noqa: BLE001 - e.g. a file not (yet) in the bucket
-        print(f"S3 read failed, using IRSA cutout: {fits_url.rsplit('/', 1)[-1]}: {e}")
+    if in_bucket:
+        try:
+            return s3.fetch_cutout(fits_url, ra, dec, size, path)
+        except LookupError:
+            raise
+        except Exception as e:  # noqa: BLE001 - e.g. a file not (yet) in the bucket
+            print(f"S3 read failed, using IRSA cutout: {fits_url.rsplit('/', 1)[-1]}: {e}")
     content = _get_with_retry(cutout_url(fits_url, ra, dec, size))
     tmp = path.with_suffix(f".{threading.get_ident()}.part")
     tmp.write_bytes(content)
     tmp.replace(path)
     return path
+
+
+def _find_quietly(fits_url: str) -> str | None:
+    """s3.find_in_bucket, None on any error (TAP is the fallback)."""
+    from . import s3
+    try:
+        return s3.find_in_bucket(fits_url)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 # T27: the exposure list for a position is cached on disk, so a new field of view (same centre)
@@ -396,12 +409,19 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
     # ~1%); IRSA answers 404 there. Look those up once via TAP and try again.
     lost = [i for i, p in enumerate(paths) if p is None]
     if lost:
+        # T57: list the bucket first (~1-2 s, finds l2b_retry versions); TAP (20-40 s) only for the rest
+        fixed = {}
+        with ThreadPoolExecutor(min(8, len(lost))) as pool:
+            for i, url in zip(lost, pool.map(lambda i: _find_quietly(chosen[i].fits_url), lost)):
+                if url:
+                    fixed[chosen[i].publisher_did] = url
+        rest = [chosen[i].publisher_did for i in lost if chosen[i].publisher_did not in fixed]
         try:
             from .mirror import resolve_urls
-            fixed = resolve_urls([chosen[i].publisher_did for i in lost])
+            if rest:
+                fixed.update(resolve_urls(rest))
         except Exception as ex:  # noqa: BLE001
-            fixed = {}
-            errors.append(f"TAP lookup for {len(lost)} failed paths: {ex}")
+            errors.append(f"TAP lookup for {len(rest)} failed paths: {ex}")
         for i in lost:
             url = fixed.get(chosen[i].publisher_did)
             if url and url != chosen[i].fits_url:
