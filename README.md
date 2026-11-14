@@ -29,7 +29,7 @@ Needs **Python 3.11 or newer** and git. From a fresh clone:
 git clone git@github.com:jabra11/nasa-challenge.git
 cd nasa-challenge
 python3 -m venv .venv
-source .venv/bin/activate                  # Windows PowerShell: .venv\Scripts\Activate.ps1
+source .venv/bin/activate                  # Linux, macOS, WSL. Windows PowerShell: .venv\Scripts\Activate.ps1
 python -m pip install -r server/requirements.txt
 python web/dev.py
 ```
@@ -45,8 +45,14 @@ official test fields. Each time you come back: `cd nasa-challenge`, activate the
 | `--lan` | others on your network can open the printed URL too |
 | `--no-browser` | just print the URL |
 
+Activating is only a shortcut. Without it, call the venv's Python directly:
+`.venv/bin/python web/dev.py` (Windows: `.venv\Scripts\python web\dev.py`).
+
 Troubleshooting:
 
+- **Activation fails**: on Linux/macOS/WSL it is `source .venv/bin/activate` (with `source`; running
+  the file directly gives "Permission denied"). In WSL use the Linux commands, not the Windows ones.
+  Or skip activating, see above.
 - **"Port … is already in use"**: another server still runs (often an old `python -m http.server`).
   Stop it or use `--api-port` / `--web-port`.
 - **"Missing Python packages"**: the venv is not active, or the install step was skipped.
