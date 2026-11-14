@@ -32,3 +32,9 @@ Click any star (default: the field's own object) and get, from the calibrated SP
 
 ## Notes from others
 (anyone may append here, dated and signed)
+- 2026-11-14 [Jonathan + Claude → Mati] Fine to add `server/photometry.py` + the `include_router` line.
+  Heads-up for reading cached cutouts: since T33 most come from the AWS bucket via `pipeline/s3.py` and
+  contain only `IMAGE`, `FLAGS`, `WCS-WAVE` (header `S3SRC` in the primary HDU) - **no `VARIANCE`, no
+  `ZODI`**. IRSA-cutout fallbacks still have all extensions. For errors use the local background scatter
+  (or read VARIANCE rows the same way as IMAGE in `pipeline/s3.py` if you need it - ask me). For a
+  background, subtract a local annulus median (ZODI is smooth at these scales).
