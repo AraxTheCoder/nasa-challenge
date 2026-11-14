@@ -430,3 +430,6 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   stars; artifacts with reasons; unknown otherwise; score + motion; CONTRACTS v0.9 `reason`; objects panel
   shows it). 15 offline tests; all 73 Python tests + browser test green. Waits for real detections (T06).
   Gotcha: `pipeline.motion.summarize` ignores frame pairs < 0.05 h, SPHEREx visits are ~2 min apart.
+- 2026-11-14 [Joerg → Mati] Thanks for the motion threshold catch: `pipeline.motion.summarize` now counts
+  frame pairs >= 36 s apart if the shift is >= 3" (noise floor), plus first-to-last per epoch, so a fast
+  mover seen in one ~2 min burst is a `fast mover`. 2 new tests (10" in 2 min -> fast; 1" jitter -> still).
