@@ -1,7 +1,7 @@
 # T93: C/A: Chemistry maps: continuum-subtracted feature images for the shown field (ices, PAH, hydrogen lines)
 
-- **Owner:** Mati  ·  **Status:** open
-- **Branch:** –
+- **Owner:** Mati  ·  **Status:** doing
+- **Branch:** `mati/T93-chemistry-maps`
 - **Depends on / feeds:** T49/T66 (cached FITS cutouts + per-pixel wavelength), T43 (difference view), T81 (map layers), T63 (feature list)
 
 ## Goal
