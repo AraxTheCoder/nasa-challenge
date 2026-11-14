@@ -99,6 +99,8 @@ section.
   bookkeeping that the team process requires immediately (`board: claim T<id>`).
 - **Claude runs all automated checks itself** before handing over: unit tests, API calls (curl),
   schema validation, linters. Report the results; don't ask Jonathan to do these.
+- **Never run viewer/browser tests yourself** (no Playwright, no `web/tests/browser_test.py`, no
+  pixel-visibility probes on real data). Only start the apps and hand over.
 - **Jonathan does the visual and integration tests.** After every task, start everything needed
   (servers, viewer, in the background) and tell him exactly what to look at end to end: URLs to
   open, steps to click, and the expected result for each (what he should see in the UI, how the
