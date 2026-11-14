@@ -207,9 +207,22 @@ function show(id) {
   for (const tr of document.querySelectorAll("#frame-table tbody tr")) {
     tr.classList.toggle("shown", tr.dataset.frame === id);
   }
-  rowFor(id)?.scrollIntoView({ block: "nearest" });
+  keepRowVisible(rowFor(id));
   renderFrameInfo(f);
   updateStageError();
+}
+
+// Scroll only the frame table's own box so the row is visible. Not scrollIntoView(): that also
+// scrolls the page, and in the narrow layout (table under the image) it pulls the image out of view
+// on every blink.
+function keepRowVisible(row) {
+  const box = row?.closest(".table-wrap");
+  if (!box) return;
+  const r = row.getBoundingClientRect();
+  const b = box.getBoundingClientRect();
+  const head = box.querySelector("thead")?.getBoundingClientRect().height ?? 0;
+  if (r.top < b.top + head) box.scrollTop -= b.top + head - r.top;
+  else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom;
 }
 
 function setSlot(slot, id) {
@@ -272,8 +285,9 @@ export function initViewer() {
 
   document.addEventListener("keydown", (e) => {
     if (!state.target || e.altKey || e.ctrlKey || e.metaKey || isTyping(e.target)) return;
-    // Buttons, radios and the slider keep their own Space/arrow behaviour.
-    if (e.target.closest?.("input, button") && (e.key === " " || e.key.startsWith("Arrow"))) return;
+    // Buttons keep Space (it clicks them); radios and the slider also keep the arrow keys.
+    const control = e.target.closest?.("input, button");
+    if (control && (e.key === " " || (e.key.startsWith("Arrow") && control.tagName === "INPUT"))) return;
     if (e.key === " ") { e.preventDefault(); state.playing ? stopBlink() : startBlink(); }
     else if (e.key === "x" || e.key === "X") { stopBlink(); flip(); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); }

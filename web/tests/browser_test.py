@@ -134,6 +134,16 @@ try:
         check("target=demo-synthetic" in o.url, "offline mode: target in URL")
         o.keyboard.press("x")
         check("B · f003" in o.text_content("#stage-label"), "offline mode: blink keys work")
+        # The frame table still follows the current frame inside its own scroll box.
+        o.evaluate("document.querySelector('.table-wrap').style.maxHeight = '60px'")
+        o.click("#btn-a")
+        o.keyboard.press("ArrowRight"); o.keyboard.press("ArrowRight"); o.keyboard.press("ArrowRight")
+        visible = o.evaluate("""() => {
+            const box = document.querySelector('.table-wrap').getBoundingClientRect();
+            const row = document.querySelector('tr.shown').getBoundingClientRect();
+            return document.querySelector('.table-wrap').scrollTop > 0 && row.bottom <= box.bottom + 1;
+        }""")
+        check(visible, "frame table scrolls inside its box to the shown frame")
         check(not oerr, f"offline: no page errors {oerr}")
 
         # 9. phone width
@@ -142,6 +152,15 @@ try:
         wait_loaded(m)
         sw = m.evaluate("document.documentElement.scrollWidth")
         check(sw <= 390, f"no horizontal scroll on phone (scrollWidth={sw})")
+        # Narrow layout puts the frame table under the image; blinking must not scroll the page to it.
+        m.evaluate("document.querySelector('#stage').scrollIntoView({block: 'start'})")
+        y0 = m.evaluate("window.scrollY")
+        m.click("#btn-play")
+        m.wait_for_timeout(1600)
+        m.click("#btn-play")
+        m.keyboard.press("ArrowRight")
+        y1 = m.evaluate("window.scrollY")
+        check(y1 == y0, f"blinking/stepping keeps the page still on phone (scrollY {y0} -> {y1})")
         m.screenshot(path=str(out / "t20-mobile.png"), full_page=True)
         b.close()
 finally:
