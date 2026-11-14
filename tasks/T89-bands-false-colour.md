@@ -1,6 +1,6 @@
 # T89: Band switching that works on the map + a false-colour layer
 
-- **Owner:** Jonathan  ·  **Status:** done
+- **Owner:** Jonathan  ·  **Status:** doing
 - **Branch:** `main` (like T55: `app/` + tilegen/server pieces)
 - **Depends on / feeds:** T55 (`/app/`), T82 (pass layers), T32 (field epoch layers), T57 (cutouts)
 
