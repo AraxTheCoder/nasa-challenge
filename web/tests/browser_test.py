@@ -136,6 +136,7 @@ try:
         check(page.is_visible("#synthetic-badge") and page.is_visible("#stage-watermark"), "fixture shown as synthetic")
         srcs = page.eval_on_selector_all("#frame-stack img", "els => els.map(e => [e.src, e.naturalWidth])")
         check(all(s.startswith(API + "/api/targets/") and w == 96 for s, w in srcs), "frames load from API, relative to target_url")
+        check(all("v=" in s for s, _ in srcs), "frame URLs carry a build stamp (rebuilds must not show cached old frames)")
         check(page.input_value("#preset") != "", "preset select marks the chosen field")
         page.screenshot(path=str(out / "t20-loaded.png"), full_page=True)
 
@@ -176,11 +177,15 @@ try:
         # 6. rebuild
         page.goto(WEB + "?ra=10&dec=20&size=20&" + Q)
         wait_loaded(page)
+        before = page.eval_on_selector("#frame-stack img", "e => e.src")
+        page.wait_for_timeout(1100)  # provenance timestamps have 1 s resolution
         page.click("#btn-rebuild")
         page.wait_for_selector("#job:not([hidden])", timeout=5000)
         wait_loaded(page)
         page.wait_for_selector("#job[hidden]", state="attached", timeout=10000)
-        check(True, "rebuild goes through a build again")
+        after = page.eval_on_selector("#frame-stack img", "e => e.src")
+        check(before != after and before.split("?")[0] == after.split("?")[0],
+              f"rebuild gives the same frame a new URL, so the browser fetches the new image ({before[-24:]} -> {after[-24:]})")
         check(not errors, f"no console errors on happy paths: {errors}")
 
         # 6b. RA/Dec help bubble, previewed with ?tip=1 (T29)

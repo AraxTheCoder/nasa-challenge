@@ -183,7 +183,7 @@ function renderStage() {
   // All frames stacked and preloaded; blinking only toggles visibility, so there is no flicker.
   state.imgs = new Map();
   const imgs = state.frames.map((f) => {
-    const img = el("img", { src: new URL(f.image, state.base).href, alt: `Frame ${f.id}`, draggable: "false" });
+    const img = el("img", { src: frameUrl(f), alt: `Frame ${f.id}`, draggable: "false" });
     img.addEventListener("error", () => {
       if (state.imgs.get(f.id) !== img) return; // a newer target replaced this one
       state.broken.add(f.id);
@@ -194,6 +194,18 @@ function renderStage() {
     return img;
   });
   $("#frame-stack").replaceChildren(...imgs);
+}
+
+/**
+ * Frame image URL with a build stamp. A rebuild (Rebuild button / refresh=1, or fixture → live) writes
+ * new images under the same names, and the API lets browsers cache frames for a day; without the
+ * stamp the browser shows the old images for frames whose names already existed.
+ */
+function frameUrl(f) {
+  const url = new URL(f.image, state.base);
+  const stamp = (state.target.provenance ?? []).map((p) => p.retrieved_utc ?? "").sort().pop();
+  if (stamp) url.searchParams.set("v", stamp);
+  return url.href;
 }
 
 function renderFrameTable() {
