@@ -1,4 +1,8 @@
-# Contracts (v0.3)
+# Contracts (v0.4)
+
+v0.4 adds optional `labels` to `target.json`: catalogue names and positions (SIMBAD, Gaia DR3),
+moved to each frame's time. Additive: `schema_version` stays `"0.2"`, old readers ignore the field.
+See TEAM.md Decisions, 2026-11-14.
 
 v0.3 makes the tool **live**: any RA/Dec a user enters is built on request from IRSA and cached
 (see "Live API" below). The target folder format is unchanged. See TEAM.md Decisions, 2026-11-14.
@@ -80,6 +84,7 @@ Formal schema: `docs/target.schema.json`. Example: `fixtures/targets/demo-synthe
 | `known_objects` | B | catalogued small bodies in the field. A writes `[]` |
 | `detections` | B | moving sources found by us. A writes `[]` |
 | `pairs` | A | optional (v0.2): frames from different epochs at matching wavelength, see below |
+| `labels` | A | optional (v0.4): catalogue objects in the field with a position per frame, see below |
 
 ### Frame
 
@@ -112,6 +117,27 @@ compared fairly. A pair is two frames from **different epochs**, same detector, 
 `|wavelength a - wavelength b| <= 0.5 * bandwidth` (smaller of the two). `a` is the earlier frame. Each frame is in at
 most one pair per other epoch (the closest match). Detection (B) and the "matched pairs" blink
 view (C) should prefer pairs over arbitrary frame combinations.
+
+### Label (v0.4, optional)
+
+```json
+{ "id": "l000", "name": "Barnard's star", "kind": "variable star", "otype": "BY*",
+  "source": "simbad", "named": true, "mag": null, "pm_mas_yr": 10393.4,
+  "positions": [ { "frame_id": "f000", "ra_deg": 269.44629, "dec_deg": 4.76736, "x": 47.47, "y": 48.06 } ] }
+```
+
+- Written by `pipeline.labels.add_labels(target)` (A) after the frames exist. Synthetic targets get
+  `labels: []`: real names on simulated frames would mislead.
+- `positions`: one per frame, catalogue position moved to that frame's time with the proper
+  motion (parallax ignored, < 0.1 px). For a fast star the label follows it across epochs.
+- `source`: `simbad` (names, object types; tries the CDS host, then the Harvard and IDIA mirrors)
+  or `gaia_dr3` (stars brighter than G = 16; `mag` is Gaia G).
+- `named`: `true` for a human-readable name (Barnard's star, V3214 Oph), `false` for catalogue
+  numbers (Gaia DR3 …, ZTF J…). Suggested UI default: show named labels, the rest on demand.
+- `kind`: plain-words object type for the UI; `otype` is the raw SIMBAD type.
+- A label marks a **catalogued** object, not a detection. Detections stay in `detections` (B).
+- The same object can appear twice (SIMBAD and Gaia). The UI may hide a Gaia label within 2 px
+  of a named SIMBAD label.
 
 ### Image and coordinate conventions
 

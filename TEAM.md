@@ -42,11 +42,11 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T03 | A: Align cutouts to one common WCS grid (north up) and get the wavelength at the target position per frame | | open | | Needs T02. Wavelength varies across a SPHEREx image |
 | T04 | A: Render frames to PNG/WebP and write `target.json` per CONTRACTS, validated against the schema | | open | | Needs T03. First real target = end-to-end milestone |
 | T05 | A: Batch-bake 3–5 demo targets and publish them to `web/targets/` (size budget in CONTRACTS) | | open | | Needs T04 and the target list from T10 |
-| T06 | B: Mover detection v0 on the fixture: source extraction per frame, match across frames, keep what moves | | open | | Start on `fixtures/`, switch to real data after T04 |
+| T06 | B: Mover detection v0 on the fixture: source extraction per frame, match across frames, keep what moves | Jonathan | doing | `jonathan/T06-mover-detection` | Start on `fixtures/`, switch to real data after T04 |
 | T07 | B: JPL SB Identification cross-match: known small bodies in the field per frame time → `known_objects` | | open | | Needs SPHEREx position from Horizons (-163182) as observer |
 | T08 | B: Classify detections as known / unknown / artifact and write them into `target.json` | | open | | Needs T06, T07 |
 | T09 | B: Sanity check on a known bright asteroid in real SPHEREx data: do we recover it at the JPL position? | | open | | Needs T04, T08 |
-| T10 | B: "Planet X mode": pick a slow distant body (dwarf planet), check it's detectable across epochs, propose the demo target list | | open | | Feeds T05 |
+| T10 | B: "Planet X mode": pick a slow distant body (dwarf planet), check it's detectable across epochs, propose the demo target list | Jonathan | doing | `jonathan/T10-test-targets` | Reworded 2026-11-14 for the official text: check SPHEREx multi-epoch coverage of the five official test fields (Barnard, Eps Indi B, WISE 0855, RW Aur, R Dra) + maybe one dwarf planet; feeds T05 warm-up |
 | T11 | C: Static viewer skeleton: load `index.json` + `target.json` from the fixture, show frames, blink between two | Mati | done | `mati/T11-viewer-skeleton` | [tasks/T11](tasks/T11-viewer-skeleton.md). Vanilla JS, no build. Reads static target folders; not yet wired to the Live API (v0.3). Run: see `web/README.md` |
 | T12 | C: Epoch timeline and band/wavelength filter | | open | | Needs T11 |
 | T13 | C: Overlay detections and known objects, with a clear "synthetic" badge where it applies | | open | | Needs T11 |
@@ -55,7 +55,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T16 | C: Demo video and slides | | open | | After feature freeze |
 | T17 | A: Compute wavelength-matched `pairs` across epochs (+ `bandwidth_um`) in `target.json` (contracts v0.2) | Joerg | open | | Part of T03/T04 output. Rule in CONTRACTS "Pair" |
 | T18 | C: Live API service: `GET /api/target?ra=&dec=&size=` builds (pipeline + detect) or serves from cache, progress while building, CORS (contracts v0.3) | Jonathan | done | `jonathan/T18-live-api` | `python -m server [--fixture]`, see `server/README.md`. Live mode works once `pipeline.build` (T02–T04) exists; until then `--fixture` |
-| T19 | A: Labels on the images: catalogue names/positions (SIMBAD, Gaia DR3 with proper motion, CatWISE) into `target.json` | Joerg | doing | `joerg/T19-labels` | [task file](tasks/T19-labels.md) |
+| T19 | A: Labels on the images: catalogue names/positions (SIMBAD, Gaia DR3 with proper motion) into `target.json` | Joerg | done | `joerg/T19-labels` | [task file](tasks/T19-labels.md). `pipeline/labels.py`; viewer side is T13 |
 | T20 | C: Viewer ↔ Live API: RA/Dec/size input, `?ra=&dec=&size=` in the page URL, request + poll with progress, load from `target_url`, quick picks for the official test fields (contracts v0.3) | Mati | doing | `mati/T20-live-api-client` | [tasks/T20](tasks/T20-live-api-client.md) |
 
 ## Decisions
@@ -97,6 +97,10 @@ Dated, one line each, with why.
   the Board stays the one-line index. Why: Board rows are too short for findings and requests.
 - 2026-11-14 [Mati] Agrees with the architecture and CONTRACTS v0.1 (closes the Questions item).
   Why: Mati's answer; per Joerg's line above no ack is needed, v0.2 + v0.3 are in effect.
+- 2026-11-14 [Joerg] CONTRACTS v0.4: optional `labels` in `target.json` (SIMBAD names + Gaia DR3
+  stars, position per frame with proper motion), written by `pipeline.labels`. `schema_version`
+  stays "0.2" so existing readers keep working. Why: official targets are fast-moving stars;
+  labels that follow them make motion visible. Details: tasks/T19-labels.md.
 
 ## Ideas
 
@@ -125,6 +129,8 @@ Things waiting on a human.
   proper-motion stars, brown dwarfs and variables, not asteroids. Bake these as demo targets?
   (3) nice-to-haves: coordinates in the URL, add/subtract epochs, choosable FOV, Gaia/WISE
   overlay, spectra, flag display. Resources tab and judging criteria still missing.
+- 2026-11-14 [Joerg → Mati] `labels` is in CONTRACTS v0.4 for T13 (overlay). Drawing suggestion
+  and a working reference are in tasks/T19-labels.md, "Questions / needs from others".
 
 ## Log
 
@@ -167,3 +173,8 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   + polling (C), `pipeline.build` with optional `progress=` callback (A). Gotchas: ids round to
   1e-4 deg (WISE 0855 → `c1337951-m072451-s15`); T14 GitHub Pages alone can't run the API, a
   Python host is needed; Space Apps general judging criteria still not pasted.
+- 2026-11-14 [joerg + Claude] Done: T19 labels (pipeline side). `pipeline/labels.py` adds SIMBAD
+  names + Gaia DR3 stars to `target.json`, moved to each frame time; 0.4" accuracy on real frames
+  (Barnard's Star field). CONTRACTS v0.4 + schema. Also: CLAUDE.md rules for task files and
+  "agents keep everything consistent". Next (Joerg): T02-T04 so `build_target` exists for T18.
+  Gotchas: main SIMBAD host down today (mirror used); Barnard's Star saturates in D1.
