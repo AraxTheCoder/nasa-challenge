@@ -47,6 +47,9 @@ Design of the whole survey (passes, data volumes, candidate classes, open questi
   catalogue objects, so the validation set is visible as such.
 
 ## Handoff
+- **Removed 2026-11-14 evening** (Mati's Decision: the tool visualizes, citizen scientists find things): the
+  Candidates panel, `/api/discoveries`, the hand-made sample, the schema and their tests are gone from main
+  (CONTRACTS v0.23). Everything is in git history (merge `e0ffe06`) if it is ever wanted back.
 - Done on the sample. When the survey has tile statistics, the heatmap layer from "Notes from others" (observed
   minus expected chance outliers per tile) is the natural next step: it would need a per-tile list next to
   `candidates` (not in the format yet, on purpose: no data to design it against).

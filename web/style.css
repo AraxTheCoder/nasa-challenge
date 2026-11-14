@@ -354,21 +354,6 @@ body.map-only #ph-measure { display: none !important; }
 .ph-anomalies .ph-anom-list { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
 .ph-anomalies .ph-anom-known { color: #e5484d; }
 
-/* ---------- T76: candidates from the discovery index ---------- */
-.discoveries { max-width: 1248px; margin: 8px auto 0; }
-.disc-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
-.disc-head h3 { margin: 0; }
-.disc-head label { display: inline-flex; align-items: center; gap: 6px; }
-.disc-intro { margin: 6px 0 !important; }
-.disc-wrap { max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
-.disc-table td.disc-reason { white-space: normal; color: var(--muted); min-width: 260px; }
-.disc-table td.disc-name { white-space: nowrap; }
-.disc-known { display: block; }
-.disc-table td.num { font-variant-numeric: tabular-nums; }
-.disc-table tbody tr[aria-current="true"] { background: #22304d; }
-.disc-table tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-@media (max-width: 1280px) { .discoveries { margin: 8px 16px 0; } }
-
 /* T86: unusual spectra in the field */
 .outliers { max-width: 1248px; margin: 8px auto 0; }
 @media (max-width: 1280px) { .outliers { margin: 8px 16px 0; } }

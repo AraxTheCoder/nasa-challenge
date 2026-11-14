@@ -1,4 +1,7 @@
-# Contracts (v0.22)
+# Contracts (v0.23)
+
+v0.23: the discovery index (v0.13, T76: `GET /api/discoveries`, its file format and the hand-made sample) is
+removed (Decision 2026-11-14, Mati: the tool visualizes, citizen scientists find things).
 
 v0.22 (T58): limits for a public Live API (`python -m server --public`): 429 + Retry-After (per-IP request
 rate or too many new jobs from one address), 503 `{"status": "busy"}` + Retry-After (server-wide job cap),
@@ -595,40 +598,6 @@ Answer (200):
   a new harvest (`pipeline.mirror`); `release_note` says so.
 - Rebuild = `GET /api/target?…&refresh=1`. Synthetic targets: `{"status": "no_data"}`. Unknown target: 404.
   Image search failed (IRSA down): 502 with a message.
-
-### Discoveries (v0.13, T76)
-
-The survey's candidates (T73–T75), for the viewer's "Candidates" list and "Show me something interesting":
-
-```
-GET /api/discoveries                              every candidate, best score first
-    ?class=brown_dwarf,variable                   only these classes
-    &ra=<deg>&dec=<deg>&radius=<deg>              only within radius of a position (all three or none)
-    &min_score=0.5 &limit=50                      score floor, at most this many
-    &random=1                                     one candidate at random (after the filters)
-```
-
-Answer (200): the index file's head plus the selection. Bad parameters: 400 `{"status": "error", "message"}`.
-
-```json
-{ "status": "ready", "synthetic": false, "survey": "pilot pass 2, 2026-11-20", "description": "...",
-  "method": "...", "generated_utc": "...", "provenance": [ ... ], "source": "data/survey/discoveries.json",
-  "total": 812, "count": 1,
-  "candidates": [ { "id": "p2-000123", "name": "optional", "ra_deg": 133.7598, "dec_deg": -7.2422,
-                    "size_arcmin": 10, "class": "brown_dwarf", "score": 0.93,
-                    "reason": "Moves 0.6 px between epochs, no Gaia counterpart, bright at 4.5 µm only",
-                    "known": null, "lam_um": 4.5, "mjd": 61000.5, "tile": {"order": 6, "ipix": 40905},
-                    "evidence": { "pm_arcsec_per_yr": 7.9 } } ] }
-```
-
-- The file is `data/survey/discoveries.json` (pass 2 writes it; re-read when it changes) with the fields above
-  except `status`, `source`, `total`, `count`; schema `docs/discoveries.schema.json`. Without it the API serves
-  `fixtures/discoveries-sample.json`: real known objects, class / score / reason by hand, `"synthetic": true`,
-  shown as "Sample · hand-made" in the viewer.
-- `class`: `brown_dwarf` | `variable` | `spectral` (odd spectrum) | `mover` | `other` (T73's candidate classes).
-  `score` 0–1, higher = more interesting. `reason`: plain words, shown to the user as is.
-- `known`: catalogue name when the candidate is a known object (validation / recovery), else null or absent.
-- `lam_um`: where it shows best; the viewer opens the map band there. `size_arcmin`: field to build (default 10).
 
 ### Frontend URL
 
