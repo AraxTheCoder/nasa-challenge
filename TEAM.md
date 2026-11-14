@@ -108,9 +108,9 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T70 | B/C: Motion classes for real detections: asteroid-like / nearby star / distant body from rate, direction and shape, checked on T06 output (idea I15) | | open | | [tasks/T70](tasks/T70-detection-motion-classes.md). Partly done: classes for labels (T23), status + reason incl. class for detections (T08). |
 | T71 | All: the Live API sets up its own data on start, in the background: MPC orbit catalogue (T51/T53, refreshed weekly) and the SPHEREx image index (T31) when missing; builds use the fallbacks until ready | Joerg | done | `joerg/T71-auto-data` | [tasks/T71](tasks/T71-auto-data.md). Teammates no longer need the one-time setup commands |
 | T72 | C: Catalogue names anywhere on the explore map (not only the shown field's movers): `GET /api/sky-labels` (SIMBAD, VSX, CatWISE, cached per 0.25 deg cell), drawn when zoomed in to 2 deg, names where they fit, dots + hover for the rest | Joerg | done | `joerg/T72-map-labels` | [tasks/T72](tasks/T72-map-labels.md). Joerg: "why can't I see the labels in the explorer?" |
-| T73 | A: Discovery survey pass 0 + pilot: catalogue targets and a sparse exposure set per sky tile (~2 per epoch × detector, matched λ) as a manifest for pass 1; pilot regions chosen | Mati | doing | `mati/T73-survey-pilot` | [tasks/T73](tasks/T73-survey-plan.md). Contains the survey design for T73–T76. Suggested owner: Joerg (catalogues, labels). |
-| T74 | A/B: Discovery survey pass 1 next to the bucket: per manifest exposure read IMAGE + FLAGS, extract sources (T06), keep detection lists per tile, drop pixels; runs on the us-east4 VM | Mati | doing | `mati/T73-survey-pilot` | [tasks/T74](tasks/T74-survey-pass1.md). Suggested owner: Jonathan (T06 extractor, VM). |
-| T75 | B: Discovery survey pass 2 (HPC): flag tiles from the pass-1 lists (moved / appeared / changed at matched λ / odd spectrum), then all exposures there at full resolution, forced photometry, spectra, candidates with class + score + reason | Mati | doing | `mati/T73-survey-pilot` | [tasks/T75](tasks/T75-survey-pass2.md). Suggested owner: whoever runs the HPC (Joerg or Jonathan). |
+| T73 | A: Discovery survey pass 0 + pilot: catalogue targets and a sparse exposure set per sky tile (~2 per epoch × detector, matched λ) as a manifest for pass 1; pilot regions chosen | Mati | blocked | `mati/T73-survey-pilot` | [tasks/T73](tasks/T73-survey-plan.md). Contains the survey design for T73–T76. Suggested owner: Joerg (catalogues, labels). **Parked (Decision 2026-11-14, Mati: visualization only).** |
+| T74 | A/B: Discovery survey pass 1 next to the bucket: per manifest exposure read IMAGE + FLAGS, extract sources (T06), keep detection lists per tile, drop pixels; runs on the us-east4 VM | Mati | blocked | `mati/T73-survey-pilot` | [tasks/T74](tasks/T74-survey-pass1.md). Suggested owner: Jonathan (T06 extractor, VM). **Parked (Decision 2026-11-14, Mati: visualization only).** |
+| T75 | B: Discovery survey pass 2 (HPC): flag tiles from the pass-1 lists (moved / appeared / changed at matched λ / odd spectrum), then all exposures there at full resolution, forced photometry, spectra, candidates with class + score + reason | Mati | blocked | `mati/T73-survey-pilot` | [tasks/T75](tasks/T75-survey-pass2.md). Suggested owner: whoever runs the HPC (Joerg or Jonathan). **Parked (Decision 2026-11-14, Mati: visualization only).** |
 | T76 | C: Discovery index in the viewer: candidates per tile from the survey served by the Live API; "Show me something interesting" + candidate list, each opening its field with blink, spectrum and reason | Mati | done | `mati/T76-discovery-index` | [tasks/T76](tasks/T76-discovery-index.md). Suggested owner: Mati. Can start on a synthetic sample index. |
 | T77 | B: (merged into T74/T75, the same survey; measured scope + per-band plan moved to tasks/T74 Notes) | Joerg | done | | [tasks/T77](tasks/T77-sky-survey-hpc.md) |
 | T78 | C: Type an exact wavelength: a µm input next to the sky map's band slider (snaps to the nearest of the 102 channels, shows its exact centre) and "frames at λ" in the blink viewer (A/B = the frames nearest that wavelength in two epochs) | Mati | done | `mati/T78-wavelength-input` | [tasks/T78](tasks/T78-wavelength-input.md). Mati's request; needs porting to `app/` (T55) |
@@ -253,6 +253,13 @@ Dated, one line each, with why.
 - 2026-11-14 [Jonathan] CONTRACTS v0.20 (T89): `&detector=` on `/api/target`, epoch layers `e<n>d<det>` / `e<n>c`, sky layers `spherex-live-p<n>-rgb`, live-order slices rounded to the detector. Why: the band slider did nothing for field epochs (mean of all detectors) and re-rendered identical pass tiles for each of a detector's 17 channels; a one-detector field builds in 31 s instead of ~100 s.
 - 2026-11-14 [Jonathan] CONTRACTS v0.21 (T89): `spherex-live-rgb` (false-colour map at every zoom) and IRSA's blank cube slices 50/51 served from 49/52. Why: false colour did nothing zoomed out, and the band 2.399 µm (slice 50) left the zoomed-out map black.
 - 2026-11-14 [Joerg] CONTRACTS v0.22 (T58): limits for a public Live API behind `--public`: 429 / 503 busy with Retry-After, admin token for refresh and settings, cache cap. Why: a public server must not download unlimited data or fill its disk; off by default, so nothing changes for the team.
+- 2026-11-14 [Mati] **Scope: the tool shows the data beautifully, citizen scientists do the finding.** We build
+  visualization (blink, bands, stacks, differences, spectra, overlays, map) and no automatic discovery: no
+  precomputed survey (T73–T75 parked, code kept on branch `mati/T73-survey-pilot`, unmerged), no new
+  classification layers. Why: the challenge asks for "a public-facing web tool to display images of the sky ...
+  making it easy for anyone to quickly see how they change over time" (WiseView as the model: the volunteers
+  made the discoveries); with the deadline on Nov 15 the work goes into the tool, deploy (T14) and submission
+  (T15/T16). Existing on-demand analysis panels stay as they are unless their owner decides otherwise.
 
 ## Ideas
 
@@ -404,6 +411,11 @@ Things waiting on a human.
   "follows the detector" artifact rule (T67).
 - 2026-11-14 [Joerg → Jonathan] T89: proposal to feed your false colour / band layers with deep per-detector (and per-epoch) stacks from the T85 cutouts (~40 exposures per detector instead of 2); details in tasks/T89 "Notes from others". Your call; I won't touch it unless you say so.
 - 2026-11-14 [Joerg → all] T14 public deploy: which host? Options: the us-east4 VM (already serves tiles, next to the data), a new small VM, or this host behind a tunnel. Needs a decision before Sunday noon; T58 limits are being added now.
+- 2026-11-14 Mati (Claude) [→ Joerg, Jonathan]: see the new Decision "the tool shows the data, citizen scientists
+  do the finding". [→ Joerg] T84/T86 panels stay (on demand, the user judges); T87 (classes from the bands) is
+  against the new scope: please decide with Mati whether it still goes ahead. Survey pilot results (7 fields,
+  for reference): Eps Ind B came out as a brown dwarf by itself, the Barnard field's RR Lyrae and eclipsing
+  binary as variables (scatter within an epoch); notes in tasks/T73–T75.
 
 ## Log
 
@@ -755,3 +767,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   "NO DATA" instead of "SHARP" when no visible tile has data.
 - 2026-11-14 [Joerg] Claimed T58 (limits before a public deploy) and T91 (measured motion of the official targets); added T92 (guided tour), starts after T90 lands. T14 (deploy) needs a host decision from the humans: under Questions.
 - 2026-11-14 [Joerg] T58 done: `python -m server --public` adds per-IP rate limits, a per-IP and server-wide cap on new expensive jobs (429 / 503 busy), admin token for refresh and settings, and an LRU cache cap. Off by default. Next for T14: a host (question under Questions / Blockers).
+- 2026-11-14 Mati (Claude): Mati's Decision: visualization only, citizen scientists find things. T73–T75 parked (branch `mati/T73-survey-pilot` pushed, not merged: survey runner, `pipeline/variability.py`, pilot on 7 of 25 fields). Next: deploy (T14) and submission (T15/T16), timing with the team.
