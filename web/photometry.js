@@ -185,7 +185,7 @@ function render() {
   const steady = odd.size ? frames.filter((f) => !odd.has(f.frame_id)) : frames;
   const changes = matchedChanges(steady);
   const at = `(RA ${fmtNum(d.ra_deg, 4)}°, Dec ${fmtNum(d.dec_deg, 4)}°)`;
-  const where = st.sky ? `at the point clicked on the map ${at}` : st.pos ? `at the clicked star ${at}` : `at the field centre ${at}`;
+  const where = st.sky?.name ? `at ${st.sky.name} ${at}` : st.sky ? `at the point clicked on the map ${at}` : st.pos ? `at the clicked star ${at}` : `at the field centre ${at}`;
   const what = d.all_exposures ? `exposures (all SPHEREx images of this spot)` : "frames";
   const parts = [el("p", { class: "ph-where small" }, `${good.length} of ${frames.length} ${what} measured ${where}.`)];
   if (frames.length && !good.length) {
@@ -380,12 +380,15 @@ function measureAtStage(e) {
   load();
 }
 
+/** T86: open the spectrum of a named source (e.g. from the unusual-spectra list), same as a map click there. */
+export function openSpectrum(ra, dec, name) { return loadSky(ra, dec, name); }
+
 /** T79: a click on the map: every exposure at that sky point, no field needed. */
-async function loadSky(ra, dec) {
+async function loadSky(ra, dec, name = null) {
   const api = getApiBase();
   if (!api) return;
   const token = ++st.token;
-  st.sky = { ra, dec };
+  st.sky = { ra, dec, name };
   st.pos = null;
   st.data = null;
   drawMarker();

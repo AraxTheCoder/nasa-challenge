@@ -57,10 +57,16 @@ def image_url(source_url: str) -> str:
 
 def measure_cutout(path: Path, ra: float, dec: float) -> dict | None:
     """Photometry at (ra, dec) in one cached cutout; None if the position is not on it."""
+    return measure_cutout_many(path, [(ra, dec)])[0]
+
+
+def measure_cutout_many(path: Path, positions) -> list[dict | None]:
+    """measure_cutout at many (ra, dec) positions, the file read once (T85: a whole field per exposure)."""
     from astropy.io import fits
     from astropy.wcs import WCS, FITSFixedWarning
     from astropy.wcs.utils import proj_plane_pixel_area
 
+    positions = list(positions)
     with fits.open(path) as hd, warnings.catch_warnings():
         warnings.simplefilter("ignore", FITSFixedWarning)
         img = hd["IMAGE"].data.astype(float)
@@ -69,14 +75,26 @@ def measure_cutout(path: Path, ra: float, dec: float) -> dict | None:
         var = hd["VARIANCE"].data.astype(float) if "VARIANCE" in hd else None
         bad = ((hd["FLAGS"].data.astype(np.int64) & build.HW_MASK) != 0) | ~np.isfinite(img)
         w = WCS(hd["IMAGE"].header)
-        x, y = (float(v) for v in w.all_world2pix(ra, dec, 0))
+        if not positions:
+            return []
+        xs, ys = w.all_world2pix([p[0] for p in positions], [p[1] for p in positions], 0)
         ny, nx = img.shape
         r_out = ANNULUS_PX[1]
-        if not (r_out <= x <= nx - 1 - r_out and r_out <= y <= ny - 1 - r_out):
-            return None
-        wave, bw = build.wavelength_at(hd, x, y)
+        inside = (xs >= r_out) & (xs <= nx - 1 - r_out) & (ys >= r_out) & (ys <= ny - 1 - r_out)
+        waves = build.wavelengths_at(hd, xs[inside], ys[inside]) if inside.any() else ([], [])
         pix_sr = proj_plane_pixel_area(w) * (math.pi / 180) ** 2
+    out, k = [], 0
+    for i in range(len(positions)):
+        if not inside[i]:
+            out.append(None)
+            continue
+        out.append(_aperture(img, var, bad, float(xs[i]), float(ys[i]), float(waves[0][k]), float(waves[1][k]), pix_sr))
+        k += 1
+    return out
 
+
+def _aperture(img, var, bad, x: float, y: float, wave: float, bw: float, pix_sr: float) -> dict | None:
+    r_out = ANNULUS_PX[1]
     x0, x1 = int(x - r_out) - 1, int(x + r_out) + 2
     y0, y1 = int(y - r_out) - 1, int(y + r_out) + 2
     yy, xx = np.mgrid[y0:y1, x0:x1]
@@ -150,15 +168,15 @@ _proc_pool = None
 _proc_lock = threading.Lock()
 
 
-def _spectrum_cutout(url: str, ra: float, dec: float) -> Path:
-    hit = build.cached_cutout(url, ra, dec, SPECTRUM_CUT_DEG)
+def _spectrum_cutout(url: str, ra: float, dec: float, size_deg: float = SPECTRUM_CUT_DEG) -> Path:
+    hit = build.cached_cutout(url, ra, dec, size_deg)
     if hit:
         return hit
     d = build._cutout_dir(url, ra, dec, build.RAW_ROOT)
     d.mkdir(parents=True, exist_ok=True)
-    dest = d / f"{SPECTRUM_CUT_DEG:.4f}.fits"
+    dest = d / f"{size_deg:.4f}.fits"
     try:
-        return s3.fetch_cutout(url, ra, dec, SPECTRUM_CUT_DEG, dest)
+        return s3.fetch_cutout(url, ra, dec, size_deg, dest)
     except LookupError:
         raise
     except Exception as ex:  # noqa: BLE001
@@ -167,7 +185,7 @@ def _spectrum_cutout(url: str, ra: float, dec: float) -> Path:
         moved = s3.find_in_bucket(url)          # reprocessed: a listing of the bucket finds it (~1 s)
         if not moved or moved == url:
             raise LookupError(f"not in the bucket: {url.rsplit('/', 1)[-1]}") from ex
-        return s3.fetch_cutout(moved, ra, dec, SPECTRUM_CUT_DEG, dest)
+        return s3.fetch_cutout(moved, ra, dec, size_deg, dest)
 
 
 def _spectrum_point(e, ra: float, dec: float) -> tuple[str, object]:
