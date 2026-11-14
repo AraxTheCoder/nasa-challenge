@@ -49,7 +49,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T10 | B: "Planet X mode": pick a slow distant body (dwarf planet), check it's detectable across epochs, propose the demo target list | Jonathan | doing | `jonathan/T10-test-targets` | Reworded 2026-11-14 for the official text: check SPHEREx multi-epoch coverage of the five official test fields (Barnard, Eps Indi B, WISE 0855, RW Aur, R Dra) + maybe one dwarf planet; feeds T05 warm-up |
 | T11 | C: Static viewer skeleton: load `index.json` + `target.json` from the fixture, show frames, blink between two | Mati | done | `mati/T11-viewer-skeleton` | [tasks/T11](tasks/T11-viewer-skeleton.md). Vanilla JS, no build. Reads static target folders; not yet wired to the Live API (v0.3). Run: see `web/README.md` |
 | T12 | C: Epoch timeline and band/wavelength filter | Mati | done | `mati/T12-timeline-filter` | [tasks/T12](tasks/T12-timeline-filter.md). Timeline per epoch (y = λ), λ/detector filter, v0.2 pairs, `M` = match B to A's λ |
-| T13 | C: Overlay detections and known objects, with a clear "synthetic" badge where it applies | Mati | doing | `mati/T13-objects-panel` | [tasks/T13](tasks/T13-objects-panel.md). Paths on the image are T22; T13 = objects list, counts, artifacts toggle |
+| T13 | C: Overlay detections and known objects, with a clear "synthetic" badge where it applies | Mati | done | `mati/T13-objects-panel` | [tasks/T13](tasks/T13-objects-panel.md). Objects panel + headline count; paths on the image are T22 |
 | T14 | C: Deploy: static viewer (e.g. GitHub Pages) + Live API on a host that runs Python, viewer pointed at it (contracts v0.3) | | open | | Needs T11, T18, T20. Reworded 2026-11-14 for live data (was: pre-baked targets, no live API calls) |
 | T15 | C: Submission text, data credits and AI-use disclosure | | open | | Needs official text in `docs/CHALLENGE.md` |
 | T16 | C: Demo video and slides | | open | | After feature freeze |
@@ -191,6 +191,10 @@ Things waiting on a human.
   `paths.js` (T22) via `viewer:*` events. Suggestion: make explore mode its own module + panel and
   hand a clicked position to the existing form (`fillForm` + `loadField` in `app.js`) so the per-epoch
   blink, progress, URL and history keep working. Run `python web/tests/browser_test.py` before merging.
+- 2026-11-14 [Mati → Jonathan, server] Fixture mode (`python -m server --fixture`) writes its synthetic
+  copies into the same cache (`data/targets/<id>`) as live builds. After switching to live mode those
+  ids are "ready" and serve the synthetic field until `refresh=1`. Suggest a separate cache dir for
+  fixture mode, or live mode treating `"synthetic": true` entries as a cache miss.
 
 ## Log
 
@@ -278,3 +282,9 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   A/B = pair with the longest baseline, `M` matches B to A's wavelength. Frame info says whether A/B
   are wavelength-matched. Merged with T22 (paths) on top. Gotchas: not tried on a real live target
   yet; T17 (pairs in target.json) is still open, without it the viewer falls back to closest λ.
+- 2026-11-14 [Mati + Claude] Done: T13 merged. Objects panel in the side bar: unknown movers first, known
+  (matched), "known · not detected", artifacts behind a toggle; synthetic badge per object; headline next
+  to the target name ("2 moving objects: 1 unknown", or "detection has not run" on real builds today).
+  Click a row → ring on the image + jump to a frame with the object. Added browser checks for T22's
+  overlay. Gotcha (server, Jonathan): a fixture-mode run caches synthetic copies under the same ids as
+  live builds, so live mode then serves them until `refresh=1`; see Questions.
