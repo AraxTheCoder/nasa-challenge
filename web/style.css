@@ -505,3 +505,17 @@ body.map-only #ph-measure { display: none !important; }
 .build-bar { margin-top: 12px; }
 /* T91: motion measured by SPHEREx */
 .ph-motion-big { font-size: 1.35em; font-weight: 600; margin: 4px 0; }
+/* T92: guided tour */
+.tour-start { position: absolute; top: 12px; right: 12px; z-index: 7; background: rgb(15 26 43 / 0.8); color: var(--text);
+  border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-weight: 600;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.tour-start:hover { border-color: var(--accent); }
+.tour-card { position: fixed; right: 16px; bottom: 16px; z-index: 50; width: min(380px, calc(100vw - 32px));
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px 14px;
+  box-shadow: 0 10px 36px rgba(0,0,0,0.55); }
+.tour-card h3 { margin: 4px 0 6px; font-size: 1.15em; text-transform: none; letter-spacing: normal; color: var(--text); }
+.tour-card p { margin: 0 0 10px; line-height: 1.45; }
+.tour-head { display: flex; align-items: center; }
+.tour-x { margin-left: auto; font-size: 20px; line-height: 1; padding: 0 4px; }
+.tour-nav { display: flex; justify-content: space-between; margin-top: 10px; }
+@media (max-width: 600px) { .tour-start { top: auto; right: auto; bottom: 12px; left: 12px; } }

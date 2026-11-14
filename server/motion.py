@@ -24,7 +24,7 @@ from . import limits
 
 router = APIRouter()
 _ID = re.compile(r"^[a-z0-9-]+$")
-_jobs: dict[tuple[str, str], dict] = {}
+_jobs: dict[str, dict] = {}
 _lock = threading.Lock()
 limits.register_active(lambda: len(_jobs))    # T58: counts against the server-wide job cap
 
@@ -35,9 +35,9 @@ def _state(target: dict, name: str, start: bool = True) -> dict:
     if star is None:
         return {"status": "error", "message": f"no catalogue label called {name!r} in this field"}
     hit = astrometry.cached(target, star["id"])
-    if hit is not None:
-        return {**hit, "status": hit.get("status", "ready")}
-    key = (target["id"], star["id"])
+    if hit is not None:      # cached per star: measured in this field or another one around it
+        return {**hit, "id": star["id"], "status": hit.get("status", "ready")}
+    key = star["name"]                                # one job per star, whichever field asked
     with _lock:
         job = _jobs.get(key)
         if job is None and not start:
@@ -66,7 +66,7 @@ def _state(target: dict, name: str, start: bool = True) -> dict:
 def _is_new(target: dict, name: str) -> bool:
     from pipeline import astrometry
     star = astrometry.find_star(target, name)
-    return bool(star) and (target["id"], star["id"]) not in _jobs and astrometry.cached(target, star["id"]) is None
+    return bool(star) and star["name"] not in _jobs and astrometry.cached(target, star["id"]) is None
 
 
 MIN_PM_MAS_YR = 300

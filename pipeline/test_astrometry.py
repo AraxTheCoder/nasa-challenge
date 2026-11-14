@@ -84,7 +84,7 @@ def test_recovers_injected_motion_despite_pointing_errors(tmp_path, monkeypatch)
     assert r["pm_east_arcsec_yr"] == pytest.approx(3.0, abs=0.3)
     assert r["pm_north_arcsec_yr"] == pytest.approx(-4.0, abs=0.3)
     assert "agrees" in r["verdict"] and r["n_measured"] == 18
-    assert AS.cached(target, "s")["pm_total_arcsec_yr"] == r["pm_total_arcsec_yr"]     # cached per (field, label)
+    assert AS.cached(target, "s")["pm_total_arcsec_yr"] == r["pm_total_arcsec_yr"]     # cached per star
 
 
 def test_faint_star_next_to_a_neighbour_is_not_found(tmp_path, monkeypatch):

@@ -9,6 +9,10 @@ import { currentTarget, targetBase } from "./viewer.js";
 // The server decides whether the clicked spot is a moving catalogued star (≥ 0.3″/yr, within 8″): the viewer's
 // copy of the field doesn't always carry its labels (they come on request). 404 "none" = no box.
 const cache = new Map();          // `${target id}|${ra}|${dec}` -> answer
+let autoStart = false;            // the next box measures right away instead of offering a button (the tour)
+
+/** The next motion box starts measuring by itself (T92: the tour's "Measure its speed"). */
+export function measureNext() { autoStart = true; }
 
 const COMPASS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
 const dir = (pa) => COMPASS[Math.round(((pa % 360) + 360) % 360 / 45) % 8];
@@ -76,6 +80,10 @@ export function motionBox(ra, dec) {
   box.dataset.token = String(Math.random());
   const hit = cache.get(key);
   if (hit) fill(box, { name: (hit.name ?? "this star").replace(/^\* /, "") }, hit, where);
-  else { box.hidden = true; fetchMotion(where, false, box, box.dataset.token); }   // shown once the server says it's a moving star
+  else {
+    box.hidden = true;                                   // shown once the server says it's a moving star
+    fetchMotion(where, autoStart, box, box.dataset.token);
+    autoStart = false;
+  }
   return box;
 }

@@ -26,6 +26,7 @@ import { initPhotometry } from "./photometry.js";
 import "./mapframes.js"; // T81: the frame viewer's A/B, blink, play and A − B drive the map
 import "./passes.js";    // T82: blink SPHEREx's six-month survey passes anywhere on the map (buttons, map tools)
 import "./outliers.js";  // T86: sources in the field with unusual spectra
+import "./tour.js";      // T92: guided tour of the official targets ("▶ Tour", ?tour=1)
 import { initLamPick, lamFromUrl, setLamUrl } from "./lampick.js";
 import { initStack } from "./stackview.js";
 import { nearestBand, parseLam } from "./lambda.js";

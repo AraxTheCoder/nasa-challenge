@@ -38,6 +38,7 @@ REF_MAX = 40             # reference stars per field
 REF_MIN = 5
 REF_ISOLATION_ARCSEC = 30.0
 MIN_SNR = 5.0
+STAR_CUT_DEG = 0.3       # cutout around the star when the field is a big one (reference stars within it)
 VERSION = 1
 ROOT = Path("data/motion")
 
@@ -160,13 +161,16 @@ def _batch(exposures, ra0, dec0, size_deg, track):
         return list(pool.map(lambda e: _one(e, ra0, dec0, size_deg, track), exposures))
 
 
-def cache_path(target_id: str, label_id: str) -> Path:
-    return ROOT / f"{target_id}__{label_id}.json"
+def cache_path(star_name: str) -> Path:
+    """One result per star, whichever field it was measured in (the map's automatic tile fields and the typed
+    field around the same star share it)."""
+    import re
+    return ROOT / (re.sub(r"[^a-z0-9]+", "-", star_name.lower()).strip("-") + ".json")
 
 
 def cached(target: dict, name: str) -> dict | None:
     star = find_star(target, name)
-    p = cache_path(target["id"], star["id"]) if star else None
+    p = cache_path(star["name"]) if star else None
     if p and p.is_file():
         r = json.loads(p.read_text(encoding="utf-8"))
         if r.get("version") == VERSION:
@@ -188,9 +192,9 @@ def measure_motion(target: dict, name: str, processes: int | None = None, progre
     r = measure_motion_uncached(target, name, processes=processes, progress=progress)
     if r.get("id") or r.get("status") in ("not_found", "not_enough"):
         star = find_star(target, name)
-        p = cache_path(target["id"], star["id"])
+        p = cache_path(star["name"])
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps({**r, "id": star["id"]}), encoding="utf-8")
+        p.write_text(json.dumps({**r, "measured_in": target["id"]}), encoding="utf-8")
     return r
 
 
@@ -201,10 +205,18 @@ def measure_motion_uncached(target: dict, name: str, processes: int | None = Non
     star = next((s for s in sources if star and s["id"] == star["id"]), None)
     if star is None:
         raise LookupError(f"no label called {name!r} in {target['id']}")
-    refs = _references(sources, star)
     c = target["center"]
-    ra0, dec0 = round(c["ra_deg"] % 360, 4), round(c["dec_deg"], 4)
-    size_deg = round(target.get("size_arcmin", 15) / 60 + 2 * fieldspectra.MARGIN_DEG, 4)
+    # A cutout around the star, not the field: the map's automatic fields are up to 1.5° wide (300 such cutouts
+    # would take minutes). Centred on a 0.01° grid so every field around the same star reuses the same files;
+    # inside a typed 15′ field around the star, T85's field cutouts are reused as they are.
+    if fieldspectra._sep_arcsec(star, {"ra_deg": c["ra_deg"], "dec_deg": c["dec_deg"]}) < 120 and target.get("size_arcmin", 15) <= 20:
+        ra0, dec0 = round(c["ra_deg"] % 360, 4), round(c["dec_deg"], 4)
+        size_deg = round(target.get("size_arcmin", 15) / 60 + 2 * fieldspectra.MARGIN_DEG, 4)
+    else:
+        ra0, dec0 = round(star["ra_deg"] % 360, 2), round(star["dec_deg"], 2)
+        size_deg = STAR_CUT_DEG
+    inside = [x for x in sources if fieldspectra._sep_arcsec(x, {"ra_deg": ra0, "dec_deg": dec0}) < size_deg / 2 * 3600 - 60]
+    refs = _references(inside, star)
     exposures, _ = build.cached_exposures(ra0, dec0)
     track = [star] + refs
 
