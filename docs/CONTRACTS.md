@@ -1,4 +1,6 @@
-# Contracts (v0.18)
+# Contracts (v0.19)
+
+v0.19 (T55): `GET /api/pass-dates` gains `visits` per pass (its images grouped by gaps > 30 d). Additive only.
 
 v0.18 (T64): data releases. Each frame may carry `collection` (the IRSA collection = SPHEREx release, e.g.
 `spherex_qr3_deep`); target.json may carry `source_exposures` (what SPHEREx had at the centre at build time);
@@ -502,7 +504,7 @@ GET /api/pass-dates?ra=<deg>&dec=<deg>
 ```
 
 v0.14 (T55): when SPHEREx imaged that point in each pass (UTC dates of the level-2 images whose centre is
-within 1.2 deg, all detectors); passes without images there are left out. `visits` (v0.16): the pass's images
+within 1.2 deg, all detectors); passes without images there are left out. `visits` (v0.19): the pass's images
 grouped by gaps > 30 d; near a pass boundary one pass can hold two visits half a year apart. 503 + `Retry-After` while the
 local image index is being built.
 

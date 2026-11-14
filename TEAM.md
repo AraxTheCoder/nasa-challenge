@@ -245,6 +245,7 @@ Dated, one line each, with why.
 - 2026-11-14 [Jonathan] CONTRACTS v0.16: tiles mode `balanced` (default with a remote) + `balance` stats in `/api/settings`. Why: measured on fresh spots (18 pass tiles, 12 at once): balanced 9.1 s, local only 13.2 s, VM only 13.8 s; neither side alone is fastest all the time.
 - 2026-11-14 [Jonathan] `/app/` chooses what blinks by itself: survey passes; resting on one HiPS order-6 tile builds its field in the background (no progress popup) and blinks its epochs while the view stays on that tile; leaving the tile or zooming out goes back to passes. A text indicator shows which. Why: no buttons, and fields on the tile grid are built once and reused.
 - 2026-11-14 [Mati] CONTRACTS v0.18 (T64): frames carry `collection` (SPHEREx release), target.json `source_exposures` (images known at build time), new `GET /api/targets/<id>/updates` (newer images / new release → the viewer offers Rebuild). Image searches no longer use a fixed list of four collections: `pipeline/releases.py` lists the bucket's release folders (cached a day) and adds new ones (`spherex_<rel>`, `_deep`), duplicates across releases dedupe to the newest. Why: the challenge asks for a tool that is easy to update with the latest data releases; with the fixed list a QR4 / DR2 would never have appeared.
+- 2026-11-14 [Jonathan] CONTRACTS v0.19: `visits` per pass in `/api/pass-dates`. Why: near a pass boundary a pass holds two visits half a year apart (Epsilon Indi B: Apr & Oct 2025); the map labels them separately.
 
 ## Ideas
 
@@ -729,4 +730,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Jonathan (Claude): T55 step 16: survey passes blink from level 6 (their first live order; field
   epochs stay at level 7); base map under the passes capped at order 5 (IRSA cube, no competing live renders);
   pass labels list each visit ("Apr & Oct 2025": near a pass boundary one pass holds two visits;
-  `/api/pass-dates` gains `visits`, CONTRACTS v0.16); stale highlight on the pass labels fixed.
+  `/api/pass-dates` gains `visits`, CONTRACTS v0.19); stale highlight on the pass labels fixed.
