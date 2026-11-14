@@ -87,6 +87,34 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
         code = {"ready": 200, "building": 202}.get(body["status"], 404 if "not built" in str(body.get("message")) else 500)
         return JSONResponse(body, status_code=code)
 
+    sky_cache: dict = {}
+    sky_lock = threading.Lock()
+    sky_dir = cache_root.parent / "sky_labels"
+
+    @app.get("/api/sky-labels")
+    def sky_labels(ra: float, dec: float, radius: float = 0.5):
+        """T72: catalogue labels for any patch of the map (SIMBAD, VSX, CatWISE), snapped to a grid
+        and cached in memory + data/sky_labels/. ~2-4 s the first time, instant after."""
+        from pipeline.labels import sky_labels as compute, sky_region
+        if not (-90 <= dec <= 90) or not (0 < radius <= 5):
+            raise HTTPException(400, "bad ra/dec/radius")
+        r_ra, r_dec, r_rad = sky_region(ra % 360, dec, radius)
+        key = f"{r_ra:.4f}_{r_dec:+.4f}_{r_rad:.2f}"
+        hit = sky_cache.get(key)
+        f = sky_dir / f"{key}.json"
+        if hit is None and f.is_file():
+            hit = sky_cache[key] = json.loads(f.read_text(encoding="utf-8"))
+        if hit is None:
+            hit = compute(r_ra, r_dec, r_rad)
+            if hit["provenance"]:              # cache only when a catalogue answered
+                with sky_lock:
+                    sky_cache[key] = hit
+                    sky_dir.mkdir(parents=True, exist_ok=True)
+                    tmp = f.with_suffix(".part")
+                    tmp.write_text(json.dumps(hit), encoding="utf-8")
+                    tmp.replace(f)
+        return JSONResponse(hit, headers={"Cache-Control": "max-age=86400"})
+
     @app.get("/api/targets/{tid}/frames/{name}")
     def frame(tid: str, name: str):
         if not (_ID.match(tid) and _FRAME.match(name)):

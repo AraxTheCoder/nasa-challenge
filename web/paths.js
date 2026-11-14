@@ -11,6 +11,7 @@ import { $, el, sourceName } from "./util.js";
 import "./trail.js"; // T23 trail view, same viewer events
 import "./inspector.js"; // T23 object inspector, opened by clicking an object
 import "./traces.js"; // T35 traces on the explore map
+import "./skylabels.js"; // T72 catalogue names anywhere on the explore map
 
 const SVG = "http://www.w3.org/2000/svg";
 document.head.append(el("link", { rel: "stylesheet", href: new URL("./paths.css", import.meta.url).href }));

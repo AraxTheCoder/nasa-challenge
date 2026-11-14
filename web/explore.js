@@ -27,6 +27,7 @@ let field = null;          // {ra, dec, size} of the blink field, drawn as an ou
 let epochLayers = [];
 
 export const getSky = () => sky;
+export const getApiBase = () => apiBase;   // T72: skylabels.js asks the Live API too
 
 /** Create the map. opts: {ra, dec, fovDeg} */
 export async function initExplore(container, opts = {}) {
@@ -34,6 +35,7 @@ export async function initExplore(container, opts = {}) {
   sky = createSky(container, { ra: opts.ra ?? 269.4463, dec: opts.dec ?? 4.7682, fov: opts.fovDeg ?? 2 });
   sky.addDrawHook(drawField);
   await setSurvey(DEFAULT_SURVEY);
+  document.dispatchEvent(new CustomEvent("explore:ready"));   // T72: skylabels.js hooks in
   return sky;
 }
 

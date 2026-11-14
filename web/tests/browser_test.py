@@ -438,6 +438,15 @@ try:
         # matches within half a channel (0.015 µm): f000↔f004 (+50%) and f001↔f007 (+82%)
         check("epoch 1 → 2: median +50%" in legend and "epoch 1 → 3: median +82%" in legend and ph.locator(".ph-dot-c").count() == 2,
               f"change at the same wavelength across epoch pairs ({legend})")
+        # T63 spectrum context (the science itself is checked in web/tests/spectrum_check.mjs)
+        check(ph.locator(".ph-context").count() == 1 and "Baseline" in ph.text_content(".ph-context") and ph.locator(".ph-base").count() >= 2,
+              "T63: baseline drawn and explained under the spectrum")
+        ph.click("text=Feature markers")
+        check(ph.locator(".ph-feature").count() == 8 * 3 and "H₂O ice 3.05" in ph.text_content(".ph-features-key"),
+              "T63: feature markers in every epoch panel, with a key")
+        ph.click("text=Expected + hints")
+        check(ph.locator(".ph-context").count() == 0 and ph.locator(".ph-base").count() == 0, "T63: baseline + hints can be switched off")
+        ph.click("text=Expected + hints"); ph.click("text=Feature markers")
         ph.click("#ph-measure")
         cb = ph.locator("#ph-catcher").bounding_box()
         ph.locator("#ph-catcher").click(position={"x": cb["width"] * 0.25, "y": cb["height"] * 0.5})
