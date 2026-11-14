@@ -61,7 +61,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T22 | C: Movement paths in the viewer: line + tick per frame, early→late colour, current position + name, labelled exaggerated arrow for slow movers | Joerg | doing | `joerg/T22-movement-paths` | [task file](tasks/T22-movement-paths.md). From the "Draw paths" idea |
 | T23 | A: Labelling over time: labels that follow moving objects, motion summary + motion class per object, trail image, shift-and-stack | Joerg | doing | `joerg/T23-labels-over-time` | [task file](tasks/T23-labels-over-time.md). Umbrella for T19 (done) + T22; from 4 Ideas |
 | T24 | All: Pin exact dependency versions so everyone runs the same | Joerg | done | `joerg/T24-pin-deps` | Lock files at root; README "Dependencies". Python 3.12+ |
-| T25 | C: Default field in the form (Barnard's Star) + hint that RA/Dec/field of view can be changed | Mati | doing | `mati/T25-form-defaults` | [tasks/T25](tasks/T25-form-defaults.md) |
+| T25 | C: Default field in the form (Barnard's Star) + hint that RA/Dec/field of view can be changed | Mati | done | `mati/T25-form-defaults` | [tasks/T25](tasks/T25-form-defaults.md). Default = `"default": true` in `web/presets.json` |
 | T26 | A: Builds survive IRSA throttling: retry 503/timeouts with backoff, one shared download limit across concurrent builds (no frames dropped) | Jonathan | doing | `jonathan/T26-T28-speed` | Measured: IRSA answers `503 Server busy`, frames were silently dropped |
 | T27 | A: Cache the IRSA exposure list per position (disk, TTL) and drop the server's duplicate query, so FOV changes skip TAP | Jonathan | doing | `jonathan/T26-T28-speed` | TAP took 19 s for a trivial query today |
 | T28 | A: Reuse cached cutouts across FOV changes (a larger cached cutout serves a smaller FOV; minimum size bucket) | Jonathan | doing | `jonathan/T26-T28-speed` | 82% of each 4.6 MB cutout is the EPSF table, independent of FOV |
@@ -231,3 +231,6 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 [Mati + Claude] Fix merged: blinking no longer scrolls the page down to the frame table
   on narrow screens (Mati's report); arrow keys step after clicking A/B/Blink. Branch
   `mati/T11-fix-blink-scroll`, details in tasks/T11. Merges cleanly with T22.
+- 2026-11-14 [Mati + Claude] Done: T25 merged. The form opens with Barnard's Star filled in (from
+  `"default": true` in `web/presets.json`), a hint says what can be changed, nothing loads until Show.
+  Gotcha for T05: presets.json entries gained a `default` flag (additive).
