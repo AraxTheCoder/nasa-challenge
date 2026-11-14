@@ -38,9 +38,9 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
 | T01 | A: IRSA query: list all SPHEREx exposures covering an RA/Dec (SIA/TAP), with time, detector, access URL | Joerg | done | `joerg/T01-irsa-query` | `python -m pipeline.query --ra .. --dec ..`; COSMOS: 214 images, 3 epochs |
-| T02 | A: Download cutouts for one target into `data/`, with a cache so re-runs don't re-download | | open | | Needs T01 |
-| T03 | A: Align cutouts to one common WCS grid (north up) and get the wavelength at the target position per frame | | open | | Needs T02. Wavelength varies across a SPHEREx image |
-| T04 | A: Render frames to PNG/WebP and write `target.json` per CONTRACTS, validated against the schema | | open | | Needs T03. First real target = end-to-end milestone |
+| T02 | A: Download cutouts for one target into `data/`, with a cache so re-runs don't re-download | Jonathan | doing | `jonathan/T02-T04-build` | Needs T01 |
+| T03 | A: Align cutouts to one common WCS grid (north up) and get the wavelength at the target position per frame | Jonathan | doing | `jonathan/T02-T04-build` | Needs T02. Wavelength varies across a SPHEREx image |
+| T04 | A: Render frames to PNG/WebP and write `target.json` per CONTRACTS, validated against the schema | Jonathan | doing | `jonathan/T02-T04-build` | Needs T03. First real target = end-to-end milestone |
 | T05 | A: Batch-bake 3–5 demo targets and publish them to `web/targets/` (size budget in CONTRACTS) | | open | | Needs T04 and the target list from T10 |
 | T06 | B: Mover detection v0 on the fixture: source extraction per frame, match across frames, keep what moves | Jonathan | doing | `jonathan/T06-mover-detection` | Start on `fixtures/`, switch to real data after T04 |
 | T07 | B: JPL SB Identification cross-match: known small bodies in the field per frame time → `known_objects` | | open | | Needs SPHEREx position from Horizons (-163182) as observer |
