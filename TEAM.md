@@ -17,7 +17,7 @@ distant body would look across epochs, demonstrated on a real dwarf planet.
 |---|---|---|---|
 | A | Data pipeline | `pipeline/` | Joerg |
 | B | Detection & science | `detect/` | Jonathan |
-| C | Frontend & submission | `web/` | Mati |
+| C | Frontend & submission | `web/` | Mati, Jonathan |
 
 ## Timeline
 
@@ -47,12 +47,15 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T08 | B: Classify detections as known / unknown / artifact and write them into `target.json` | | open | | Needs T06, T07 |
 | T09 | B: Sanity check on a known bright asteroid in real SPHEREx data: do we recover it at the JPL position? | | open | | Needs T04, T08 |
 | T10 | B: "Planet X mode": pick a slow distant body (dwarf planet), check it's detectable across epochs, propose the demo target list | | open | | Feeds T05 |
-| T11 | C: Static viewer skeleton: load `index.json` + `target.json` from the fixture, show frames, blink between two | Mati | doing | `mati/T11-viewer-skeleton` | No build step if possible |
+| T11 | C: Static viewer skeleton: load `index.json` + `target.json` from the fixture, show frames, blink between two | Mati | review | `mati/T11-viewer-skeleton` | Works on fixture; waiting for Mati's look before merge. Run: see `web/README.md` |
 | T12 | C: Epoch timeline and band/wavelength filter | | open | | Needs T11 |
 | T13 | C: Overlay detections and known objects, with a clear "synthetic" badge where it applies | | open | | Needs T11 |
 | T14 | C: Deploy to GitHub Pages with pre-baked targets, target picker, no live API calls | | open | | Needs T11; real targets arrive with T05 |
 | T15 | C: Submission text, data credits and AI-use disclosure | | open | | Needs official text in `docs/CHALLENGE.md` |
 | T16 | C: Demo video and slides | | open | | After feature freeze |
+| T17 | A: Compute wavelength-matched `pairs` across epochs (+ `bandwidth_um`) in `target.json` (contracts v0.2) | Joerg | open | | Part of T03/T04 output. Rule in CONTRACTS "Pair" |
+| T18 | C: Live API service: `GET /api/target?ra=&dec=&size=` builds (pipeline + detect) or serves from cache, progress while building, CORS (contracts v0.3) | Jonathan | doing | `jonathan/T18-live-api` | New folder `server/`. Uses `build_target` once T02–T04 exist; until then serves the fixture labelled synthetic |
+| T19 | A: Labels on the images: catalogue names/positions (SIMBAD, Gaia DR3 with proper motion, CatWISE) into `target.json` | Joerg | doing | `joerg/T19-labels` | [task file](tasks/T19-labels.md) |
 
 ## Decisions
 
@@ -66,6 +69,31 @@ Dated, one line each, with why.
   folder layout, entry points). Why: gives all tracks a fixed interface from the first hour.
 - 2026-11-14 Tracks for now: Joerg = A (pipeline), Jonathan = B (detection), Mati = C (frontend
   & submission). Why: agreed at kickoff; may change later.
+- 2026-11-14 **PROPOSED** (not agreed yet): CONTRACTS v0.2 adds optional `pairs`
+  (wavelength-matched frames across epochs), per-frame `bandwidth_um`, and alpha 0 for no-data
+  pixels. Why: no two SPHEREx frames share a wavelength (LVF stepping), so star brightness changes
+  between arbitrary frames; only matched pairs compare like with like. Alpha answers Mati's
+  no-data question. Additive only, v0.1 readers keep working; schema accepts "0.1" and "0.2".
+- 2026-11-14 **PROPOSED**: v0.2 pair tolerance is 0.5 x bandwidth, not 0.25. Why: on COSMOS D2,
+  0.25 gives 7 pairs, 0.5 gives 21, 0.75 adds none; the remaining offsets are ~1/3 channel and the
+  pair differences still cancel stars cleanly (checked by eye on 5 pairs).
+- 2026-11-14 Jonathan also works on track C (alongside B). Why: people claim tasks, not tracks;
+  the track only says which folder a task lives in.
+- 2026-11-14 [Jonathan] **DECIDED by Jonathan, Joerg + Mati please ack:** the tool serves *live*
+  SPHEREx data for any RA/Dec the user enters, fetched from IRSA on request and cached, not
+  pre-baked targets. Why: the official Objectives say users enter coordinates and get that patch
+  as a video; pre-baked only would miss the core requirement. Replaces "no live API calls" in the
+  PROPOSED architecture; CONTRACTS needs a v0.3 (request API + cache) before code depends on it.
+- 2026-11-14 [Jonathan] Live data is **final**, no ack needed. CONTRACTS v0.3 adds the Live API
+  (`server/`, T18): `GET /api/target?ra=&dec=&size=` → build or cache hit, `/api/jobs/<id>`
+  progress, `/api/targets/<id>/...` serves the unchanged target folder. Why: official Objectives
+  require user-entered coordinates; target folder format stays as-is so A/B code is unaffected.
+  Impact: T05 becomes cache warm-up of the five named test fields, T14 needs a host that runs Python.
+- 2026-11-14 [Joerg] Decisions no longer need acks: whoever decides writes a dated line here and
+  it holds. Agents keep the repo consistent with every decision (rules in CLAUDE.md). So CONTRACTS
+  v0.2 (pairs, bandwidth, alpha no-data) and v0.3 (live API) are both in effect.
+- 2026-11-14 [Joerg] Every task gets a file `tasks/T<id>-<slug>.md` for details and communication;
+  the Board stays the one-line index. Why: Board rows are too short for findings and requests.
 
 ## Ideas
 
@@ -82,6 +110,18 @@ Things waiting on a human.
 - 2026-11-14 Do we all agree on the PROPOSED architecture and CONTRACTS v0.1? If yes, append a
   Decisions line "AGREED".
 - 2026-11-14 RESOLVED: tracks assigned, see Members & roles (A = Joerg, B = Jonathan, C = Mati).
+- 2026-11-14 [Mati → A/Joerg] For T04: can no-data pixels (grid corners outside a rotated frame)
+  be written as fully transparent (alpha 0) in the PNG/WebP? The viewer shows transparent pixels
+  as hatched "no data"; black would look like empty sky.
+- 2026-11-14 [Joerg → Mati] Yes: T04 writes no-data pixels with alpha 0 (now in CONTRACTS v0.2,
+  PROPOSED). Masked bad pixels inside the frame get alpha 0 too.
+- 2026-11-14 [Jonathan] Official text is now in `docs/CHALLENGE.md`. It differs from our plan:
+  (1) users *enter RA/Dec* and get a video of that patch, but CONTRACTS says pre-baked targets,
+  no live API calls (live IRSA cutouts from the browser, or a small backend?);
+  (2) the named test targets are Barnard's Star, Epsilon Indi B, WISE 0855, RW Aur, R Dra:
+  proper-motion stars, brown dwarfs and variables, not asteroids. Bake these as demo targets?
+  (3) nice-to-haves: coordinates in the URL, add/subtract epochs, choosable FOV, Gaia/WISE
+  overlay, spectra, flag display. Resources tab and judging criteria still missing.
 
 ## Log
 
