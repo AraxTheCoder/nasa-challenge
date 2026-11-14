@@ -88,6 +88,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T49 | A/C: Light curves + spectra on the fly at any position: aperture photometry on the cached SPHEREx FITS (pipeline + `/api/targets/<id>/photometry` + viewer charts); for the variable test stars RW Aur / R Dra | Mati | done | `mati/T49-photometry` | [tasks/T49](tasks/T49-photometry.md). `/api/targets/<id>/photometry`; panel under the timeline; CONTRACTS v0.10 |
 | T50 | All: `web/dev.py --host ADDR`: serve viewer + Live API on one address only (e.g. WireGuard 10.0.0.2) instead of all interfaces (`--lan`) | Joerg | done | `joerg/T50-dev-host` | [tasks/T50](tasks/T50-dev-host.md). Joerg's new host serves the team over WireGuard 10.0.0.0/24 |
 | T51 | B: `detect/run.py` so builds get known asteroids/comets now: JPL lookup (T07) + classify (T08) after every build; mover detection (T06) plugs into the same function later | Joerg | doing | `joerg/T51-detect-run` | [tasks/T51](tasks/T51-detect-run.md). Builds call `detect.run.detect()` but the module never existed, so every field had 0 objects. Jonathan: T06 adds tracks here |
+| T52 | All: Docs match the code (idea I2): README status/run/how-it-works, CONTRACTS without pre-baked `web/targets/` + `pipeline.publish`, undocumented API routes, a schema-0.2 fixture with pairs/labels/varied detections | Mati | doing | `mati/T52-docs-current` | [tasks/T52](tasks/T52-docs-current.md) |
 
 ## Decisions
 
@@ -193,7 +194,7 @@ Ideas are numbered (I1, I2, …) to refer to them; numbers stay fixed, a new ide
   live-data decision made obsolete (needs a Decisions line); the committed fixture is schema 0.1 without
   pairs / labels / varied detections (the browser test generates a richer one; commit it as a second
   fixture). ~1 h.
-  (gap scan vs. the official text, 2026-11-14) — status: new
+  (gap scan vs. the official text, 2026-11-14) — status: on the Board (T52)
 - I3 [Mati] **Per-detector co-adds per epoch** (consideration: "add together all the data taken by each of the
   six detector arrays to improve the signal-to-noise"): mean/median of the aligned frames per detector
   and epoch as extra frames (`kind: "coadd"`, `n_exposures`; contract change). Helps faint red brown
