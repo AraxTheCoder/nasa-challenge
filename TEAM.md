@@ -209,6 +209,14 @@ Things waiting on a human.
   copies into the same cache (`data/targets/<id>`) as live builds. After switching to live mode those
   ids are "ready" and serve the synthetic field until `refresh=1`. Suggest a separate cache dir for
   fixture mode, or live mode treating `"synthetic": true` entries as a cache miss.
+- 2026-11-14 [Mati → Jonathan, T30] Explore mode is broken in every browser: `web/explore.js` loads
+  `aladin-lite@3.8.2/dist/aladin.js` with a classic `<script>`, but that file is an ES module (ends with
+  `export`) → "Unexpected token 'export'", no map; the exception also broke two other browser checks
+  ("stop waiting", phone scroll). Tested fix (one line, in `initExplore`): replace `await loadScript(...)`
+  + `A = window.A` with `A = (await import(ALADIN_JS)).default;` → `web/tests/browser_test.py` back to
+  1 failure. That one is external: today Aladin resolves `CDS/P/SPHEREx/QR2/D1` via `alasky.unistra.fr`
+  (DNS does not resolve) and `alaskybis` (aborted); its DSS fallback 404s. Until CDS is back, the map
+  stays empty unless you use direct HiPS URLs on a host that is up (e.g. IRSA's SPHEREx HiPS).
 
 ## Log
 
@@ -316,3 +324,8 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 [joerg + Claude] T23 progress: label motion summary + class (contracts v0.5), trail view,
   object inspector, overlap-free names, shift-and-stack (`python -m pipeline.stack`). T17 pairs now in
   `pipeline.build`. All merged.
+- 2026-11-14 [Mati + Claude] Fixes merged: (1) frame URLs carry a build stamp (`?v=` newest provenance
+  time), because the API caches frames for a day and a rebuild (Rebuild / refresh=1 / fixture → live)
+  reuses the names: Mati saw 4 old synthetic frames among 36 real ones. (2) Objects headline no longer
+  claims "no moving objects found" when detection never ran. First real field checked in the viewer:
+  Barnard's Star, 36 frames / 3 epochs / 6 detectors, all images load, no errors. T30 report in Questions.
