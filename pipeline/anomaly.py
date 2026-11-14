@@ -24,6 +24,7 @@ import math
 
 import numpy as np
 
+VERSION = 2                  # bump when the method changes: cached spectra get their anomalies recomputed
 SPIKE_SIGMA = 5.0            # one exposure vs. its neighbours
 NEIGHBOUR_DEX = 0.04         # wavelength window for "neighbours": +-10% (SPHEREx channels: ~2.5%)
 MIN_NEIGHBOURS = 4
@@ -254,7 +255,7 @@ def find_anomalies(spectrum: dict, check_known: bool = True) -> dict:
     else:
         parts = [f"{n} {k}{'s' if n > 1 else ''}" for k, n in kinds.items() if n]
         summary = "Unusual: " + ", ".join(parts) + "."
-    return {"items": items, "summary": summary, "counts": kinds,
+    return {"version": VERSION, "items": items, "summary": summary, "counts": kinds,
             "method": f"spikes: {SPIKE_SIGMA:g}σ vs. ±{NEIGHBOUR_DEX:g} dex neighbours of the same epoch; "
                       f"epochs: {len(BINS) - 1} common bands, level ≥{100 * LEVEL_MIN:.0f}% at ≥{LEVEL_SIGMA:g}σ, "
                       f"shape reduced χ² ≥{SHAPE_CHI2:g} and ≥{100 * SHAPE_MIN:.0f}% in one band"}

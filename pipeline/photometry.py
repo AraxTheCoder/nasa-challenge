@@ -225,7 +225,8 @@ def measure_all(ra: float, dec: float, progress=None, threads: int = SPECTRUM_TH
     cached = spectrum_cache(ra, dec)
     if cached.is_file():
         out = json.loads(cached.read_text(encoding="utf-8"))
-        if "anomalies" not in out:                     # cached before T84
+        from .anomaly import VERSION
+        if (out.get("anomalies") or {}).get("version") != VERSION:   # cached before T84 or with an older method
             out["anomalies"] = _anomalies(out)
             _write_spectrum(cached, out)
         return out
