@@ -1,0 +1,29 @@
+# data (never commit downloads; tiny samples go to fixtures/)
+data/*
+!data/.gitkeep
+*.fits
+*.fits.gz
+*.fits.fz
+
+# python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+.astropy/
+
+# node
+node_modules/
+dist/
+.vite/
+.cache/
+
+# local
+.DS_Store
+.env
+.claude/settings.local.json

@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git fetch --quiet 2>/dev/null; echo 'Repo state (after git fetch):'; git status -sb | head -20"
+          }
+        ]
+      }
+    ]
+  }
+}
