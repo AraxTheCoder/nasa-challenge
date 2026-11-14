@@ -14,6 +14,37 @@ repo = Path(__file__).resolve().parents[2]
 out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.mkdtemp(prefix="web-test-"))
 out.mkdir(parents=True, exist_ok=True)
 cache = Path(tempfile.mkdtemp(prefix="web-test-cache-"))
+# Multi-epoch synthetic target for the timeline/filter/pairs checks (T12). Lives in data/ (gitignored),
+# reuses the fixture images, and is removed at the end.
+import json
+MULTI = repo / "data" / "test-targets"
+shutil.rmtree(MULTI, ignore_errors=True)
+(MULTI / "multi-epoch" / "frames").mkdir(parents=True)
+_src = sorted((repo / "fixtures" / "targets" / "demo-synthetic" / "frames").glob("*.png"))
+_spec = [  # id, epoch, mjd, detector, wavelength
+    ("f000", 1, 60790.0, 2, 1.200), ("f001", 1, 60790.5, 2, 1.230), ("f002", 1, 60791.0, 3, 1.800),
+    ("f003", 1, 60792.0, 3, 1.830), ("f004", 2, 60970.0, 2, 1.210), ("f005", 2, 60970.5, 2, 1.300),
+    ("f006", 2, 60971.0, 3, 1.820), ("f007", 3, 61150.5, 2, 1.235), ("f008", 3, 61151.0, 3, 2.100),
+]
+_fixture = json.loads((repo / "fixtures" / "targets" / "demo-synthetic" / "target.json").read_text())
+_frames = []
+for i, (fid, ep, mjd, det, lam) in enumerate(_spec):
+    shutil.copy(_src[i % len(_src)], MULTI / "multi-epoch" / "frames" / f"{fid}.png")
+    _frames.append({"id": fid, "time_utc": f"2025-01-01T00:00:00Z", "mjd": mjd, "epoch": ep, "detector": det,
+                    "wavelength_um": lam, "bandwidth_um": 0.03, "image": f"frames/{fid}.png",
+                    "obs_id": None, "source_url": None})
+for f in _frames:  # real-looking times from MJD
+    from datetime import datetime, timedelta, timezone
+    f["time_utc"] = (datetime(1858, 11, 17, tzinfo=timezone.utc) + timedelta(days=f["mjd"])).strftime("%Y-%m-%dT%H:%M:%SZ")
+_t = dict(_fixture, id="multi-epoch", name="Synthetic multi-epoch test field (NOT SPHEREx data)", schema_version="0.2",
+          frames=_frames, known_objects=[], detections=[], labels=[],
+          pairs=[{"a": "f000", "b": "f004", "detector": 2, "dwave_um": 0.01, "dt_days": 180.0},
+                 {"a": "f001", "b": "f007", "detector": 2, "dwave_um": 0.005, "dt_days": 360.0},
+                 {"a": "f003", "b": "f006", "detector": 3, "dwave_um": 0.01, "dt_days": 179.0}])
+(MULTI / "multi-epoch" / "target.json").write_text(json.dumps(_t))
+(MULTI / "index.json").write_text(json.dumps({"schema_version": "0.1", "targets": [
+    {"id": "multi-epoch", "name": _t["name"], "synthetic": True, "ra_deg": 150.0, "dec_deg": 2.2, "n_frames": 9}]}))
+
 API, WEB = "http://127.0.0.1:8001", "http://127.0.0.1:8081/web/"
 Q = "api=" + API
 procs = [
@@ -203,6 +234,55 @@ try:
         check(visible, "frame table scrolls inside its box to the shown frame")
         check(not oerr, f"offline: no page errors {oerr}")
 
+        # 8b. timeline, wavelength filter, matched pairs (T12) on the multi-epoch target
+        z = b.new_page(viewport={"width": 1280, "height": 900})
+        zerr = []
+        z.on("pageerror", lambda x: zerr.append(str(x)))
+        z.goto(WEB + "?data=../data/test-targets/")
+        wait_loaded(z)
+        a_id = lambda: z.eval_on_selector("input[name=slot-a]:checked", "e => e.value")
+        b_id = lambda: z.eval_on_selector("input[name=slot-b]:checked", "e => e.value")
+        check(z.locator(".tl-panel").count() == 3 and z.locator(".tl-frame").count() == 9, "timeline: 3 epoch panels, 9 frames")
+        check((a_id(), b_id()) == ("f001", "f007"), f"default A/B = matched pair with longest baseline ({a_id()}, {b_id()})")
+        check(z.locator(".tl-frame.is-a").get_attribute("data-frame") == "f001"
+              and z.locator(".tl-frame.is-b").get_attribute("data-frame") == "f007", "timeline marks A and B")
+        check("wavelength-matched" in z.text_content("#frame-info"), "frame info says A/B are wavelength-matched")
+        check(z.is_visible("#pair-select") and "f001 ↔ f007" in z.eval_on_selector("#pair-select", "s => s.options[s.selectedIndex].text"),
+              "pair picker shows the current pair")
+        z.fill("#lam-max", "1.5"); z.press("#lam-max", "Enter"); z.locator("#lam-max").blur()
+        z.wait_for_function("document.querySelector('#filter-count').textContent.includes('5 of 9')")
+        rows = z.eval_on_selector_all("#frame-table tbody tr", "rs => rs.filter(r => !r.hidden).length")
+        check(rows == 5 and z.locator(".tl-frame.is-out").count() == 4, f"λ ≤ 1.5: 5 rows, 4 timeline dots dimmed ({rows})")
+        z.fill("#lam-min", "1.7"); z.fill("#lam-max", "2.0"); z.locator("#lam-max").blur()
+        z.wait_for_function("document.querySelector('#filter-count').textContent.includes('3 of 9')")
+        check((a_id(), b_id()) == ("f002", "f006"), f"filter moves A/B inside it, B = closest λ in another epoch ({a_id()}, {b_id()})")
+        z.click("#btn-a"); z.keyboard.press("ArrowRight")
+        check("f003" in z.text_content("#stage-label"), "stepping skips frames outside the filter")
+        z.click("#lam-reset")
+        check(z.locator(".tl-frame.is-out").count() == 0 and z.text_content("#filter-count") == "", "All frames resets the filter")
+        z.select_option("#det-filter", "2")
+        check(z.locator(".tl-frame.is-out").count() == 4, "detector filter D2 keeps 5 frames")
+        z.click("#lam-reset")
+        z.check("input[name=slot-a][value=f005]")
+        z.click("#stage")  # focus away from the radio so M goes to the page
+        z.keyboard.press("m")
+        check(b_id() == "f007", f"M: B = closest wavelength in another epoch, same detector ({b_id()})")
+        z.check("input[name=slot-b][value=f008]")
+        z.check("input[name=slot-a][value=f000]")
+        check("different wavelengths" in z.text_content("#frame-info"), "frame info warns when A/B are at different wavelengths")
+        z.select_option("#pair-select", label=z.eval_on_selector("#pair-select", "s => [...s.options].find(o => o.text.startsWith('f000')).text"))
+        check((a_id(), b_id()) == ("f000", "f004"), "picking a pair sets A and B")
+        z.locator('.tl-frame[data-frame="f005"] .tl-hit').click()
+        check("f005" in z.text_content("#stage-label"), "clicking a timeline dot shows that frame")
+        z.screenshot(path=str(out / "t12-timeline.png"), full_page=True)
+        zp = b.new_page(viewport={"width": 390, "height": 844})
+        zp.goto(WEB + "?data=../data/test-targets/")
+        wait_loaded(zp)
+        sw = zp.evaluate("document.documentElement.scrollWidth")
+        check(sw <= 390 and zp.locator(".tl-panel").count() == 3, f"timeline fits on a phone (scrollWidth={sw})")
+        zp.screenshot(path=str(out / "t12-phone.png"), full_page=True)
+        check(not zerr, f"T12: no page errors {zerr}")
+
         # 9. phone width
         m = b.new_page(viewport={"width": 390, "height": 844})
         m.goto(WEB + "?ra=133.7598&dec=-7.2422&size=15&" + Q)
@@ -224,5 +304,6 @@ finally:
     for pr in procs:
         pr.terminate()
     shutil.rmtree(cache, ignore_errors=True)
+    shutil.rmtree(MULTI, ignore_errors=True)
 print(f"\n{len(fails)} failures · screenshots in {out}")
 sys.exit(1 if fails else 0)

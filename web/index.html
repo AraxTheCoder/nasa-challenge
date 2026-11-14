@@ -99,9 +99,33 @@
             <output id="speed-out" for="speed">500 ms</output>
           </label>
         </div>
+        <!-- T12: compare at the same wavelength. SPHEREx sees each spot at a different wavelength on
+             every visit, and stars change brightness with wavelength. -->
+        <div class="compare" role="group" aria-label="Wavelength filter and matching">
+          <label class="lam">λ
+            <input id="lam-min" type="number" step="0.01" min="0.5" max="5.5" placeholder="min" aria-label="Minimum wavelength in µm">
+            –
+            <input id="lam-max" type="number" step="0.01" min="0.5" max="5.5" placeholder="max" aria-label="Maximum wavelength in µm">
+            µm</label>
+          <label id="det-wrap" hidden>Detector <select id="det-filter"></select></label>
+          <button id="lam-reset" type="button" class="link" hidden>All frames</button>
+          <span id="filter-count" class="muted small"></span>
+          <button id="btn-match" type="button" title="Set B to the frame from another epoch at the closest wavelength to A (M)">Match B to A's λ</button>
+          <label id="pair-wrap" hidden>Matched pairs <select id="pair-select"></select></label>
+        </div>
+
+        <div id="timeline" class="timeline"></div>
+        <p class="tl-legend muted small">
+          <span class="tl-key tl-key-dot"></span> frame
+          <span class="tl-key tl-key-a"></span> A
+          <span class="tl-key tl-key-b"></span> B
+          <span class="tl-key tl-key-shown"></span> shown ·
+          one panel per epoch, height = wavelength: frames at the same height in different epochs make a fair blink.
+        </p>
+
         <p class="hint muted">
-          <kbd>Space</kbd> blink on/off · <kbd>X</kbd> flip A/B · <kbd>←</kbd>/<kbd>→</kbd> step through frames ·
-          <span class="nodata-swatch" aria-hidden="true"></span> hatched = no data
+          <kbd>Space</kbd> blink on/off · <kbd>X</kbd> flip A/B · <kbd>M</kbd> match B to A's wavelength ·
+          <kbd>←</kbd>/<kbd>→</kbd> step through frames · <span class="nodata-swatch" aria-hidden="true"></span> hatched = no data
         </p>
       </div>
     </section>
