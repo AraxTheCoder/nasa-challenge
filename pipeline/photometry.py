@@ -41,7 +41,8 @@ from .s3 import IBE_PREFIX, S3_ROOT
 APERTURE_PX = 3.0
 ANNULUS_PX = (5.0, 8.0)
 MAX_MASKED = 0.2            # more than this fraction of the aperture flagged -> masked
-NOTE = ("Aperture photometry (r = 3 native px ≈ 18″) on the zodi-subtracted SPHEREx images; no aperture "
+NOTE = ("Aperture photometry (r = 3 native px ≈ 18″) on the SPHEREx images, sky (incl. zodiacal light) from the "
+        "surrounding ring; no aperture "
         "correction, so the spectrum's slope is approximate. Masked = saturated or flagged pixels in the aperture. "
         "Neighbours within ~18″ blend in (SPHEREx pixels are 6″), mostly at short wavelengths where stars are brightest.")
 
