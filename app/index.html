@@ -65,12 +65,11 @@
         <label title="Names of catalogued stars and objects in the field (SIMBAD, Gaia DR3). Asked only when switched on.">
           <input id="labels-toggle" type="checkbox"> Labels <span id="labels-note" class="muted small"></span></label>
         <label id="tiles-box" class="muted small" hidden
-               title="Where the live deep-zoom tiles are computed: here, or on the Google Cloud VM next to the AWS SPHEREx bucket (much faster downloads)">Tiles
-          <select id="tiles-mode"><option value="local">local</option><option value="remote">US VM</option></select></label>
+               title="Where the live deep-zoom tiles are computed. balanced (default): here and on the Google Cloud VM next to the AWS SPHEREx bucket at once, more tiles to whichever is faster right now; local: only here; US VM: only on the VM">Tiles
+          <select id="tiles-mode"><option value="balanced">balanced</option><option value="local">local</option><option value="remote">US VM</option></select></label>
         <label class="muted small" title="Debug: tile outlines (green sharp, yellow still blurry, red no tile), zoom level and loading state">
           <input id="sky-debug" type="checkbox"> Debug</label>
-        <label class="muted small" title="What blinks at level 7. Survey passes: SPHEREx's 6-month all-sky passes, anywhere, right away. Field epochs: the view's field is built once the map rests (aligned single frames, traces and detections of moving objects; takes a while).">Blink
-          <select id="blink-source"><option value="passes">survey passes</option><option value="epochs">field epochs</option></select></label>
+        <span id="blink-status" class="muted small" title="What blinks, chosen by itself at level 7: survey passes (SPHEREx's 6-month all-sky passes, anywhere, right away) or, after resting on one map tile, that tile's field epochs (aligned single frames, traces and detections of moving objects; built in the background)"></span>
       </div>
       <div class="hud-row">
         <span id="explore-passes" class="explore-epochs" hidden></span>

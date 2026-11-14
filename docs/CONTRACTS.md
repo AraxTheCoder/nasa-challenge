@@ -1,4 +1,11 @@
-# Contracts (v0.15)
+# Contracts (v0.17)
+
+v0.17 (T86): the spectral-outliers answer gains chart data (`bands_um`, `envelope`, `colours`, `points`;
+`version` 2), for the colour–colour diagram and band-shape chart. New fields only.
+
+v0.16 (T55): tile settings get a third mode, `balanced` (default when a remote tile generator is configured):
+each live tile goes to this machine or the VM, whichever is expected to finish it first; `GET /api/settings`
+reports the measured throughput per side under `balance`. `local` / `remote` behave as before.
 
 v0.15 (T85, T86): `GET /api/targets/<id>/spectral-outliers`: spectra of every catalogue source of a field and
 the sources whose spectral shape is out of distribution for that field. New endpoint and cache only; nothing
@@ -398,7 +405,7 @@ answers at once. T86 (`pipeline.spectral_outliers`) ranks them. Answer (200):
 - `items` are sorted by `score` (summed significance of consistent deviations; halved for blends, ×0.3 for
   jagged residuals). `scores` has every judged source, for colouring.
 - `items[].ra_deg/dec_deg` open the source's spectrum with `GET /api/photometry?ra=&dec=`.
-- Chart data (`version` 2): `bands_um` (22 band centres); `envelope` {`p16`, `p50`, `p84`}: the ordinary
+- Chart data (v0.17, `version` 2): `bands_um` (22 band centres); `envelope` {`p16`, `p50`, `p84`}: the ordinary
   sources' band shape (log10, own level taken out); `colours` {short, mid, long: [µm, µm]};
   `points`: every judged source `{id, name, otype, ra_deg, dec_deg, x, y, outlier, reference, score, shape,
   model}` with `x` = short − mid and `y` = mid − long colour in magnitudes (+ = redder), `shape` its band
@@ -489,9 +496,16 @@ within 1.2 deg, all detectors); passes without images there are left out. 503 + 
 local image index is being built.
 
 ```
-GET  /api/settings                     → {"tiles": "local" | "remote", "remote_url", "remote_available"}
-POST /api/settings {"tiles": "remote"} → same body; which generator renders the live tiles
+GET  /api/settings                     → {"tiles": "balanced" | "local" | "remote", "remote_url", "remote_available",
+                                          "balance": {"local": {avg_s, tiles_per_s, inflight, done, failed}, "remote": {…}}}
+POST /api/settings {"tiles": "balanced"} → same body; which generator renders the live tiles (400 if unknown)
 ```
+
+`balanced` (v0.16, default with a remote): a tile costs (tiles in flight on that side + 1) / that side's measured
+throughput (tiles in flight / seconds per tile, moving average); the cheaper side renders it, a side unused for
+20 s gets the next tile while idle (so both stay measured), a failing side is backed off. Local renders of
+combined tiles use the VM's images per tile, so tiles look the same from either side. `balance` is omitted
+without a remote.
 
 `remote` is the team's tile generator on a VM next to the bucket (`deploy/`, T47): seconds instead of
 minutes from Europe. Only the tiles go there; builds, caches and the API stay local.

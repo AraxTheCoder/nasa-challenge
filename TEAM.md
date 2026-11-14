@@ -241,7 +241,9 @@ Dated, one line each, with why.
 - 2026-11-14 [Jonathan] CONTRACTS v0.14: `GET /api/pass-dates` + `x_survey_passes` in the live properties + `spherex-live-p<n>` documented. Why: `/app/` labels the blinked survey passes with when they were taken (month/year) instead of P1/P2/P3. New fields only.
 - 2026-11-14 [Jonathan] `/app/` blinks by itself at level 7 (no Blink button, no red outline); default source = survey passes; "field epochs" builds the view's field once the map rests. Why: below level 7 no motion between epochs is visible, and pass tiles on the map's own grid load far faster than a build.
 - 2026-11-14 [Joerg] CONTRACTS v0.15: new endpoint `GET /api/targets/<id>/spectral-outliers` (T85/T86): field-wide spectra and spectral outliers. Why: spectral analysis per field needs every source measured at once; new endpoint only, nothing existing changes.
-- 2026-11-14 [Joerg] CONTRACTS v0.15 spectral-outliers answer gains chart data (`points`, `envelope`, `bands_um`, `colours`; `version` 2). Why: the T86 charts; new fields only.
+- 2026-11-14 [Joerg] CONTRACTS v0.17: the spectral-outliers answer gains chart data (`points`, `envelope`, `bands_um`, `colours`; `version` 2). Why: the T86 charts; new fields only.
+- 2026-11-14 [Jonathan] CONTRACTS v0.16: tiles mode `balanced` (default with a remote) + `balance` stats in `/api/settings`. Why: measured on fresh spots (18 pass tiles, 12 at once): balanced 9.1 s, local only 13.2 s, VM only 13.8 s; neither side alone is fastest all the time.
+- 2026-11-14 [Jonathan] `/app/` chooses what blinks by itself: survey passes; resting on one HiPS order-6 tile builds its field in the background (no progress popup) and blinks its epochs while the view stays on that tile; leaving the tile or zooming out goes back to passes. A text indicator shows which. Why: no buttons, and fields on the tile grid are built once and reused.
 
 ## Ideas
 
@@ -715,4 +717,9 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   tile, overflow pass tiles render on the local PC. 18 new pass tiles 20-24 s -> 12-13 s. VM redeployed.
 - 2026-11-14 [Joerg] T85 + T86 done (CONTRACTS v0.15). A field's catalogue sources measured in every exposure at once (~20 s, cached; their spectra then open instantly), ranked by how far their spectral shape is from the field's ordinary sources, with plain-words reasons and caveats. Panel "Unusual spectra in this field" under the map in `/web/` (button, progress, list, click = spectrum). Checked against Gaia colours and WISE W1−W2 (findings in tasks/T86). RW Aur itself is saturated and listed as not judged. Gotcha: X-ray/radio catalogue positions are skipped (ROSAT 1RXS offsets faked an outlier). Next: T87 (features per band + I23 catalogue prediction).
 - 2026-11-14 [Joerg] T86 reopened for a visualisation: field colour–colour diagram (outliers highlighted, click to select) + the selected source's shape vs. the field's ordinary sources, in the "Unusual spectra" panel.
-- 2026-11-14 [Joerg] T86 done again: the "Unusual spectra" panel now shows the field as a colour–colour diagram (ordinary sequence grey, outliers orange, click to select) and the selected source's bands against an ordinary source of its kind and the field's spread. API answer has chart data (CONTRACTS v0.15, `version` 2).
+- 2026-11-14 [Joerg] T86 done again: the "Unusual spectra" panel now shows the field as a colour–colour diagram (ordinary sequence grey, outliers orange, click to select) and the selected source's bands against an ordinary source of its kind and the field's spread. API answer has chart data (CONTRACTS v0.17, `version` 2).
+- 2026-11-14 Jonathan (Claude): T55 step 15: `/app/` switches by itself between survey passes and the field epochs
+  of the order-6 tile the view rests on (built in the background, ~40 s for one tile, no "Downloading cutouts"
+  popup; indicator text "Blink: survey passes · field epochs: downloading cutouts 12/36…" / "Blink: field
+  epochs"); Blink-source switch removed. Tiles: new default `balanced` (local + VM, by measured throughput;
+  CONTRACTS v0.16). Fixed a Windows rename race in `pipeline/s3.py` (S3Image header cache, my code from T42).

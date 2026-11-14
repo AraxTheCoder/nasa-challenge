@@ -48,6 +48,11 @@ Rework the UI without blocking anyone: the redesign lives in `app/` (URL `/app/`
         map rests 2 s. Faster passes: base map stops at order 6 while passes blink (no competing live
         renders), the Live API renders the other passes of a tile as soon as one is asked, VM 12 slots +
         36 image / 48 S3 threads (`deploy/install-app.sh` drop-in)
+  - [x] Step 15 (Jonathan, 2026-11-14): the source switches by itself: survey passes; resting 2 s at level 7 on
+        one HiPS order-6 tile builds that tile's field quietly (square over the whole tile, ~86′, ~40 s; same
+        grid for everyone, so built once) and its epochs blink while the view stays on the tile; out of the
+        tile or zoomed out → passes again. Text indicator "Blink: …" instead of the switch. Tiles mode
+        `balanced` (default): local + VM by measured throughput (`tilegen/client.py`)
 - [ ] Port relevant `web/` changes made after the copy
 - [ ] When done: decide (TEAM.md Decisions) whether `app/` replaces `web/`
 
@@ -62,6 +67,9 @@ Rework the UI without blocking anyone: the redesign lives in `app/` (URL `/app/`
   reached ~1.2 CPUs: GIL -> now 2 workers); pass tiles use 1 image + fill (was 3); pass tiles beyond 6 at
   the VM render on this PC (`TILES_REMOTE_MAX`); a pass tile asked for starts the other passes. Next lever
   costs money: a bigger VM (e2-standard-8 + `--workers 8`).
+- Step 15 balancing, fresh spots, 18 pass tiles, 12 at once, interleaved (2026-11-14): balanced 9.1 s
+  (36 local / 18 VM), local only 13.2 s, VM only 13.8 s. A latency-only cost (avg x (in flight + 1)) was
+  worse (14-19 s): it ignores that both sides render many tiles at once; throughput (Little's law) fixed it.
 - Copy taken from main at 6026134 (2026-11-14); refreshed from `web/` at 07974ed (2026-11-14, before any redesign edit): T52 labels, T63 spectrum, T72 map names, new `skylabels.js` + `spectrum.js`.
 
 ## Questions / needs from others

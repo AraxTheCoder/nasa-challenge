@@ -262,7 +262,7 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
         body = await request.json()
         if "tiles" in body:
             try:
-                sky.tiles.use_remote(body["tiles"] == "remote")
+                sky.tiles.set_mode(body["tiles"])      # T55: local | remote | balanced
             except ValueError as e:
                 return JSONResponse({"error": str(e)}, status_code=400)
         return settings_info()

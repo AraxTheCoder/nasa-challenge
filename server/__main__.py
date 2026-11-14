@@ -26,7 +26,8 @@ def main() -> None:
                     help="URL of a tilegen service, e.g. the US VM next to the S3 bucket "
                          f"(default: $SPHEREX_TILES_REMOTE or {TEAM_TILEGEN}; 'none' to disable). "
                          "In local mode it also stands in while the local index is being built.")
-    ap.add_argument("--use-remote", action="store_true", help="start with the remote tile generator")
+    ap.add_argument("--use-remote", action="store_true",
+                    help="start with the remote tile generator only (default with a remote: balanced, T55)")
     ap.add_argument("--cutouts-remote", default=os.environ.get("SPHEREX_CUTOUTS_REMOTE", TEAM_TILEGEN),
                     help="tilegen service that cuts the SPHEREx images for builds next to the bucket (T57; "
                          f"default: $SPHEREX_CUTOUTS_REMOTE or {TEAM_TILEGEN}; 'none' = read S3 directly)")
