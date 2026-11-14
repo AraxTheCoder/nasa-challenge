@@ -30,3 +30,7 @@ matches nothing). Plus `matched_object`, `score` (0–1) and `motion`. Built aga
 
 ## Notes from others
 (anyone may append here, dated and signed)
+- 2026-11-14 [Joerg] For T08: `pipeline.motion.summarize(track, frames, pixel_scale_arcsec)` (CONTRACTS
+  v0.5) works on any `detections[].track` and returns shift, rate, direction and a class (`still`,
+  `proper motion`, `fast mover`, `distant body?`) with a plain-words note. "Moves less than 0.3 px over
+  the whole series" (`still`) is a cheap artifact/static-source hint. Tests: `pipeline/test_motion.py`.
