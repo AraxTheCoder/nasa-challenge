@@ -53,7 +53,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T14 | C: Deploy: static viewer (e.g. GitHub Pages) + Live API on a host that runs Python, viewer pointed at it (contracts v0.3) | | open | | Needs T11, T18, T20. Reworded 2026-11-14 for live data (was: pre-baked targets, no live API calls) |
 | T15 | C: Submission text, data credits and AI-use disclosure | | open | | Needs official text in `docs/CHALLENGE.md` |
 | T16 | C: Demo video and slides | | open | | After feature freeze |
-| T17 | A: Compute wavelength-matched `pairs` across epochs (+ `bandwidth_um`) in `target.json` (contracts v0.2) | Joerg | doing | `joerg/T17-pairs` | Taken back: the viewer (T12) reads `pairs` but `pipeline.build` writes none. `pipeline/pairs.py` + one call in build.py |
+| T17 | A: Compute wavelength-matched `pairs` across epochs (+ `bandwidth_um`) in `target.json` (contracts v0.2) | Joerg | done | `joerg/T17-pairs` | Taken back: the viewer (T12) reads `pairs` but `pipeline.build` writes none. `pipeline/pairs.py` + one call in build.py |
 | T18 | C: Live API service: `GET /api/target?ra=&dec=&size=` builds (pipeline + detect) or serves from cache, progress while building, CORS (contracts v0.3) | Jonathan | done | `jonathan/T18-live-api` | `python -m server [--fixture]`, see `server/README.md`. Live mode works once `pipeline.build` (T02–T04) exists; until then `--fixture` |
 | T19 | A: Labels on the images: catalogue names/positions (SIMBAD, Gaia DR3 with proper motion) into `target.json` | Joerg | done | `joerg/T19-labels` | [task file](tasks/T19-labels.md). `pipeline/labels.py`; viewer side is T13 |
 | T20 | C: Viewer ↔ Live API: RA/Dec/size input, `?ra=&dec=&size=` in the page URL, request + poll with progress, load from `target_url`, quick picks for the official test fields (contracts v0.3) | Mati | done | `mati/T20-live-api-client` | [tasks/T20](tasks/T20-live-api-client.md). Run: `web/README.md` (API :8000, viewer :8080). Test fields in `web/presets.json` |
@@ -302,3 +302,6 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   Click a row → ring on the image + jump to a frame with the object. Added browser checks for T22's
   overlay. Gotcha (server, Jonathan): a fixture-mode run caches synthetic copies under the same ids as
   live builds, so live mode then serves them until `refresh=1`; see Questions.
+- 2026-11-14 [Joerg → Jonathan] T17: `pipeline/build.py` now calls `pipeline.pairs.add_pairs(target)`
+  right before writing `target.json` (2 lines, next to your `add_labels`). Rule per CONTRACTS "Pair",
+  tests in `pipeline/test_pairs.py`. Fields built before this have no `pairs`: `?refresh=1` adds them.
