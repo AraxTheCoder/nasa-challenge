@@ -8,10 +8,13 @@
 Detection lists (position, flux, error, wavelength at the source, flags, time) for every manifest exposure, produced next to the AWS bucket; only the lists leave AWS.
 
 ## Plan
-- [ ] Per-image entry point of the T06 source extraction (no target folder needed)
-- [ ] Worker on the us-east4 VM (T47): stream IMAGE + FLAGS from S3, extract, write lists per tile
-- [ ] Parallel workers, retries, resumable (skip done images); measured throughput (images/h, MB/s)
-- [ ] Run the pilot manifest; copy the lists to the HPC / repo `data/`
+Revised 2026-11-14 evening (Mati), see T73 "Revised design": measure catalogued sources instead of a blind
+extraction (T06 is low priority).
+- [x] Per field through the Live API: build (`/api/target`), catalogue sources (`/labels`), every source in every
+      exposure (`/spectral-outliers?start=1` runs T85 + T86); `pipeline/survey.py run_field`
+- [x] Resumable per field (`data/survey/fields/<id>.json`; builds, labels and field spectra are cached by the API)
+- [x] Run the pilot manifest (findings below)
+- [ ] Same runner against the VM's Live API (next to the bucket) for a larger area
 
 Design of the whole survey (passes, data volumes, candidate classes, open questions): [T73](T73-survey-plan.md).
 

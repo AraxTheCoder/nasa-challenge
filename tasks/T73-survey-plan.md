@@ -8,12 +8,31 @@
 A manifest per sky tile (HEALPix) listing the catalogue targets there and the few exposures pass 1 reads, for the pilot regions first.
 
 ## Plan
-- [ ] Tiling (HEALPix order ~6) and the pilot regions (official fields, ecliptic strip, high-latitude region)
-- [ ] Catalogue targets per tile: Gaia DR3 + CatWISE2020 high proper motion and brown-dwarf colours, VSX variables, MPC asteroid tracks (T51)
-- [ ] Exposure selection from the local index (T31): ~2 per epoch × detector per tile, matched wavelength where possible; fix outdated paths (T09 saw IRSA 404s)
-- [ ] Manifest format (JSON/Parquet) + numbers: images, TB, estimated hours; Decisions line
+Revised 2026-11-14 evening (Mati): see "Revised design" below; the original plan is kept under it.
+- [x] Pilot = the 5 official test fields (built-in validation) + the 20 quick picks of web/discover.json
+      (fastest stars, brown dwarfs); HEALPix order-6 tile + SPHEREx coverage per field from the local index
+- [x] Manifest: `python -m pipeline.survey manifest` → `data/survey/manifest.json`
+- [x] Catalogue sources per field = the field's labels (SIMBAD, Gaia DR3, VSX, CatWISE, ...: T37/T52), measured
+      at their positions (T85) instead of a blind extraction
+- [ ] Larger pilot (ecliptic strip, high-latitude region): same runner with a manifest of tile centres
 
-## The survey in one page (shared by T73–T76)
+## Revised design (2026-11-14 evening, Mati)
+
+Mati: blind mover detection is low priority (TEAM.md Questions, T06): stars move <= ~2 px within SPHEREx's
+data and every asteroid a single exposure reaches (V <= 14–15) is long known. SPHEREx's new information is
+the 102-band spectrum at several epochs, so the survey measures *catalogued* sources (Joerg's T85 field
+spectra: every exposure of a field read once) and looks for what doesn't behave like the field's ordinary
+stars:
+- odd spectral shape (T86, Joerg): infrared excess, ices, brown-dwarf shapes, galaxies (marked);
+- brightness change between epochs at the same wavelength, calibrated on the field's ordinary sources;
+- scatter within an epoch (hours to days apart): pulsating stars, eclipsing binaries.
+
+One runner (`pipeline/survey.py`) drives a Live API per field, so the same code runs here, on the VM next to
+the bucket, or on an HPC node with a Live API. Output: `data/survey/discoveries.json` (T76 format) → the
+viewer's Candidates panel. Still open: sources without a catalogue counterpart (needs a blind extraction at
+4–5 µm), a larger sky area.
+
+## The survey in one page (original design, shared by T73–T76)
 
 Goal: suggest new / interesting findings from (eventually) all SPHEREx data, without moving 107 TB.
 

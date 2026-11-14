@@ -8,11 +8,15 @@
 A ranked candidate list per pilot tile, each with class (brown dwarf / variable / spectral outlier / mover), score and a plain-words reason, and a measured completeness.
 
 ## Plan
-- [ ] Match pass-1 detections to Gaia (moved to frame time) and CatWISE: static + known out
-- [ ] Leftovers: link within an epoch (asteroid tracklets vs. MPC) and across epochs (proper motion)
-- [ ] Flagged tiles: all exposures, forced photometry, per-epoch spectra (T63 baseline), variability at matched λ (T12 pairs), T09 recovery check
-- [ ] Injection test: fake movers + fake brown dwarfs planted in real images, recovery rate vs. brightness
-- [ ] Validation: WISE 0855, Eps Ind B and known T/Y dwarfs in the pilot must come out as candidates
+Revised 2026-11-14 evening (Mati), see T73 "Revised design".
+- [x] Odd spectra: T86 (Joerg) per field → candidates (class `spectral`, `brown_dwarf` when a deviation reads as
+      one), known = SIMBAD already classes the object (variable, YSO, galaxy, ...)
+- [x] Variability (`pipeline/variability.py`): brighter / fainter between epochs at the same wavelength (field's
+      ordinary sources' median change per band taken out = calibration drift), and scatter within an epoch
+      (pulsators, eclipsing binaries; galaxies and blends left out: their aperture share changes)
+- [x] Score 0–1 per candidate (× 0.6 if SIMBAD already classes it, × 0.5 with caveats) → `data/survey/discoveries.json`
+- [x] Validation on the pilot (findings below)
+- [ ] Injection test (fake variables / IR excess planted in real field spectra), movers vs. MPC (dropped, T06 note)
 
 Design of the whole survey (passes, data volumes, candidate classes, open questions): [T73](T73-survey-plan.md).
 
