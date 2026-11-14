@@ -1,6 +1,6 @@
 # T55: UI redesign under /app/ (web/ stays as it is)
 
-- **Owner:** Jonathan  ·  **Status:** doing
+- **Owner:** Jonathan  ·  **Status:** done
 - **Branch:** `main` (short-lived worktrees only for edits, merged straight back; from 2026-11-14 ~17:00)
 - **Depends on / feeds:** T11–T49 viewer work (copied from `web/`)
 
@@ -55,8 +55,8 @@ Rework the UI without blocking anyone: the redesign lives in `app/` (URL `/app/`
         `balanced` (default): local + VM by measured throughput (`tilegen/client.py`)
   - [x] Step 16 (Jonathan, 2026-11-14): passes blink from level 6 (field epochs at 7); base under the passes
         capped at order 5; pass labels per visit ("Apr & Oct 2025", `visits` in `/api/pass-dates`)
-- [ ] Port relevant `web/` changes made after the copy
-- [ ] When done: decide (TEAM.md Decisions) whether `app/` replaces `web/`
+- [x] Port relevant `web/` changes made after the copy (T90: the merge took all of them)
+- [x] When done: decide (TEAM.md Decisions) whether `app/` replaces `web/`: merged into `web/` (T90), `app/` deleted 2026-11-14
 
 ## Findings
 - Step 13: pass vs epoch. Epoch = the visits to that spot, grouped by gaps > 30 d (pipeline/query.py);

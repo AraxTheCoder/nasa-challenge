@@ -50,7 +50,6 @@ Mati). When you finish a task, move its row to Done in the same commit.
 | T16 | C: Demo video and slides | | open | | After feature freeze |
 | T35 | C: Tracing over the stitched sky: paths, per-epoch markers and names of moving / important objects drawn on the explore map (T30/T32), following the epoch blink | Joerg | review | `joerg/T35-sky-traces` | [task file](tasks/T35-sky-traces.md). From Joerg's idea |
 | T42 | A/C: Live deep zoom everywhere: order 6-7 SPHEREx tiles computed on demand from AWS level-2 images (band's detector, 3 images, cached row chunks, noise-normalised stretch); IRSA cube up to order 5; S3 404 -> resolve real path, not IRSA cutouts | Jonathan | doing | `jonathan/T42-live-zoom` | Red box = orientation only |
-| T55 | C: UI redesign under `/app/` (copy of `web/`); `web/` and `/web/` stay as they are for all other work | Jonathan | doing | `main` | [tasks/T55](tasks/T55-app-ui.md). UI work only; everyone else keeps working in `web/` |
 | T60 | A/C: Contamination flags in the viewer: per-frame FLAGS bits exported with the frame, overlay toggle, flag names at the inspected pixel (idea I5) | | open | | [tasks/T60](tasks/T60-contamination-flags.md). A ~1.5 h + C ~1 h. |
 | T61 | B: Appear / disappear / brightness change between epochs, not only motion: sources present in one epoch and not another, or much brighter / fainter (idea I6a) | | open | | [tasks/T61](tasks/T61-appear-vanish-brighten.md). Needs T06 source extraction. |
 | T62 | B/C: Candidate ranking + a dedicated candidate list in the viewer: motion significance, consistency across frames, catalogue match, artifact probability from FLAGS (idea I6c) | | open | | [tasks/T62](tasks/T62-candidate-list.md). Partly done: score + reason per detection (T08), unknown first in the objects panel (T13). |
@@ -72,6 +71,7 @@ Mati). When you finish a task, move its row to Done in the same commit.
 
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
+| T55 | C: UI redesign under `/app/` (copy of `web/`); `web/` and `/web/` stay as they are for all other work | Jonathan | done | `main` | [tasks/T55](tasks/T55-app-ui.md). UI work only; everyone else keeps working in `web/` Merged into `/web/` (T90); `app/` deleted. |
 | T01 | A: IRSA query: list all SPHEREx exposures covering an RA/Dec (SIA/TAP), with time, detector, access URL | Joerg | done | `joerg/T01-irsa-query` | `python -m pipeline.query --ra .. --dec ..`; COSMOS: 214 images, 3 epochs |
 | T02 | A: Download cutouts for one target into `data/`, with a cache so re-runs don't re-download | Jonathan | done | `jonathan/T02-T04-build` | Needs T01 |
 | T03 | A: Align cutouts to one common WCS grid (north up) and get the wavelength at the target position per frame | Jonathan | done | `jonathan/T02-T04-build` | Needs T02. Wavelength varies across a SPHEREx image |
@@ -282,6 +282,7 @@ Dated, one line each, with why.
 - 2026-11-14 [Joerg] CONTRACTS v0.24 (T91): `GET /api/targets/<id>/motion?name=` (a star's motion, and distance when reliable, measured from SPHEREx alone). Why: the official targets' motion as a result, not only the catalogue path; new endpoint only.
 - 2026-11-14 [Jonathan] CONTRACTS v0.25 (T89): false colour at orders 6-7 is LRGB (detail from the chosen band, colour from the all-band cube at order 5); colour layers keep their band slices. Why: one render per colour tile instead of six; switching to false colour took ~25 s for 12 pass tiles, now 2.6 s (and a cold colour tile costs about what a grey one does). Trade-off: the colour is coarser (13″) and from all passes together; the detail (what moves) stays sharp and per pass.
 - 2026-11-14 [Mati] CONTRACTS v0.26 (T93): chemistry maps: `GET /api/targets/<id>/chemistry`, `/api/chemistry/features`, map layer `x-<feature>` (server/hips.py: `LAYER_RE` + `chemistry_image`). Why: show the 102 bands as chemistry (feature minus continuum) for citizen scientists to look at; visualization only.
+- 2026-11-14 [Jonathan] `app/` deleted: the T55 redesign is merged into `/web/` (T90), which keeps every web/ feature. CLAUDE.md's `app/` rule removed, `web/dev.py` no longer serves `/app/`. Why: one viewer; everyone works in `web/` again.
 
 ## Ideas
 
@@ -805,3 +806,6 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   active in false colour and picks the detail band. 12 pass tiles after grey: 25.5 s -> 2.6 s; cold ≈ grey.
   Old colour tiles in data/hips_cache (6-detector composites) deleted. CONTRACTS v0.25.
 - 2026-11-14 Mati (Claude): T93 done: **Chemistry** in the map's view panel: for the shown field, a chemical feature (water / CO₂ / CO / methanol ice, PAH, water bands, Pa-β, Br-γ, Br-α) minus its continuum as a map layer + a plain-words note; from the field's own SPHEREx exposures, a few seconds. Orion: Br-α shows M42 + M43, PAH the cloud filaments. CONTRACTS v0.26. [→ Jonathan] `server/hips.py`: layer key `x-<feature>` (LAYER_RE, `chemistry_image`, tile cache keyed on the map file); `web/app.js`: `map:take` event → `setManual(true)` and `map:manual` fired from `setManual`. **The browser test fails on main since T90** (also without T93): `?explore=0` hides `#explore`, which now holds the RA/Dec form, so step 2's `page.fill` times out after 11 checks; CI is red until that is fixed. Separately, `/api/hips/<id>/e1d1/properties` answers 422 (the `e{ep}` route takes it before the layer route; T89 per-detector epochs).
+- 2026-11-14 Jonathan (Claude): `app/` deleted (Jonathan). Everything it had is in `/web/` since T90 (checked file by
+  file: what was only in app/ were older versions of the same lines). CLAUDE.md + web/dev.py updated, T55 done.
+  Old `/app/` links now 404: use `/web/`. Answers my Question about the `app/` rule.
