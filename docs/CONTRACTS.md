@@ -1,4 +1,7 @@
-# Contracts (v0.9)
+# Contracts (v0.10)
+
+v0.10 adds `GET /api/targets/<id>/photometry` (T49): aperture photometry at a position in every frame of a
+built target, for spectra and light curves (see "Photometry"). New endpoint only; target.json unchanged.
 
 v0.9 adds an optional plain-words `reason` to each detection (why it is known / unknown / artifact),
 written by `detect.classify` (T08). Additive; `schema_version` stays `"0.2"`. See TEAM.md Decisions.
@@ -281,6 +284,31 @@ GET /api/targets            → index.json of everything in the cache (same form
 
 Image paths inside `target.json` stay relative to the target folder, so the frontend resolves
 them against `target_url`.
+
+### Photometry (v0.10, T49)
+
+```
+GET /api/targets/<id>/photometry?ra=<deg>&dec=<deg>     a sky position
+GET /api/targets/<id>/photometry?x=<px>&y=<px>          a pixel on the target grid (conventions above)
+GET /api/targets/<id>/photometry                        the field centre
+```
+
+Measured on the cached SPHEREx cutouts the frames were built from (`pipeline.photometry`): IMAGE minus a
+local annulus background (removes ZODI), aperture r = 3 native px, flagged pixels left out, error from
+VARIANCE or the annulus scatter (S3 cutouts have no VARIANCE). Answer (200):
+
+```json
+{ "status": "ready", "id": "...", "ra_deg": 76.9566, "dec_deg": 30.4013, "unit": "uJy",
+  "aperture_px": 3.0, "annulus_px": [5.0, 8.0], "note": "...", "missing": ["f031"],
+  "frames": [ { "frame_id": "f000", "epoch": 1, "mjd": 60902.9, "time_utc": "...", "detector": 1,
+                "wavelength_um": 1.068, "bandwidth_um": 0.022, "flux_ujy": 153437.8, "err_ujy": 599.8,
+                "masked_fraction": 0.0, "masked": false } ] }
+```
+
+- `wavelength_um` / `bandwidth_um` are **at the measured position** (not the field centre's frame value).
+- `masked`: more than 20 % of the aperture flagged (saturation, bad pixels); `flux_ujy` may be `null`.
+- `missing`: frames without a cached cutout or where the position is off the image.
+- Synthetic targets: 200 with `{"status": "no_data", "message": ...}`. Unknown target: 404. Bad ra/dec: 400.
 
 ### Target id and cache
 

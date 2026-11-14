@@ -116,6 +116,8 @@
           <div id="stage-label" class="stage-label"></div>
           <div id="stage-diff-label" class="stage-label stage-diff-label" hidden></div>
           <div id="stage-error" class="stage-error" hidden></div>
+          <!-- T49: while "Measure a star" is on, a click here measures that spot -->
+          <div id="ph-catcher" class="ph-catcher" hidden title="Click a star to measure it (Esc cancels)"></div>
           <div id="stage-watermark" class="stage-watermark" hidden>SYNTHETIC · NOT SPHEREx DATA</div>
         </div>
 
@@ -160,6 +162,17 @@
           <span class="tl-key tl-key-shown"></span> shown ·
           one panel per epoch, height = wavelength: frames at the same height in different epochs make a fair blink.
         </p>
+
+        <!-- T49: light curves and spectra on the fly (Live API, real SPHEREx fields only) -->
+        <section id="photometry" class="photometry" aria-labelledby="ph-title" hidden>
+          <div class="ph-head">
+            <h3 id="ph-title">Brightness: spectrum and change over time</h3>
+            <button id="ph-measure" type="button" aria-pressed="false" title="Then click a star on the image">Measure a star</button>
+            <button id="ph-centre" type="button" class="link">Field centre</button>
+            <span id="ph-status" class="muted small"></span>
+          </div>
+          <div id="ph-body"></div>
+        </section>
 
         <p class="hint muted">
           <kbd>Space</kbd> blink on/off · <kbd>P</kbd> play all frames · <kbd>X</kbd> flip A/B · <kbd>M</kbd> match B to A's wavelength · <kbd>D</kbd> A − B difference ·
