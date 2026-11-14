@@ -72,9 +72,10 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T33 | A: Read SPHEREx images from the AWS Open Data bucket (`nasa-irsa-spherex`, same paths as IRSA) with HTTP Range: only headers + the rows around the field of IMAGE/FLAGS + WCS-WAVE, no EPSF; IRSA cutouts as fallback | Jonathan | done | `jonathan/T33-s3-range` | Measured S3 5-7 MB/s, 0 errors vs IRSA 0.31 MB/s, >50% 503 |
 | T34 | C: Label priority: always show only the most important names (field's object, movers, known asteroids, notable motion), the rest on hover; cap + "show all" toggle | Joerg | done | `joerg/T34-label-priority` | [tasks/T34](tasks/T34-label-priority.md). Mati: labels too crowded on real fields. Builds on T23 `paths.js` |
 | T35 | C: Tracing over the stitched sky: paths, per-epoch markers and names of moving / important objects drawn on the explore map (T30/T32), following the epoch blink | Joerg | review | `joerg/T35-sky-traces` | [task file](tasks/T35-sky-traces.md). From Joerg's idea |
-| T36 | C: Own sky map as the main view (no Aladin, no dependency): WebGL HiPS renderer (HEALPix tiles, SIN projection), drag/zoom/pinch like Google Earth, SPHEREx epochs as layers, blink in the map; frame viewer stays below as detail | Jonathan | doing | `jonathan/T36-sky-map` | Replaces the T30 Aladin panel |
-| T37 | A/C: Catalogue labels only on request: builds skip labels; `GET /api/targets/<id>/labels` computes them in the background; viewer has a Labels switch | Jonathan | doing | `jonathan/T36-sky-map` | SIMBAD labels cost 30 s in deep fields (labels.py untouched) |
+| T36 | C: Own sky map as the main view (no Aladin, no dependency): WebGL HiPS renderer (HEALPix tiles, SIN projection), drag/zoom/pinch like Google Earth, SPHEREx epochs as layers, blink in the map; frame viewer stays below as detail | Jonathan | done | `jonathan/T36-sky-map` | Replaces the T30 Aladin panel |
+| T37 | A/C: Catalogue labels only on request: builds skip labels; `GET /api/targets/<id>/labels` computes them in the background; viewer has a Labels switch | Jonathan | done | `jonathan/T36-sky-map` | SIMBAD labels cost 30 s in deep fields (labels.py untouched) |
 | T38 | A: Fast labels: vectorised tracks (all objects x frames at once), ranked cap of 400 SIMBAD + 400 Gaia per field, grid-based duplicate merge, SIMBAD + Gaia in parallel, 15 s per mirror | Joerg | done | (merged as e715788) | Deep field (COSMOS, 30,785 SIMBAD objects): 23 s -> 5.5 s, labels 50+ MB -> 1.2 MB. Official fields: same important labels |
+| T39 | A: Wide per-epoch stitch test (reference): full 3.5° images from AWS, one mosaic per epoch over ~6°, HiPS, page with region-wide labels + traces | Joerg | done | `joerg/T39-wide-stitch` | `pipeline/reference/wide_stitch/` (README, `run.sh`). Input for T32/T36 (Jonathan) |
 
 ## Decisions
 
@@ -148,6 +149,11 @@ Dated, one line each, with why.
   + the field's object always, then notable types, classic names, other names, catalogue numbers,
   nearest the centre first) and the 400 brightest Gaia stars (G < 16). Why: deep fields returned
   ~30,000 objects; labelling took 23-30 s and wrote 50+ MB of labels. Now 1-7 s, mostly network.
+- 2026-11-14 [Jonathan] CONTRACTS v0.8: catalogue labels only on request (Labels switch → `GET
+  /api/targets/<id>/labels`, `labels_requested` in target.json); builds write `labels: []`. Why: Jonathan
+  wants the work to happen only when labels are switched on; SIMBAD labels took 30 s in deep fields.
+  Also T36: the sky map is our own WebGL HiPS renderer (`web/sky.js`, `web/healpix.js`), Aladin Lite is
+  gone. Joerg: `web/traces.js` now paints via a sky.js draw hook (only `draw()` changed, selection kept).
 
 ## Ideas
 
@@ -378,3 +384,13 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   SIMBAD + Gaia in parallel: COSMOS-like field 23 s -> 5.5 s, official fields 1-7 s (network-bound),
   same important labels. Your 5 s budget + late labels still make sense for slow catalogue servers;
   whether T37 still needs labels-on-request is your call.
+- 2026-11-14 [Jonathan + Claude] Done: T36 own sky map (no Aladin): `web/sky.js` WebGL HiPS renderer
+  (SIN projection, drag/wheel/pinch/dblclick/keys, parent-tile fallback while loading, 200-texture
+  LRU), `web/healpix.js` (matches astropy_healpix on 1848 cases: `node web/tests/healpix_check.mjs`).
+  Default map = IRSA SPHEREx DR1 cube with a 102-band slider; CDS D1-D6 + 2MASS/AllWISE selectable.
+  T37 labels on request (Labels switch). Not seen in a browser by Claude; Jonathan tests visually.
+- 2026-11-14 [Joerg → Jonathan, for T32/T36] Wide per-epoch stitching works as a reference
+  (`pipeline/reference/wide_stitch/`): 2 full D1 images per epoch from the AWS mirror (~3 min for 6),
+  stitched onto one 5.5 x 6.8 deg grid in 3 s per epoch, HiPS in 6 s, 22 deg² per epoch. Per-field
+  epoch tiles (T32) only cover the built 15' field, so the map shows no per-epoch sky around it;
+  full images (or Range reads of their region, T33) would give real stitching. Numbers in its README.

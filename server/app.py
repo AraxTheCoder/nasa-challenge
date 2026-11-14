@@ -57,6 +57,15 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
         return FileResponse(path, media_type="application/json",
                             headers={"Cache-Control": "no-cache"})
 
+    @app.get("/api/targets/{tid}/labels")
+    def target_labels(tid: str):
+        """T37: catalogue labels on request. 202 while SIMBAD/Gaia are asked, 200 when target.json has them."""
+        if not _ID.match(tid):
+            raise HTTPException(404)
+        body = builder.labels(tid)
+        code = {"ready": 200, "building": 202}.get(body["status"], 404 if "not built" in str(body.get("message")) else 500)
+        return JSONResponse(body, status_code=code)
+
     @app.get("/api/targets/{tid}/frames/{name}")
     def frame(tid: str, name: str):
         if not (_ID.match(tid) and _FRAME.match(name)):

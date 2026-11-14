@@ -318,7 +318,7 @@ def _labels_with_budget(target: dict, final_json: Path) -> None:
 def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: float,
                  out_root: Path = Path("data/targets"), progress: Progress | None = None,
                  per_group: int = PER_GROUP, name: str | None = None, refresh: bool = False,
-                 final_root: Path | None = None) -> Path:
+                 final_root: Path | None = None, labels: bool = False) -> Path:
     """Query, download, align, render. Returns the target folder with a valid target.json."""
     def report(step, done=None, total=None, message=""):
         if progress:
@@ -411,8 +411,11 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
             "retrieved_utc": downloads_started}],
         "frames": frames, "known_objects": [], "detections": [],
     }
-    report("render", len(frames), len(frames), "adding catalogue labels")
-    _labels_with_budget(target, Path(final_root or out_root) / target_id / "target.json")
+    if labels:
+        report("render", len(frames), len(frames), "adding catalogue labels")
+        _labels_with_budget(target, Path(final_root or out_root) / target_id / "target.json")
+    else:
+        target["labels"] = []      # T37: labels only on request (server: /api/targets/<id>/labels)
     from .pairs import add_pairs  # T17: wavelength-matched pairs for the viewer's pairs blink
     add_pairs(target)
     (out / "target.json").write_text(json.dumps(target, indent=1), encoding="utf-8")
@@ -427,11 +430,12 @@ def main(argv=None):
     ap.add_argument("--size", type=float, default=15)
     ap.add_argument("--out", type=Path, default=Path("data/targets"))
     ap.add_argument("--per-group", type=int, default=PER_GROUP)
+    ap.add_argument("--labels", action="store_true", help="also add catalogue labels (SIMBAD, Gaia)")
     ap.add_argument("--refresh", action="store_true", help="re-query IRSA instead of the cached exposure list")
     args = ap.parse_args(argv)
     out = build_target(args.id, args.ra, args.dec, args.size, args.out,
                        progress=lambda s, d=None, t=None, m="": print(f"[{s}] {m}", flush=True),
-                       per_group=args.per_group, refresh=args.refresh)
+                       per_group=args.per_group, refresh=args.refresh, labels=args.labels)
     print(f"wrote {out}")
 
 
