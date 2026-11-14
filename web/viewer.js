@@ -2,6 +2,7 @@
 // Knows nothing about where target.json came from; app.js hands it the parsed JSON and its URL.
 
 import { $, el, fmtDuration, fmtNum, fmtTime, isTyping, safeUrl } from "./util.js";
+import "./paths.js"; // T22: movement paths, listens to the viewer:* events below
 
 const SCHEMA_VERSIONS = ["0.1", "0.2"]; // target.json versions this viewer understands
 
@@ -50,6 +51,7 @@ export function showTarget(target, targetUrl) {
   renderStage();
   renderFrameTable();
   renderProvenance();
+  document.dispatchEvent(new CustomEvent("viewer:target", { detail: { target } }));
   show(state.aId);
   $("#empty").hidden = true;
   $("#viewer-body").hidden = false;
@@ -69,6 +71,7 @@ export function clearTarget() {
   $("#viewer-body").hidden = true;
   $("#side").hidden = true;
   document.title = "SPHEREx Blink";
+  document.dispatchEvent(new CustomEvent("viewer:target", { detail: { target: null } }));
 }
 
 // A = first frame; B = first frame of a later epoch, else the last frame.
@@ -210,6 +213,7 @@ function show(id) {
   rowFor(id)?.scrollIntoView({ block: "nearest" });
   renderFrameInfo(f);
   updateStageError();
+  document.dispatchEvent(new CustomEvent("viewer:frame", { detail: { frameId: id } }));
 }
 
 function setSlot(slot, id) {
