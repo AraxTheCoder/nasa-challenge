@@ -20,15 +20,17 @@ if [ ! -f data/mirror/index.npz ]; then
 fi
 # Learn the path of every week folder, so tiles never wait for an IRSA TAP lookup (cheap if known)
 (cd app && sudo -u spherex ../venv/bin/python -m pipeline.mirror weeks)
-# T55: tuning kept in the repo (a drop-in over the unit setup-vm.sh wrote): more tiles at once, and
-# enough image / S3 threads for them (reads wait on S3 latency, the 2 vCPUs are not the limit).
+# T55: tuning kept in the repo (a drop-in over the unit setup-vm.sh wrote): one worker process per vCPU
+# (Python's GIL held one process to ~1.2 of 2 CPUs), enough image / S3 threads per worker, and a smaller
+# in-memory chunk cache each (2 x 600 x ~0.6 MB fits the e2-medium's 4 GB; the disk cache is shared).
 mkdir -p /etc/systemd/system/spherex-tilegen.service.d
 cat > /etc/systemd/system/spherex-tilegen.service.d/tuning.conf <<'CONF'
 [Service]
 ExecStart=
-ExecStart=/opt/spherex/venv/bin/python -m tilegen --host 127.0.0.1 --port 8100 --slots 12
-Environment=TILEGEN_IMAGE_THREADS=36
-Environment=TILEGEN_CHUNK_THREADS=48
+ExecStart=/opt/spherex/venv/bin/python -m tilegen --host 127.0.0.1 --port 8100 --slots 8 --workers 2
+Environment=TILEGEN_IMAGE_THREADS=24
+Environment=TILEGEN_CHUNK_THREADS=32
+Environment=S3_CHUNK_MEM=600
 CONF
 systemctl daemon-reload
 systemctl restart spherex-tilegen

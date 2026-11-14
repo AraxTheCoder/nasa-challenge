@@ -39,6 +39,9 @@ def pass_of(mjd):
 # 1 image per tile when S3 is slow (from Europe: ~0.1 MB/s per connection on 2026-11-14), more
 # next to the bucket (the Google Cloud VM sets TILEGEN_IMAGES=3).
 IMAGES_PER_TILE = int(os.environ.get("TILEGEN_IMAGES", "1"))
+# T55: a pass tile = one snapshot (+ fill where it has holes): images of one pass can be months apart
+# (Barnard's Star, pass 3: May and Aug 2026), averaging them smears movers, and it costs 3x the reads.
+PASS_IMAGES = int(os.environ.get("TILEGEN_PASS_IMAGES", "1"))
 SHARE_ORDER = 5               # tiles inside one order-5 cell use the same images (shared row chunks)
 MAX_FILL = 3                  # more images, only while the tile still has holes (image edge, bad pixels)
 FILL_UNTIL = 0.995            # stop once this fraction of the tile has data
@@ -269,9 +272,10 @@ def render(slice_: int, order: int, npix: int, pass_: int | None = None) -> byte
     # if those don't cover this tile, fall back to the best images for the tile itself.
     parent = npix >> (2 * (order - SHARE_ORDER))
     lon_p, lat_p = HEALPix(nside=2 ** SHARE_ORDER, order="nested").healpix_to_lonlat(parent)
-    urls = pick_images(lon_p.to_value(u.deg), lat_p.to_value(u.deg), detector, pass_=pass_)
+    k = PASS_IMAGES if pass_ else IMAGES_PER_TILE
+    urls = pick_images(lon_p.to_value(u.deg), lat_p.to_value(u.deg), detector, k=k, pass_=pass_)
     if not urls or not _covers(urls[0], lon_c.to_value(u.deg), lat_c.to_value(u.deg)):
-        urls = pick_images(lon_c.to_value(u.deg), lat_c.to_value(u.deg), detector, pass_=pass_)
+        urls = pick_images(lon_c.to_value(u.deg), lat_c.to_value(u.deg), detector, k=k, pass_=pass_)
     if not urls:
         return None
     glon, glat = _grid_lonlat(order, npix)

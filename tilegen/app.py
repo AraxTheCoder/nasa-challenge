@@ -109,6 +109,7 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
     def health():
         n = stats["rendered"]
         return {"ok": True, "orders": list(render.LIVE_ORDERS), "images_per_tile": render.IMAGES_PER_TILE,
+                "images_per_pass_tile": render.PASS_IMAGES,
                 "passes": True,                                 # T82: /tiles/live-p<n>/ is served
                 "rendered": n, "served_from_cache": stats["cached"], "prefetched": stats["prefetched"],
                 "prefetch_pending": len(pending),
@@ -218,3 +219,10 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
                 "mean_cut_s": round(cut_stats["seconds"] / n, 2) if n else None}
 
     return app
+
+
+def app_from_env() -> FastAPI:
+    """uvicorn factory for several worker processes (python -m tilegen --workers n): settings from env.
+    Each worker renders on its own (Python's GIL holds one process to ~1 CPU); the disk cache is shared."""
+    import os
+    return create_app(Path(os.environ.get("TILEGEN_CACHE", "data/tilegen_cache")), int(os.environ.get("TILEGEN_SLOTS", "6")))
