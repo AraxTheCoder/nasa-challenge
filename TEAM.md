@@ -85,6 +85,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T47 | All: Live tile generator (`tilegen/`) on Google Cloud `us-east4` next to the AWS SPHEREx bucket; viewer/API/builds stay local (EU); Tiles switch local/US VM | Jonathan | done | `jonathan/T47-gcp` | From Jonathan's idea. Measure S3 throughput on the VM first |
 
 | T48 | C: Cached Allsky fallback at deep zoom so pending/failed live tiles never erase available overview imagery | Joerg | done | `joerg/T48-map-overview-fallback` | [tasks/T48](tasks/T48-map-overview-fallback.md). User approved implementation + push; investigate repeated tile errors |
+| T49 | A/C: Light curves + spectra on the fly at any position: aperture photometry on the cached SPHEREx FITS (pipeline + `/api/targets/<id>/photometry` + viewer charts); for the variable test stars RW Aur / R Dra | Mati | doing | `mati/T49-photometry` | [tasks/T49](tasks/T49-photometry.md). Gap-scan ideas #2 + #3 |
 
 ## Decisions
 
@@ -212,11 +213,11 @@ Format: `[name] idea — status: new`. Agents don't act on an idea until a human
   1. (→ Board: T45) **Play the series like a video** (core Objective: "a series of images of that patch like a little
      video"): today only A/B blink + arrow keys. Autoplay all frames inside the wavelength filter (or one
      per epoch at matched wavelength), speed + loop, timeline cursor follows. C, `viewer.js`, ~1-2 h.
-  2. **Light curves for the variable test stars** (RW Aur, R Dra are official test targets): brightness
+  2. (→ Board: T49) **Light curves for the variable test stars** (RW Aur, R Dra are official test targets): brightness
      over time at (nearly) the same wavelength, since SPHEREx steps in wavelength and blinking mixes
      colour with variability. Needs calibrated photometry per frame at a position (FITS, not the PNGs):
      A/B: `pipeline.photometry` + `GET /api/targets/<id>/photometry?x=&y=`; C: chart on click. ~3 h.
-  3. **Spectra on the fly** ("extra kudos"): same photometry, plotted against wavelength (each epoch
+  3. (→ Board: T49) **Spectra on the fly** ("extra kudos"): same photometry, plotted against wavelength (each epoch
      sweeps 0.75-5 µm), one colour per epoch. Shares the endpoint with 2, so do both together. C ~1 h extra.
   4. **Per-detector co-adds per epoch** (consideration: "add together all the data taken by each of the
      six detector arrays to improve the signal-to-noise"): mean/median of the aligned frames per detector
@@ -332,6 +333,10 @@ Things waiting on a human.
   children), then prioritize visible live requests and stop disconnected jobs before acquiring a
   live slot. Consider single-flight protection for shared S3Image metadata/chunks too: current
   `.part` paths can collide across tile workers. No production code changed by Joerg's session.
+- 2026-11-14 [Mati → Jonathan, T49] Heads-up: T49 (light curves + spectra) adds `server/photometry.py` (an
+  APIRouter, `GET /api/targets/<id>/photometry`) and one `app.include_router(...)` line in `server/app.py`;
+  it reads the cached cutouts via `pipeline.build.cached_cutout` / `wavelength_at`. Shout in tasks/T49 if
+  you'd rather wire it differently.
 
 ## Log
 
