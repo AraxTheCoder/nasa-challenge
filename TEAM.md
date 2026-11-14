@@ -71,6 +71,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T32 | A: Per-epoch HiPS tiles (R2/R3): build HEALPix tiles per epoch x detector from full images for chosen regions (warm the 5 official fields first), served by `server/` as extra Aladin layers, epoch switch = blink | Jonathan | done | `jonathan/T32-epoch-hips` | Full images cover ~12 deg2 each, far less waste than 36 cutouts per 15' |
 | T33 | A: Read SPHEREx images from the AWS Open Data bucket (`nasa-irsa-spherex`, same paths as IRSA) with HTTP Range: only headers + the rows around the field of IMAGE/FLAGS + WCS-WAVE, no EPSF; IRSA cutouts as fallback | Jonathan | doing | `jonathan/T33-s3-range` | Measured S3 5-7 MB/s, 0 errors vs IRSA 0.31 MB/s, >50% 503 |
 | T34 | C: Label priority: always show only the most important names (field's object, movers, known asteroids, notable motion), the rest on hover; cap + "show all" toggle | Joerg | done | `joerg/T34-label-priority` | [tasks/T34](tasks/T34-label-priority.md). Mati: labels too crowded on real fields. Builds on T23 `paths.js` |
+| T35 | C: Tracing over the stitched sky: paths, per-epoch markers and names of moving / important objects drawn on the explore map (T30/T32), following the epoch blink | Joerg | doing | `joerg/T35-sky-traces` | [task file](tasks/T35-sky-traces.md). From Joerg's idea |
 
 ## Decisions
 
@@ -168,7 +169,7 @@ Format: `[name] idea — status: new`. Agents don't act on an idea until a human
   - Candidate ranking (motion significance, consistency across frames, catalogue match, artifact
     probability from the FLAGS bits) and a dedicated candidate list in the viewer.
   - Photutils for source extraction (not in requirements.lock yet: add with a pin + lock update).
-- [Joerg] Tracing over the stitched sky: draw labels, paths and motion tracks (and detections) on the
+- [Joerg] (on the Board as T35) Tracing over the stitched sky: draw labels, paths and motion tracks (and detections) on the
   explore map (T30/T32 per-epoch HiPS), not only on a single field, so a mover can be followed across
   epochs while panning. The data is there: `labels[].positions`, `known_objects`, `detections` carry
   RA/Dec per frame; Aladin overlays (catalogue + polyline) can draw them. — status: new
