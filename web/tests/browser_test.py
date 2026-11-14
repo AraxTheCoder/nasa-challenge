@@ -522,6 +522,23 @@ try:
         check(sk.get_attribute("#btn-diff", "aria-pressed") == "false" and sk.is_hidden("#diff-canvas"), "T59: the stack ends A − B")
         sk.check("#trail-on")
         check(sk.input_value("#stack-mode") == "off" and sk.is_hidden("#stack-canvas"), "T59: the trail view ends the stack")
+        # T69: shift-and-stack along a clicked object / a guessed motion
+        sk.select_option("#stack-mode", "object")
+        check("Click an object" in sk.text_content("#stack-note") and sk.is_hidden("#stack-canvas"), "T69: along an object asks for a click first")
+        sk.evaluate("""() => document.dispatchEvent(new CustomEvent('paths:select', { detail: { obj: { name: '(99) Testia',
+            positions: [{ frame_id: 'f000', ra_deg: 150.0, dec_deg: 2.2, x: 60, y: 60 }, { frame_id: 'f001', ra_deg: 150.0, dec_deg: 2.2, x: 60, y: 62 }] } } }))""")
+        sk.wait_for_selector("#stack-canvas:not([hidden])", timeout=8000)
+        check("Stack along (99) Testia · 2 frames" in sk.text_content("#stage-stack-label") and "stays in place" in sk.text_content("#stack-note"),
+              f"T69: stack along the selected object ({sk.text_content('#stage-stack-label')})")
+        sk.select_option("#stack-mode", "motion")
+        sk.wait_for_function("document.querySelector('#stage-stack-label').textContent.includes('guessed motion')")
+        check(sk.is_visible("#stack-rate") and "0.25″/h toward 90° (E)" in sk.text_content("#stage-stack-label"),
+              f"T69: guessed motion with rate + direction ({sk.text_content('#stage-stack-label')})")
+        sk.fill("#stack-rate", "0.5"); sk.press("#stack-rate", "Enter")
+        sk.wait_for_function("document.querySelector('#stage-stack-label').textContent.includes('0.5″/h')")
+        check(True, "T69: changing the rate restacks")
+        sk.select_option("#stack-mode", "off")
+        check(sk.is_hidden("#stack-motion") and sk.is_hidden("#stack-canvas"), "T69: off hides the motion inputs")
         check(not skerr, f"T59: no page errors {skerr}")
 
         # 8c. objects panel (T13) on the multi-epoch target
