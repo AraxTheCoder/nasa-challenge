@@ -31,6 +31,15 @@ def main() -> None:
     ap.add_argument("--cutouts-remote", default=os.environ.get("SPHEREX_CUTOUTS_REMOTE", TEAM_TILEGEN),
                     help="tilegen service that cuts the SPHEREx images for builds next to the bucket (T57; "
                          f"default: $SPHEREX_CUTOUTS_REMOTE or {TEAM_TILEGEN}; 'none' = read S3 directly)")
+    ap.add_argument("--public", action="store_true", default=os.environ.get("SPHEREX_PUBLIC") == "1",
+                    help="T58: limits for a public server (per-IP rates, job cap, admin token for refresh/settings, "
+                         "cache cap); also $SPHEREX_PUBLIC=1. Admin token: $SPHEREX_ADMIN_TOKEN")
+    ap.add_argument("--cache-gb", type=float, default=float(os.environ.get("SPHEREX_CACHE_GB", 20)),
+                    help="with --public: keep the field / cutout / spectra caches under this size (default 20)")
+    ap.add_argument("--max-jobs", type=int, default=int(os.environ.get("SPHEREX_MAX_JOBS", 4)),
+                    help="with --public: expensive jobs (builds, spectra) running at once on the server (default 4)")
+    ap.add_argument("--trust-proxy", action="store_true",
+                    help="with --public: client IP from X-Forwarded-For (only behind your own reverse proxy)")
     ap.add_argument("--no-data-setup", action="store_true",
                     help="don't fetch/build the orbit catalogue and image index in the background (T71)")
     args = ap.parse_args()
@@ -38,6 +47,11 @@ def main() -> None:
         args.tiles_remote = None
     if str(args.cutouts_remote).lower() in ("none", ""):
         args.cutouts_remote = None
+    from . import limits
+    limits.configure(args.public, cache_gb=args.cache_gb, max_active=args.max_jobs, trust_proxy=args.trust_proxy)
+    if args.public:
+        print(f"public mode: per-IP limits, {args.max_jobs} jobs at once, cache cap {args.cache_gb:g} GB, "
+              f"admin token {'set' if limits.CFG.token else 'NOT set (refresh and settings disabled)'}", flush=True)
     if not args.fixture and not args.no_data_setup:
         from . import data_setup
         data_setup.start(REPO / "data")     # T71: background; the fallbacks serve until it is done

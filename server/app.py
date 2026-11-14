@@ -14,12 +14,11 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Res
 import json
 import threading
 
-from . import hips
+from . import hips, limits
 from .skycache import SkyCache
 from .builder import REPO, Builder
 from .photometry import router as photometry_router  # T49
 from .fieldspectra import router as fieldspectra_router  # T85/T86
-from .discoveries import router as discoveries_router  # T76
 from .updates import router as updates_router  # T64
 from .coords import CoordError, parse_dec, parse_ra, parse_size, target_id
 
@@ -39,16 +38,19 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"],
                        allow_headers=["*"])
     app.state.builder = builder
+    app.middleware("http")(limits.middleware)   # T58: per-IP request rate (only with --public)
+    limits.register_active(builder.active_count)
+    limits.start_sweeper(Path(cache_root).parent, builder.building_ids)   # T58: cache cap (only with --public)
     app.include_router(photometry_router)  # T49: /api/targets/<id>/photometry
     app.include_router(fieldspectra_router)  # T85/T86: /api/targets/<id>/spectral-outliers
-    app.include_router(discoveries_router)  # T76: /api/discoveries
     app.include_router(updates_router)  # T64: /api/targets/<id>/updates
 
     def reply(job) -> JSONResponse:
         return JSONResponse(job.body(), status_code=_HTTP[job.status])
 
     @app.get("/api/target")
-    def request_target(ra: str, dec: str, size: str | None = None, refresh: int = 0, detector: int | None = None):
+    def request_target(request: Request, ra: str, dec: str, size: str | None = None, refresh: int = 0,
+                       detector: int | None = None):
         try:
             ra_deg, dec_deg, size_am = parse_ra(ra), parse_dec(dec), parse_size(size)
             if detector is not None and not 1 <= detector <= 6:
@@ -58,7 +60,13 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
         tid, ra_r, dec_r = target_id(ra_deg, dec_deg, size_am)
         if detector:
             tid += f"-d{detector}"                       # T89: one band's field, cached apart
-        return reply(builder.request(tid, ra_r, dec_r, size_am, refresh=bool(refresh), detector=detector))
+        refresh = bool(refresh) and limits.is_admin(request)      # T58: public servers rebuild only with the token
+        running = builder.get(tid)
+        if refresh or not (builder.is_cached(tid) or (running and running.status == "building")):
+            deny = limits.new_job(request)               # T58: a new build costs a job (per IP + server-wide cap)
+            if deny is not None:
+                return deny
+        return reply(builder.request(tid, ra_r, dec_r, size_am, refresh=refresh, detector=detector))
 
     @app.get("/api/jobs/{tid}")
     def job_status(tid: str):
@@ -265,6 +273,8 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
 
     @app.post("/api/settings")
     async def set_settings(request: Request):
+        if not limits.is_admin(request):                 # T58: a public server's tile mode is not for visitors
+            return JSONResponse({"error": "changing settings needs the admin token"}, status_code=403)
         body = await request.json()
         if "tiles" in body:
             try:

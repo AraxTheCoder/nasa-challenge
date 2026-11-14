@@ -13,7 +13,6 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `stack.js`, `stackview.js` | stacks (T59): the shown frame's epoch (all detectors) or detector (all epochs) added together, background removed per frame; blinkable; shift-and-stack (T69) along a clicked object or a guessed motion; display only |
 | `lambda.js`, `lampick.js` | type an exact wavelength (T78): "Frames at λ" picks A/B closest to it, the map's µm box picks the closest of 102 channels; `?lam=` in links |
 | `spectrum.js` | spectrum context (T63): star-like baseline per epoch, points that leave it, plain-words hints, feature list; pure, checked by `tests/spectrum_check.mjs` |
-| `discoveries.js`, `discoverview.js` | Candidates (T76): the discovery index from `/api/discoveries` under the map: filter by class, sort, markers on the map, "Show me something interesting"; a click opens the field with the reason (and the map band at the candidate's `lam_um`). Until the survey delivers, a hand-made sample, labelled. Pure part checked by `tests/discoveries_check.mjs` |
 | `trail.js` | trail view: brightest pixel over the frames, movers leave a row of dots (T23) |
 | `paths.js`, `paths.css` | names and motion paths on the image, label priority + hover (T22, T34) |
 | `inspector.js` | side panel for a clicked object: what it is, how it moves, frame by frame (T23) |
@@ -37,7 +36,7 @@ Blinking starts by itself (`autoblink.js` + `app.js`): from level 6 the survey p
 one HiPS order-6 tile builds that tile's field for the shown band in the background and blinks its epochs;
 the band slider (+ typed µm) and "false colour" apply to all of it. Scroll the page (scrollbar on the right;
 the mouse wheel over the map zooms) for everything else: map tools (base map, N↑, the T82 pass buttons,
-"Blink this spot"), candidates, the field form ("Show" builds a field of a chosen size), the frame viewer,
+"Blink this spot"), the field form ("Show" builds a field of a chosen size), the frame viewer,
 analysis, spectra, objects, frames, provenance. Using the map tools or the frame viewer takes the map over
 until the view moves to another tile; the "Blink:" text on the map says what is shown.
 

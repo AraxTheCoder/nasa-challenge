@@ -13,12 +13,6 @@ Tiny committed samples for tests and frontend development. Layout as in `docs/CO
   unknown / artifact. Use it to try every viewer feature offline
   (`web/?data=../fixtures/targets/&target=demo-epochs`) and as the example of a complete target.json.
 
-- `discoveries-sample.json`: a **hand-made** discovery index (T76, CONTRACTS "Discoveries"): seven real,
-  known objects at the quick picks' positions (WISE 0855, Eps Ind B, RW Aur, R Dra, Barnard's Star, Kapteyn's
-  star, a brown dwarf), with class, score and reason written by hand from our checks (T09, T63). `"synthetic":
-  true`; the Live API serves it until the survey (T75) writes `data/survey/discoveries.json`. Regenerate:
-  `python fixtures/make_discoveries_sample.py` (deterministic; CI checks it against its generator and the schema).
-
 Regenerate from the repo root: `python3 fixtures/make_demo_synthetic.py .` and
 `python fixtures/make_demo_epochs.py` (deterministic: same bytes every run). Both are checked against the
 schema by CI (`tests/test_contract.py`).

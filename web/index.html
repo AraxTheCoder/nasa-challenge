@@ -10,7 +10,7 @@
 <body>
   <!-- T90: one page. First screen = the T55 map (the sky map fills the window, the controls float over it,
        blinking starts by itself at level 6/7). Scroll down (scrollbar on the right; the mouse wheel over the
-       map zooms) for everything else: map tools, candidates, the field form, frame viewer, analysis, spectra,
+       map zooms) for everything else: map tools, the field form, frame viewer, analysis, spectra,
        objects, frames, provenance. -->
   <section id="explore" class="mapstage" aria-label="Sky map">
     <!-- T30/T36 Sky map: pan/zoom the whole sky (own WebGL HiPS renderer, sky.js). -->
@@ -89,8 +89,8 @@
     <p class="hud-hint muted small">Drag to move · scroll or pinch to zoom · double-click to zoom in · arrow keys, +/− and N ·
       drag a panel by ⠿ to rearrange it (double-click ⠿ docks it again) ·
       <strong>Go</strong> centres a position, zoomed in fully; from level 6 the map blinks by itself (survey passes; at level 7, resting on a spot: its field epochs) ·
-      scroll the page (scrollbar on the right) for the frame viewer, spectra and candidates</p>
-    <button id="to-below" type="button" class="to-below" title="Frame viewer, spectra, candidates, map tools (or use the scrollbar on the right)">▾ more below</button>
+      scroll the page (scrollbar on the right) for the frame viewer, spectra and map tools</p>
+    <button id="to-below" type="button" class="to-below" title="Frame viewer, spectra, map tools (or use the scrollbar on the right)">▾ more below</button>
   </section>
 
   <datalist id="lam-features"></datalist>
@@ -151,32 +151,6 @@
       <select id="target-select"></select>
     </label>
   </header>
-
-  <!-- T76 Candidates: the discovery index (survey T73–T75, served by the Live API), as a list and on the map.
-       discoverview.js fills it; hidden when the API has no index. -->
-  <section id="discoveries" class="discoveries panel" aria-labelledby="disc-title" hidden>
-    <div class="disc-head">
-      <h3 id="disc-title">Candidates <span id="disc-count" class="muted"></span></h3>
-      <span id="disc-sample" class="badge badge-synthetic badge-small" hidden
-            title="Not survey output yet: real, known objects with class, score and reason written by hand (fixtures/discoveries-sample.json)">Sample · hand-made</span>
-      <button id="disc-interesting" type="button" class="primary" title="Open a random candidate from the better half of the list">Show me something interesting</button>
-      <label class="small">Class <select id="disc-class"></select></label>
-      <label class="small">Sort <select id="disc-sort">
-        <option value="score">by score</option><option value="class">by class</option><option value="name">by name</option>
-      </select></label>
-      <label class="small" title="Circle every listed candidate on the sky map"><input id="disc-onmap" type="checkbox" checked> on the map</label>
-      <span id="disc-source" class="muted small"></span>
-    </div>
-    <p class="muted small disc-intro">What the search flags as worth a look, each with the reason. Click one: the map goes there,
-      builds its blink and measures its spectrum.</p>
-    <div class="disc-wrap">
-      <table id="disc-table" class="frames disc-table">
-        <thead><tr><th>Class</th><th>Object</th><th title="Ranking: higher = more interesting">Score</th><th>Why</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <p id="disc-empty" class="muted small" hidden>No candidate of this class.</p>
-  </section>
 
   <main class="layout">
     <section class="viewer" aria-label="Frame viewer">

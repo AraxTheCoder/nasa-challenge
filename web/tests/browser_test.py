@@ -141,35 +141,6 @@ try:
         page.goto(WEB + "?" + Q)   # back to the bare page, so step 2 waits for its own build
         page.wait_for_function("document.querySelector('#source-info').textContent.includes('Live API')")
 
-        # 1c. T76: candidates from the discovery index (the API serves the hand-made sample), list + open + reason
-        page.wait_for_selector("#discoveries:not([hidden]) #disc-table tbody tr", timeout=5000)
-        rows = page.eval_on_selector_all("#disc-table tbody tr", "rs => rs.map(r => [...r.cells].map(c => c.textContent))")
-        check(len(rows) >= 5 and rows[0][0] == "Brown dwarf" and rows[0][1].startswith("WISE 0855")
-              and page.is_visible("#disc-sample") and page.is_visible("#disc-interesting"),
-              f"candidate list from /api/discoveries, best score first, marked as a hand-made sample ({len(rows)} rows)")
-        page.select_option("#disc-class", "variable")
-        rows = page.eval_on_selector_all("#disc-table tbody tr", "rs => rs.map(r => r.cells[1].textContent)")
-        check(rows == ["R Draconisknown object"], f"filter by class ({rows})")
-        page.click("#disc-table tbody tr")
-        wait_loaded(page)
-        why = page.text_content("#pick-why")
-        check(page.is_visible("#pick-why") and why.startswith("R Draconis · Variable · score") and "hand-made sample" in why
-              and "Known object" in why and "lam=1.6" in page.url and "ra=248.1672" in page.url
-              and page.get_attribute("#disc-table tbody tr", "aria-current") == "true",
-              f"a click opens the candidate's field with its reason and wavelength ({why[:70]}…, {page.url[-40:]})")
-        page.select_option("#disc-class", "all")
-        page.select_option("#disc-sort", "name")
-        first = page.eval_on_selector("#disc-table tbody tr", "r => r.cells[1].textContent")
-        check(first.startswith("Barnard"), f"sort by name ({first})")
-        # only one other "Odd spectrum" candidate (RW Aurigae): deterministic, and not WISE 0855, which step 2 builds fresh
-        page.select_option("#disc-class", "spectral")
-        page.click("#disc-interesting")
-        page.wait_for_function("location.href.includes('ra=76.9566')", timeout=5000)
-        wait_loaded(page)
-        check(page.text_content("#pick-why").startswith("RW Aurigae · Odd spectrum") and page.locator("#disc-table tbody tr[aria-current=true]").count() == 1,
-              f"Show me something interesting opens another candidate ({page.text_content('#pick-why')[:50]}…)")
-        page.goto(WEB + "?" + Q)
-        page.wait_for_function("document.querySelector('#source-info').textContent.includes('Live API')")
 
         # 2. pick a preset -> builds (202, progress) -> ready
         page.select_option("#preset", label="WISE 0855-0714")

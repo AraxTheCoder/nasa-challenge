@@ -4,7 +4,7 @@
 //    level 6 the survey passes (autoblink.js), at level 7 resting on one HiPS order-6 tile builds that
 //    tile's field quietly and blinks its epochs; the band slider and "false colour" apply to all of it.
 //  - Below (scroll the page): everything of web/: map tools (base map, north up, Joerg's pass buttons,
-//    "Blink this spot"), candidates (T76), the field form ("Show" builds a field of a chosen size), the
+//    "Blink this spot"), the field form ("Show" builds a field of a chosen size), the
 //    frame viewer (map only by default, T80/T81), analysis, spectra, objects, frames, provenance.
 //    Using the map tools or the frame viewer takes the map over until the view moves to another tile.
 // Two ways to get data:
@@ -29,8 +29,6 @@ import "./outliers.js";  // T86: sources in the field with unusual spectra
 import { initLamPick, lamFromUrl, setLamUrl } from "./lampick.js";
 import { initStack } from "./stackview.js";
 import { nearestBand, parseLam } from "./lambda.js";
-import { initDiscoveries, markShown } from "./discoverview.js";
-import { candidateAt, displayName, whyLine } from "./discoveries.js";
 import * as explore from "./explore.js";
 import { initHud } from "./hud.js";   // T55: drag the floating panels anywhere
 import { parseDec, parseRa } from "./coords.js";
@@ -67,8 +65,6 @@ const app = {
   index: null,       // offline mode: parsed index.json
   request: null,     // live mode: last {ra, dec, size} asked for
   presets: [],
-  candidates: [],    // T76: discovery index (discoverview.js), for the reason under the form
-  candSynthetic: false,
   loadToken: 0,      // bumps on every new load; stale async results check it and bail out
   abort: null,
   jobStart: 0,
@@ -164,43 +160,19 @@ function fillForm(req) {
   syncPresetSelect();
 }
 
-/** Show the matching quick pick in the dropdowns, and why the field is interesting (the quick pick's reason,
- *  else a T76 candidate's; the candidate's first when it was opened from the list), or nothing once the user
- *  typed other coordinates. */
-function syncPresetSelect({ candidateFirst = false } = {}) {
+/** Show the matching quick pick in both dropdowns (and why it is interesting), or none once the user typed
+ *  other coordinates. */
+function syncPresetSelect() {
   const { ra, dec } = readForm();
   const i = app.presets.findIndex((p) => String(p.ra_deg) === ra && String(p.dec_deg) === dec);
   $("#preset").value = i >= 0 ? String(i) : "";
   $("#go-preset").value = i >= 0 ? String(i) : "";
-  const cand = candidateAt(app.candidates, ra, dec);
-  markShown(cand?.id ?? null);
-  if (cand && (candidateFirst || i < 0)) {
-    const w = whyLine(cand, app.candSynthetic);
-    showWhy(`${displayName(cand)} · ${w.head}`, w.text);
-  } else {
-    showWhy(i >= 0 ? app.presets[i].name : "", i >= 0 ? app.presets[i].why : null);
-  }
+  showWhy(i >= 0 ? app.presets[i].name : "", i >= 0 ? app.presets[i].why : null);
 }
 
 function showWhy(title, text) {
   $("#pick-why").hidden = !text;
   $("#pick-why").replaceChildren(...(text ? [el("strong", {}, `${title}: `), text] : []));
-}
-
-/** T76: a candidate from the list opens like a quick pick; the map band goes to its wavelength if it has one. */
-function openCandidate(c) {
-  hideTip();
-  if (Number.isFinite(c.lam_um)) {
-    const lamBox = $("#explore-band-lam");
-    if (!$("#explore-band-box").hidden && lamBox.onchange) { lamBox.value = String(c.lam_um); lamBox.onchange(); }
-    else setLamUrl(c.lam_um);
-  }
-  const req = { ra: String(c.ra_deg), dec: String(c.dec_deg), size: clampSize(c.size_arcmin ?? SIZE_DEFAULT) };
-  fillForm(req);
-  syncPresetSelect({ candidateFirst: true });
-  setPageUrl(req, true, true);
-  loadField(req);
-  window.scrollTo({ top: 0, behavior: "smooth" });   // the list sits below the map: show the reason and the map
 }
 
 const presetRequest = (f) => ({ ra: String(f.ra_deg), dec: String(f.dec_deg), size: clampSize(f.size_arcmin ?? SIZE_DEFAULT) });
@@ -543,12 +515,6 @@ function bindPage() {
   $("#preset").addEventListener("change", () => { hideTip(); onPresetPicked(); });
   $("#surprise").addEventListener("click", () => { hideTip(); surprise(); });
   $("#to-below").addEventListener("click", () => $("#map-tools").scrollIntoView({ behavior: "smooth" }));
-  document.addEventListener("discoveries:open", (e) => { if (e.detail?.candidate) openCandidate(e.detail.candidate); });
-  document.addEventListener("discoveries:loaded", (e) => {
-    app.candidates = e.detail?.candidates ?? [];
-    app.candSynthetic = Boolean(e.detail?.synthetic);
-    syncPresetSelect();
-  });
   $("#field-form").addEventListener("focusin", (e) => {
     if (e.target.name === "ra" || e.target.name === "dec") showTip();
   });
@@ -628,7 +594,7 @@ function setManual(on) {
 // ---------- sky map (T30/T36) ----------
 
 /** A field arrived: an automatic one (tile build) is remembered for its tile + band; one asked for
- *  explicitly (Show, a link, a candidate, Blink this spot) moves the map there and is outlined (web/). */
+ *  explicitly (Show, a link, Blink this spot) moves the map there and is outlined (web/). */
 function syncExplore(target) {
   app.shownTarget = target;
   const c = target?.center;
@@ -731,7 +697,7 @@ function updateExplorePos(_view, cursor) {
 // Survey passes from level 6. Resting at level 7 on one HiPS order-6 tile (~55′, about one screen) builds
 // that tile's field in the background for the band shown (same grid for everyone: built once, then cached);
 // once it is ready and the view is still on that tile, its field epochs blink (aligned frames, traces,
-// detections). A field asked for explicitly (Show, a candidate, Blink this spot) blinks while the view is on
+// detections). A field asked for explicitly (Show, a link, Blink this spot) blinks while the view is on
 // it. Moving out of the tile or zooming out goes back to the survey passes. No buttons, no popup.
 
 const FIELD_ORDER = 6;
@@ -764,7 +730,7 @@ function tileField(pix) {
 
 const fieldKey = () => { const t = centreTile(); return t === null ? null : `${t}|${fieldVariant()}`; };
 
-/** The explicitly asked-for field (Show, a candidate, Blink this spot), while the view centre is on it: it
+/** The explicitly asked-for field (Show, a link, Blink this spot), while the view centre is on it: it
  *  blinks at any zoom, as in web/ before T90. */
 function explicitHere() {
   const t = autoField.explicit, v = explore.view();
@@ -1095,7 +1061,6 @@ async function main() {
     return;
   }
   await loadPresets();
-  initDiscoveries(app.api);   // T76: not awaited; the list appears when the Live API answers
   // ?explore=0 skips the sky map (embeds, slow connections, and the browser test, which must not
   // depend on external tile servers being up).
   if (p.get("explore") === "0") { $("#explore").hidden = true; $("#map-tools").hidden = true; }

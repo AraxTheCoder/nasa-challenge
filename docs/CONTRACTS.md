@@ -1,4 +1,12 @@
-# Contracts (v0.21)
+# Contracts (v0.23)
+
+v0.23: the discovery index (v0.13, T76: `GET /api/discoveries`, its file format and the hand-made sample) is
+removed (Decision 2026-11-14, Mati: the tool visualizes, citizen scientists find things).
+
+v0.22 (T58): limits for a public Live API (`python -m server --public`): 429 + Retry-After (per-IP request
+rate or too many new jobs from one address), 503 `{"status": "busy"}` + Retry-After (server-wide job cap),
+`refresh=1` and `POST /api/settings` only with the admin token. Off by default: nothing changes for the team's
+servers. See "Public limits".
 
 v0.21 (T89): sky layer `spherex-live-rgb` (the whole map in false colour: IRSA cube slices 8/25/42/59/76/93
 to order 5, the live grey tiles at 6-7); `spherex-live` serves IRSA's blank cube slices 50/51 (dichroic channels)
@@ -435,6 +443,24 @@ answers at once. T86 (`pipeline.spectral_outliers`) ranks them. Answer (200):
   shape and `model` what an ordinary source of its kind would show (log10, null = no band).
 - Synthetic targets: 200 `{"status": "no_data"}`. Unknown target: 404.
 
+### Public limits (v0.22, T58)
+
+Only when the server runs with `--public` (or `SPHEREX_PUBLIC=1`); otherwise none of this applies.
+
+- Every `/api/...` call except `/api/health` counts against a per-IP rate (`/api/sky/...` and `/api/hips/...`
+  tiles have their own, larger allowance). Beyond it: **429** `{"status": "error", "message": "too many …"}` with
+  `Retry-After` (seconds).
+- Starting expensive work costs one job from the address's job allowance (default 30 per hour, 10 at once):
+  a field build (`/api/target` for a field not cached and not being built), an all-exposure spectrum
+  (`photometry?all=1`, `/api/photometry`) not yet cached, `spectral-outliers?start=1` for a field not measured.
+  Polling a running job or reading a cached result is free. Beyond: **429** as above.
+- At most `--max-jobs` (default 4) such jobs run on the whole server. Beyond: **503**
+  `{"status": "busy", "message": …}` with `Retry-After`.
+- `refresh=1` is ignored and `POST /api/settings` answers **403** unless the request carries the admin token
+  (`SPHEREX_ADMIN_TOKEN`) as `?token=` or header `X-Admin-Token`.
+- The field / cutout / spectra caches are kept under `--cache-gb` (default 20) by evicting the least recently
+  used; a field that is being built is never evicted.
+
 ### Target id and cache
 
 - The id is derived from the request, so equal requests hit the same cache entry:
@@ -572,40 +598,6 @@ Answer (200):
   a new harvest (`pipeline.mirror`); `release_note` says so.
 - Rebuild = `GET /api/target?…&refresh=1`. Synthetic targets: `{"status": "no_data"}`. Unknown target: 404.
   Image search failed (IRSA down): 502 with a message.
-
-### Discoveries (v0.13, T76)
-
-The survey's candidates (T73–T75), for the viewer's "Candidates" list and "Show me something interesting":
-
-```
-GET /api/discoveries                              every candidate, best score first
-    ?class=brown_dwarf,variable                   only these classes
-    &ra=<deg>&dec=<deg>&radius=<deg>              only within radius of a position (all three or none)
-    &min_score=0.5 &limit=50                      score floor, at most this many
-    &random=1                                     one candidate at random (after the filters)
-```
-
-Answer (200): the index file's head plus the selection. Bad parameters: 400 `{"status": "error", "message"}`.
-
-```json
-{ "status": "ready", "synthetic": false, "survey": "pilot pass 2, 2026-11-20", "description": "...",
-  "method": "...", "generated_utc": "...", "provenance": [ ... ], "source": "data/survey/discoveries.json",
-  "total": 812, "count": 1,
-  "candidates": [ { "id": "p2-000123", "name": "optional", "ra_deg": 133.7598, "dec_deg": -7.2422,
-                    "size_arcmin": 10, "class": "brown_dwarf", "score": 0.93,
-                    "reason": "Moves 0.6 px between epochs, no Gaia counterpart, bright at 4.5 µm only",
-                    "known": null, "lam_um": 4.5, "mjd": 61000.5, "tile": {"order": 6, "ipix": 40905},
-                    "evidence": { "pm_arcsec_per_yr": 7.9 } } ] }
-```
-
-- The file is `data/survey/discoveries.json` (pass 2 writes it; re-read when it changes) with the fields above
-  except `status`, `source`, `total`, `count`; schema `docs/discoveries.schema.json`. Without it the API serves
-  `fixtures/discoveries-sample.json`: real known objects, class / score / reason by hand, `"synthetic": true`,
-  shown as "Sample · hand-made" in the viewer.
-- `class`: `brown_dwarf` | `variable` | `spectral` (odd spectrum) | `mover` | `other` (T73's candidate classes).
-  `score` 0–1, higher = more interesting. `reason`: plain words, shown to the user as is.
-- `known`: catalogue name when the candidate is a known object (validation / recovery), else null or absent.
-- `lam_um`: where it shows best; the viewer opens the map band there. `size_arcmin`: field to build (default 10).
 
 ### Frontend URL
 

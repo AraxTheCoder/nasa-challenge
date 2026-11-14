@@ -7,7 +7,8 @@
 ## Goal
 One viewer at `/web/`. The first screen looks like `/app/` (full-window map, floating panels, automatic
 blink); scrolling down the page (scrollbar on the right) reaches everything of `/web/` the others use:
-frame viewer, blink controls, analysis, spectra, candidates, outliers, timeline, side panels. Nothing of
+frame viewer, blink controls, analysis, spectra, outliers, timeline, side panels (candidates: removed by
+Mati's Decision, T76, while this was being merged). Nothing of
 `web/` and nothing of `app/` is dropped.
 
 ## Plan
@@ -30,6 +31,9 @@ frame viewer, blink controls, analysis, spectra, candidates, outliers, timeline,
   → #objects-hud-note; web's cursor position → #map-pos).
 - `web/tests/overview_check.mjs` (T48): its band switch 1 → 2 stays inside detector 1, which since T89 is the
   same live tile; it now switches 1 → 18 (detector 2) and checks the same things.
+
+- Merging main brought Mati's T76 removal (visualization only): the Candidates panel, its modules and
+  `openCandidate` were taken out of the merged app.js / index.html too.
 
 ## Questions / needs from others
 - [to everyone] `/web/` changes layout; all features stay. Please pull and look before building on web/.

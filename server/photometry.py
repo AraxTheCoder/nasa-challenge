@@ -23,10 +23,22 @@ from fastapi import APIRouter, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
+from . import limits
+
 router = APIRouter()
 _ID = re.compile(r"^[a-z0-9-]+$")
 _all_jobs: dict[tuple[float, float], dict] = {}
 _all_lock = threading.Lock()
+limits.register_active(lambda: len(_all_jobs))   # T58: all-exposure spectra count against the server-wide cap
+
+
+def _deny_new(request: Request, ra: float, dec: float):
+    """T58: None if this answers from cache / a running job or may start one; else the 429/503 to send."""
+    from pipeline.photometry import spectrum_cache
+    key = (round(ra % 360, 4), round(dec, 4))
+    if key in _all_jobs or spectrum_cache(*key).is_file():
+        return None
+    return limits.new_job(request)
 
 
 def _all_exposures(ra: float, dec: float) -> dict:
@@ -75,11 +87,14 @@ def _grid_to_sky(target: dict, x: float, y: float) -> tuple[float, float]:
 
 
 @router.get("/api/photometry")
-async def photometry_anywhere(ra: float, dec: float):
+async def photometry_anywhere(request: Request, ra: float, dec: float):
     """T79: spectrum + light curve of any sky position from all its exposures, no field needed
     (the map's click). Same job and answer as `/api/targets/<id>/photometry?...&all=1`."""
     if not (0 <= ra < 360 and -90 <= dec <= 90):
         return JSONResponse({"status": "error", "message": "ra must be in [0, 360), dec in [-90, 90]"}, status_code=400)
+    deny = _deny_new(request, ra, dec)
+    if deny is not None:
+        return deny
     body = await run_in_threadpool(_all_exposures, ra, dec)
     return JSONResponse(body, status_code={"ready": 200, "building": 202}.get(body["status"], 500))
 
@@ -101,6 +116,9 @@ async def photometry(tid: str, request: Request, ra: float | None = None, dec: f
     if not (0 <= ra < 360 and -90 <= dec <= 90):
         return JSONResponse({"status": "error", "message": "ra must be in [0, 360), dec in [-90, 90]"}, status_code=400)
     if all:
+        deny = _deny_new(request, ra, dec)
+        if deny is not None:
+            return deny
         body = await run_in_threadpool(_all_exposures, ra, dec)
         code = {"ready": 200, "building": 202}.get(body["status"], 500)
         return JSONResponse({"id": tid, **body}, status_code=code)
