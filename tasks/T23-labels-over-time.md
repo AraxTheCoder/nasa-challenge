@@ -29,7 +29,8 @@ visible without blinking: a trail image and, later, shift-and-stack along a moti
       Gaia), observation history per frame (time, epoch, wavelength, position, and brightness at
       that spot), motion data; Barnard's Star as the demo object. Grows out of T22's pinned tooltip;
       coordinate with Mati's objects list (T13)
-- [ ] Cleaner labels: avoid overlapping names (shift or hide lower-priority ones), show catalogue
+- [x] Cleaner labels (in `paths.js`): names try right/left/above/below and skip taken spots,
+      movers first; hidden names are counted in the legend, hover still works. Was: avoid overlapping names (shift or hide lower-priority ones), show catalogue
       numbers only on hover, fewer rings at wide fields
 - [x] Trail view in the viewer (`web/trail.js`): frames of this epoch or all epochs stacked with
       "brightest pixel wins"; steady stars stay dots, movers leave rows of dots. Browser-only, no pipeline change
