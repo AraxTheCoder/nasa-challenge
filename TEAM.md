@@ -56,7 +56,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T17 | A: Compute wavelength-matched `pairs` across epochs (+ `bandwidth_um`) in `target.json` (contracts v0.2) | Joerg | open | | Part of T03/T04 output. Rule in CONTRACTS "Pair" |
 | T18 | C: Live API service: `GET /api/target?ra=&dec=&size=` builds (pipeline + detect) or serves from cache, progress while building, CORS (contracts v0.3) | Jonathan | done | `jonathan/T18-live-api` | `python -m server [--fixture]`, see `server/README.md`. Live mode works once `pipeline.build` (T02–T04) exists; until then `--fixture` |
 | T19 | A: Labels on the images: catalogue names/positions (SIMBAD, Gaia DR3 with proper motion) into `target.json` | Joerg | done | `joerg/T19-labels` | [task file](tasks/T19-labels.md). `pipeline/labels.py`; viewer side is T13 |
-| T20 | C: Viewer ↔ Live API: RA/Dec/size input, `?ra=&dec=&size=` in the page URL, request + poll with progress, load from `target_url`, quick picks for the official test fields (contracts v0.3) | Mati | doing | `mati/T20-live-api-client` | [tasks/T20](tasks/T20-live-api-client.md) |
+| T20 | C: Viewer ↔ Live API: RA/Dec/size input, `?ra=&dec=&size=` in the page URL, request + poll with progress, load from `target_url`, quick picks for the official test fields (contracts v0.3) | Mati | done | `mati/T20-live-api-client` | [tasks/T20](tasks/T20-live-api-client.md). Run: `web/README.md` (API :8000, viewer :8080). Test fields in `web/presets.json` |
 
 ## Decisions
 
@@ -178,3 +178,11 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   (Barnard's Star field). CONTRACTS v0.4 + schema. Also: CLAUDE.md rules for task files and
   "agents keep everything consistent". Next (Joerg): T02-T04 so `build_target` exists for T18.
   Gotchas: main SIMBAD host down today (mirror used); Barnard's Star saturates in D1.
+- 2026-11-14 [Mati + Claude] Done: T20 merged. The viewer talks to the Live API: RA/Dec/size form,
+  `?ra=&dec=&size=` links (back/forward work), progress panel while building, Rebuild, Copy link,
+  quick picks for the five official test fields. `?data=<folder>` keeps an offline mode. Code split:
+  `web/api.js`, `viewer.js`, `app.js`, `util.js`; browser test `web/tests/browser_test.py` (27 checks).
+  Gotchas: serve the viewer on :8080, the API owns :8000. `web/presets.json` has SIMBAD positions
+  moved to epoch 2026.0 (Barnard's Star moved 4.5' since J2000; WISE 0855's position in the challenge
+  text is its ~2010 one); T05 should warm the cache with exactly those. Fast stars move < 1 px
+  (6.15"/px) per 6-month pass. Requests for Jonathan (fixture `center`) and T14 (https) in tasks/T20.
