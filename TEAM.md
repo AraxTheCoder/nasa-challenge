@@ -114,7 +114,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T75 | B: Discovery survey pass 2 (HPC): flag tiles from the pass-1 lists (moved / appeared / changed at matched λ / odd spectrum), then all exposures there at full resolution, forced photometry, spectra, candidates with class + score + reason | Joerg | open | | [tasks/T75](tasks/T75-survey-pass2.md). Suggested owner: whoever runs the HPC (Joerg or Jonathan). |
 | T76 | C: Discovery index in the viewer: candidates per tile from the survey served by the Live API; "Show me something interesting" + candidate list, each opening its field with blink, spectrum and reason | | open | | [tasks/T76](tasks/T76-discovery-index.md). Suggested owner: Mati. Can start on a synthetic sample index. |
 | T77 | B: (merged into T74/T75, the same survey; measured scope + per-band plan moved to tasks/T74 Notes) | Joerg | done | | [tasks/T77](tasks/T77-sky-survey-hpc.md) |
-| T78 | C: Type an exact wavelength: a µm input next to the sky map's band slider (snaps to the nearest of the 102 channels, shows its exact centre) and "frames at λ" in the blink viewer (A/B = the frames nearest that wavelength in two epochs) | | open | | [tasks/T78](tasks/T78-wavelength-input.md). Mati's request; needs porting to `app/` (T55) |
+| T78 | C: Type an exact wavelength: a µm input next to the sky map's band slider (snaps to the nearest of the 102 channels, shows its exact centre) and "frames at λ" in the blink viewer (A/B = the frames nearest that wavelength in two epochs) | Mati | doing | `mati/T78-wavelength-input` | [tasks/T78](tasks/T78-wavelength-input.md). Mati's request; needs porting to `app/` (T55) |
 
 ## Decisions
 
