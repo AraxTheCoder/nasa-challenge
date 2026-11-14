@@ -74,6 +74,16 @@ def _grid_to_sky(target: dict, x: float, y: float) -> tuple[float, float]:
     return float(ra), float(dec)
 
 
+@router.get("/api/photometry")
+async def photometry_anywhere(ra: float, dec: float):
+    """T79: spectrum + light curve of any sky position from all its exposures, no field needed
+    (the map's click). Same job and answer as `/api/targets/<id>/photometry?...&all=1`."""
+    if not (0 <= ra < 360 and -90 <= dec <= 90):
+        return JSONResponse({"status": "error", "message": "ra must be in [0, 360), dec in [-90, 90]"}, status_code=400)
+    body = await run_in_threadpool(_all_exposures, ra, dec)
+    return JSONResponse(body, status_code={"ready": 200, "building": 202}.get(body["status"], 500))
+
+
 @router.get("/api/targets/{tid}/photometry")
 async def photometry(tid: str, request: Request, ra: float | None = None, dec: float | None = None,
                      x: float | None = None, y: float | None = None, all: int = 0):  # noqa: A002 - query name
