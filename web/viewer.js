@@ -385,7 +385,11 @@ function matchB() {
 /** Apply new filter values; keep A, B and the shown frame inside the filter. */
 function setFilter(patch) {
   const next = { ...state.filter, ...patch };
-  if (next.min != null && next.max != null && next.min > next.max) [next.min, next.max] = [next.max, next.min];
+  // Typing one bound past the other clears the other one (no surprise swapping of both boxes).
+  if (next.min != null && next.max != null && next.min > next.max) {
+    if ("min" in patch) next.max = null;
+    else next.min = null;
+  }
   state.filter = next;
   $("#lam-min").value = next.min ?? "";
   $("#lam-max").value = next.max ?? "";

@@ -31,9 +31,10 @@ function niceRange(lo, hi) {
 function yTicks(lo, hi) {
   const span = hi - lo;
   const step = span > 3 ? 1 : span > 1.2 ? 0.5 : span > 0.5 ? 0.2 : span > 0.2 ? 0.1 : 0.05;
+  const digits = step >= 1 ? 0 : step >= 0.1 ? 1 : 2; // same decimals on every label
   const ticks = [];
   for (let t = Math.ceil(lo / step) * step; t <= hi + 1e-9; t += step) ticks.push(Number(t.toFixed(3)));
-  return ticks;
+  return { ticks, digits };
 }
 
 const day = (iso) => (iso ?? "").slice(0, 10);
@@ -66,11 +67,12 @@ export function renderTimeline(host, frames, { onPick }) {
   scales.set(root, { yOf, range: [y0, y1] });
 
   // Recessive y grid + labels.
-  for (const t of yTicks(y0, y1)) {
+  const { ticks, digits } = yTicks(y0, y1);
+  for (const t of ticks) {
     const y = yOf(t);
     root.append(
       svg("line", { class: "tl-grid", x1: PAD_LEFT, x2: width, y1: y, y2: y }),
-      svg("text", { class: "tl-axis", x: PAD_LEFT - 6, y: y + 3.5, "text-anchor": "end" }, `${fmtNum(t, t < 1 || t % 1 ? 2 : 0)}`),
+      svg("text", { class: "tl-axis", x: PAD_LEFT - 6, y: y + 3.5, "text-anchor": "end" }, fmtNum(t, digits)),
     );
   }
   root.append(svg("text", { class: "tl-axis", x: 2, y: PAD_TOP - 10 }, "λ µm"));
