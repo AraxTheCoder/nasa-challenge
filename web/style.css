@@ -255,6 +255,7 @@ button.link:hover { text-decoration: underline; }
 .obj-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .obj-name { font-weight: 600; overflow-wrap: anywhere; }
 .obj-sub { overflow-wrap: anywhere; }
+.obj-reason { color: var(--text); opacity: 0.85; overflow-wrap: anywhere; }
 .obj-chip { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
 .obj-unknown { color: var(--warn); border-color: var(--warn); }
 .obj-known { color: var(--slot-a); border-color: var(--slot-a); }

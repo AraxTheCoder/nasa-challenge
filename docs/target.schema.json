@@ -241,6 +241,10 @@
                 "exclusiveMaximum": 360
               }
             }
+          },
+          "reason": {
+            "type": "string",
+            "description": "v0.9: plain-words reason for the status (detect.classify, T08)"
           }
         }
       }

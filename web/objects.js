@@ -20,6 +20,7 @@ function objectsOf(t) {
     key: `d:${d.id}`, status: d.status, name: d.matched_object ?? (d.status === "unknown" ? "Unknown mover" : `Artifact ${d.id}`),
     detail: d.matched_object ? `detection ${d.id}` : d.id, score: d.score, rate: d.motion?.rate_arcsec_per_hr,
     pa: d.motion?.pa_deg, positions: d.track ?? [], synthetic: d.synthetic !== false,
+    reason: typeof d.reason === "string" ? d.reason : null, // v0.9, from detect.classify (T08)
   }));
   const matched = new Set((t.detections ?? []).filter((d) => d.status !== "artifact" && d.matched_object).map((d) => d.matched_object));
   const missed = (t.known_objects ?? []).filter((k) => !matched.has(k.name)).map((k) => ({
@@ -97,7 +98,8 @@ function render() {
         "aria-pressed": String(st.focus === o.key), onclick: () => focusObject(o) },
         el("span", { class: "obj-line" }, chip(o.status, ran), el("span", { class: "obj-name" }, o.name),
           o.synthetic ? el("span", { class: "badge badge-synthetic badge-small" }, "synthetic") : null),
-        el("span", { class: "obj-sub muted small" }, sub)));
+        el("span", { class: "obj-sub muted small" }, sub),
+        o.reason ? el("span", { class: "obj-reason small" }, o.reason) : null));
     return row;
   }));
 }

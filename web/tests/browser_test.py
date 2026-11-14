@@ -43,6 +43,7 @@ _t = dict(_fixture, id="multi-epoch", name="Synthetic multi-epoch test field (NO
                "track": [{"frame_id": f, "ra_deg": 150.0, "dec_deg": 2.2, "x": x, "y": 30.0} for f, x in (("f004", 40.0), ("f005", 45.0), ("f006", 50.0))],
                "motion": {"rate_arcsec_per_hr": 120.0, "pa_deg": 45.0}},
               {"id": "d002", "status": "artifact", "matched_object": None, "synthetic": True, "score": 0.1,
+               "reason": "seen in one frame only: nothing to confirm motion with",
                "track": [{"frame_id": "f000", "ra_deg": 150.0, "dec_deg": 2.2, "x": 10.0, "y": 10.0}]},
               {"id": "d003", "status": "known", "matched_object": "(99) Testia", "synthetic": True, "score": 0.9,
                "track": [{"frame_id": f, "ra_deg": 150.0, "dec_deg": 2.2, "x": 60.0, "y": y} for f, y in (("f000", 60.0), ("f001", 62.0))],
@@ -333,6 +334,7 @@ try:
         check("120″/h → NE" in q.locator("#objects-list .obj-row").first.text_content(), "unknown mover shows rate and direction")
         q.check("#objects-show-artifacts")
         check(q.locator("#objects-list .obj-row").count() == 4 and "Artifact d002" in q.text_content("#objects-list"), "artifacts appear on request")
+        check("seen in one frame only" in q.text_content("#objects-list"), "artifact shows its reason (v0.9, T08)")
         q.uncheck("#objects-show-artifacts")
         q.locator("#objects-list .obj-row").first.click()
         check("f004" in q.text_content("#stage-label"), "clicking an object jumps to a frame where it is")

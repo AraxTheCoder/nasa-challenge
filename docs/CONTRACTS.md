@@ -1,4 +1,7 @@
-# Contracts (v0.8)
+# Contracts (v0.9)
+
+v0.9 adds an optional plain-words `reason` to each detection (why it is known / unknown / artifact),
+written by `detect.classify` (T08). Additive; `schema_version` stays `"0.2"`. See TEAM.md Decisions.
 
 v0.8 makes catalogue labels opt-in: builds write `labels: []`; `GET /api/targets/<id>/labels` adds them
 (see "Labels on request"). See TEAM.md Decisions.
@@ -201,6 +204,10 @@ from the geocentre.
 - `synthetic`: `true` if the source was injected by us. Must be shown in the UI.
 - `score`: 0–1, higher is more convincing.
 - `motion.pa_deg`: direction of motion, degrees east of north.
+- `reason` (v0.9, optional): one plain-words sentence why the detection got its status, e.g.
+  "follows (4) Vesta (JPL) within 0.4 px on 3 frame(s)" or "seen in one frame only". Shown in the UI.
+- Pipeline for detections: T06 finds tracks → `detect.known_objects` (T07, JPL) fills `known_objects`
+  → `detect.classify` (T08) sets `status`, `matched_object`, `score`, `motion`, `reason`.
 
 ## Entry points
 
@@ -208,6 +215,8 @@ from the geocentre.
 python -m server [--port 8000] [--fixture]            # Live API (T18)
 python -m pipeline.build --id <id> --ra <deg> --dec <deg> --size <arcmin> [--out data/targets]
 python -m detect.run <target_dir>
+python -m detect.known_objects <target_dir> [--vmag 20]  # T07: known asteroids/comets from JPL
+python -m detect.classify <target_dir>                   # T08: status/score/reason per detection
 python -m pipeline.publish <id> [--to web/targets]      # copies a target and updates index.json
 ```
 
