@@ -55,7 +55,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T16 | C: Demo video and slides | | open | | After feature freeze |
 | T17 | A: Compute wavelength-matched `pairs` across epochs (+ `bandwidth_um`) in `target.json` (contracts v0.2) | Joerg | open | | Part of T03/T04 output. Rule in CONTRACTS "Pair" |
 | T18 | C: Live API service: `GET /api/target?ra=&dec=&size=` builds (pipeline + detect) or serves from cache, progress while building, CORS (contracts v0.3) | Jonathan | done | `jonathan/T18-live-api` | `python -m server [--fixture]`, see `server/README.md`. Live mode works once `pipeline.build` (T02–T04) exists; until then `--fixture` |
-| T19 | A: Labels on the images: catalogue names/positions (SIMBAD, Gaia DR3 with proper motion, CatWISE) into `target.json` | Joerg | doing | `joerg/T19-labels` | [task file](tasks/T19-labels.md) |
+| T19 | A: Labels on the images: catalogue names/positions (SIMBAD, Gaia DR3 with proper motion) into `target.json` | Joerg | done | `joerg/T19-labels` | [task file](tasks/T19-labels.md). `pipeline/labels.py`; viewer side is T13 |
 | T20 | C: Viewer ↔ Live API: RA/Dec/size input, `?ra=&dec=&size=` in the page URL, request + poll with progress, load from `target_url`, quick picks for the official test fields (contracts v0.3) | Mati | doing | `mati/T20-live-api-client` | [tasks/T20](tasks/T20-live-api-client.md) |
 
 ## Decisions
@@ -97,6 +97,10 @@ Dated, one line each, with why.
   the Board stays the one-line index. Why: Board rows are too short for findings and requests.
 - 2026-11-14 [Mati] Agrees with the architecture and CONTRACTS v0.1 (closes the Questions item).
   Why: Mati's answer; per Joerg's line above no ack is needed, v0.2 + v0.3 are in effect.
+- 2026-11-14 [Joerg] CONTRACTS v0.4: optional `labels` in `target.json` (SIMBAD names + Gaia DR3
+  stars, position per frame with proper motion), written by `pipeline.labels`. `schema_version`
+  stays "0.2" so existing readers keep working. Why: official targets are fast-moving stars;
+  labels that follow them make motion visible. Details: tasks/T19-labels.md.
 
 ## Ideas
 
@@ -125,6 +129,8 @@ Things waiting on a human.
   proper-motion stars, brown dwarfs and variables, not asteroids. Bake these as demo targets?
   (3) nice-to-haves: coordinates in the URL, add/subtract epochs, choosable FOV, Gaia/WISE
   overlay, spectra, flag display. Resources tab and judging criteria still missing.
+- 2026-11-14 [Joerg → Mati] `labels` is in CONTRACTS v0.4 for T13 (overlay). Drawing suggestion
+  and a working reference are in tasks/T19-labels.md, "Questions / needs from others".
 
 ## Log
 
@@ -167,3 +173,8 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   + polling (C), `pipeline.build` with optional `progress=` callback (A). Gotchas: ids round to
   1e-4 deg (WISE 0855 → `c1337951-m072451-s15`); T14 GitHub Pages alone can't run the API, a
   Python host is needed; Space Apps general judging criteria still not pasted.
+- 2026-11-14 [joerg + Claude] Done: T19 labels (pipeline side). `pipeline/labels.py` adds SIMBAD
+  names + Gaia DR3 stars to `target.json`, moved to each frame time; 0.4" accuracy on real frames
+  (Barnard's Star field). CONTRACTS v0.4 + schema. Also: CLAUDE.md rules for task files and
+  "agents keep everything consistent". Next (Joerg): T02-T04 so `build_target` exists for T18.
+  Gotchas: main SIMBAD host down today (mirror used); Barnard's Star saturates in D1.
