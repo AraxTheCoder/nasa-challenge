@@ -93,7 +93,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T54 | A/C: Known objects + labels start while the images download (they need only frame times + field geometry), so a new field is complete when its frames are | Joerg | done | `joerg/T52-more-labels` | [tasks/T54](tasks/T54-early-objects-labels.md). New field: frames 11 s, objects +2.5 s, labels +2-3 s today |
 | T56 | All: Docs match the code (idea I2): README status/run/how-it-works, CONTRACTS without pre-baked `web/targets/` + `pipeline.publish`, undocumented API routes, a schema-0.2 fixture with pairs/labels/varied detections | Mati | done | `mati/T52-docs-current` | [tasks/T56](tasks/T56-docs-current.md). Was claimed as T52, then T55 (ID clashes with Joerg's T52, Jonathan's T55). Also: classify fix for SkyBoT/MPC, tilegen tests in CI |
 | T55 | C: UI redesign under `/app/` (copy of `web/`); `web/` and `/web/` stay as they are for all other work | Jonathan | doing | `jonathan/T55-app-ui` | [tasks/T55](tasks/T55-app-ui.md). UI work only; everyone else keeps working in `web/` |
-| T57 | A: Faster "Show": the US VM (tilegen, `us-east4`) reads + cuts the SPHEREx images next to the bucket and sends only the small cutout FITS (gzip); build/photometry/caches stay local; fallback S3, then IRSA | Jonathan | doing | `jonathan/T57-vm-cutouts` | [tasks/T57](tasks/T57-vm-cutouts.md). Download was ~36 s of ~45 s for a new field |
+| T57 | A: Faster "Show": the US VM (tilegen, `us-east4`) reads + cuts the SPHEREx images next to the bucket and sends only the small cutout FITS (gzip); build/photometry/caches stay local; fallback S3, then IRSA | Jonathan | done | `jonathan/T57-vm-cutouts` | [tasks/T57](tasks/T57-vm-cutouts.md). Fresh 15' field: 52.8 s → 19.9 s. Default on; `--cutouts-remote none` turns it off |
 | T58 | All: Limits before a public deploy: rate limit per IP, cap on concurrent builds, `refresh=1` only with a token, cache size cap with eviction (idea I1) | | open | | [tasks/T58](tasks/T58-public-limits.md). Server side, ~1 h. Suggested owner: Jonathan (server). |
 | T59 | A/C: Per-detector co-adds per epoch: mean/median of the aligned frames per detector and epoch as extra frames, for faint red sources (idea I3) | | open | | [tasks/T59](tasks/T59-coadds.md). A ~2 h + C ~0.5 h. Works best together with T66 (more frames per field). |
 | T60 | A/C: Contamination flags in the viewer: per-frame FLAGS bits exported with the frame, overlay toggle, flag names at the inspected pixel (idea I5) | | open | | [tasks/T60](tasks/T60-contamination-flags.md). A ~1.5 h + C ~1 h. |
@@ -209,6 +209,10 @@ Dated, one line each, with why.
   `mag_band`; `known_objects[].source` `mpcorb`; the server starts `/objects` (known objects) itself
   after each build. Why: name variables, brown dwarfs and planets (official targets include two
   of each kind), and known asteroids no longer hold up builds (T51, T52). Additive.
+- 2026-11-14 Jonathan: The team VM (`us-east4`) now also cuts the SPHEREx images for builds (T57,
+  `GET /cutout`), not only map tiles; build, detection, photometry and all caches stay local. Default on
+  for `python -m server` / `web/dev.py`. Why: a new field took ~45-53 s, ~35 s of it pulling whole
+  detector rows over the Atlantic; via the VM 19.9 s. Supersedes "only tiles run on the VM" (T47).
 
 ## Ideas
 
@@ -551,3 +555,8 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   (web/util.js, paths.js, inspector.js) and `loadObjects` (web/app.js) when you sync it.
 - 2026-11-14 Mati (Claude): T63 done: under the spectrum, a "what a plain star would give" baseline per epoch (blackbody fitted below 2.5 µm), rings on points that leave it, plain-words hints (warm dust / cool atmosphere / ices / hydrogen lines), feature markers toggle. Client-side only (`web/spectrum.js`), no API change, no effect on sky tiles. On real data: RW Aur 15× above the baseline at 4–5 µm (its disk), Eps Ind B no star shape + bright at 4 µm (brown dwarf). Jonathan: port to `app/` (T55), see tasks/T63.
 - 2026-11-14 Mati (Claude): Ideas cleaned up on Mati's request: everything moved to the Board or done is deleted (I1, I3–I6, I8–I20; mapping in the Log line "Ideas → Board" above). Only I7 (embed + share) is left; numbers stay fixed, the next new idea is I21.
+- 2026-11-14 Jonathan (Claude): T57 done. "Show" gets its cutouts from the US VM: fresh 15' field
+  52.8 s (direct S3) → 19.9 s, measured on the same PC. Also: images are aligned while the rest download;
+  a wrong derived path (l2b_retry) is found by listing the bucket (1.3 s, was 38 s via TAP) and no longer
+  pauses the VM; VM `data/` now survives deploys (was rebuilt each time because of `data/.gitkeep`).
+  Nothing to do on your side: pull + restart the API. Gotcha: the line to the PC (~3 MB/s) is the limit now.

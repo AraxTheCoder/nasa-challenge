@@ -47,9 +47,9 @@ def test_build_fetch_gets_the_cutout_from_the_vm(vm, tmp_path):
     client, calls = vm
     p = build.fetch(URL, 269.4463, 4.7682, 0.385, raw_root=tmp_path / "raw")
     with fits.open(p) as h:
-        assert h["IMAGE"].data.shape == (4, 4) and "team VM" in h[0].header["VIA"]
+        assert h["IMAGE"].data.shape == (4, 4) and h[0].header["VIA"] == "team-vm-us-east4"
     assert calls == [(URL, 269.4463, 4.7682, build.MIN_CUTOUT_DEG)]   # same size rule as local reads
-    assert ";via=team VM" in build.source_of(p, URL, 269.4463, 4.7682)
+    assert ";via=team-vm-us-east4" in build.source_of(p, URL, 269.4463, 4.7682)
     # the VM keeps a gzip copy: a second Europe-side cache asks again and the VM doesn't re-read S3
     build.fetch(URL, 269.4463, 4.7682, 0.385, raw_root=tmp_path / "raw2")
     assert len(calls) == 1 and client.get("/cutout/health").json()["served_from_cache"] == 1

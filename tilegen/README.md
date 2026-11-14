@@ -6,7 +6,7 @@ in the AWS Open Data bucket (us-east-1). Below order 6 the map uses IRSA's all-s
 | File | What |
 |---|---|
 | `render.py` | one tile: pick images (pipeline.mirror), read row chunks (pipeline.s3), sample, stretch |
-| `app.py` | the service: `GET /tiles/live/Norder<k>/Dir<d>/Npix<p>[_<slice>].png`, `GET /health` |
+| `app.py` | the service: `GET /tiles/live/Norder<k>/Dir<d>/Npix<p>[_<slice>].png`, `GET /health`; T57: `GET /cutout?url=&ra=&dec=&size=` (gzip cutout FITS for builds, cached in `data/vm_cutouts/`), `GET /cutout/health` |
 | `client.py` | used by the Live API: `local` (in-process) or `remote` (HTTP to a tilegen service) |
 
 As its own service (on the Google Cloud VM next to the bucket, see `deploy/`):

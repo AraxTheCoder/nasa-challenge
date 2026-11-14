@@ -24,6 +24,7 @@ from . import render
 
 TILE_RE = re.compile(r"^Norder(\d+)/Dir(\d+)/Npix(\d+)(?:_(\d+))?\.png$")
 MISSING = b"MISSING"
+VIA = "team-vm-us-east4"   # T57: in the cutout's header and the frame's source_url (#rows=...;via=...)
 
 
 def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, prefetch: bool = True,
@@ -165,7 +166,7 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
             busy["n"] += 1                         # tile prefetch pauses while someone waits for this
             try:
                 with cut_sem:
-                    s3.fetch_cutout(url, ra, dec, size, tmp, via="team VM us-east4 (tilegen /cutout)")
+                    s3.fetch_cutout(url, ra, dec, size, tmp, via=VIA)
             except LookupError:
                 off.parent.mkdir(parents=True, exist_ok=True)
                 off.touch()

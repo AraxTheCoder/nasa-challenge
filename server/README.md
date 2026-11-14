@@ -7,6 +7,7 @@ it to the frontend. API spec: `docs/CONTRACTS.md` → "Live API".
 pip install -r requirements.lock   # from the repo root; exact pinned versions
 python -m server                    # live: real SPHEREx data, cache in data/targets/
 python -m server --fixture          # tests / offline: the synthetic demo field for every request (own cache)
+python -m server --cutouts-remote none   # T57: builds read S3 directly instead of asking the team VM (default)
 python -m pytest server -q
 ```
 
