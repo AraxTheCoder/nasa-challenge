@@ -501,6 +501,8 @@ GET /api/targets/<id>/motion?ra=<deg>&dec=<deg>[&start=0]            the catalog
   ≥ 3″ away in every epoch, e.g. WISE 0855); `not_enough`: measured in fewer than two epochs. Both with `message`.
 - `parallax` is fitted with 3+ epochs; `distance_pc` only when `reliable` (χ²/dof ≤ 3 and > 3σ), else `note` says why.
 - `epochs[].east/north`: arcsec from the label's reference position, pointing-corrected with Gaia reference stars.
+- Cached per star (`data/motion/<star name>.json`, with `measured_in` = the field it was measured in): any field
+  around the same star (e.g. the map's automatic tile fields) answers from it.
 - Unknown label: 404 `{"status": "error"}`. Synthetic target: 200 `{"status": "no_data"}`. Public servers (T58):
   a new measurement costs one job.
 

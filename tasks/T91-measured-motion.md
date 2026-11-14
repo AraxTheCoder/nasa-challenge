@@ -29,6 +29,9 @@ and turn it into a proper motion with an error bar, next to Gaia's value. "SPHER
 
 - Barnard's Star's parallax fit gives 1.02 ± 0.12″ (true 0.547″) with χ²/dof 13: epoch 2 sits 1.9″ east of the
   line, a systematic shift (saturated core, PSF across detectors), so no distance is claimed there.
+- After T90 the map builds its own (up to 1.5°) tile fields around a spot: results are cached per star, and in a
+  big field the fit uses a 0.3° cutout centred on the star (0.01° grid, shared by all fields) with the reference
+  stars inside it. Barnard's Star measured that way: 10.41 ± 0.14″/yr.
 - WISE 0855 needs deep stacks (the T89 note to Jonathan) to be measurable at all.
 
 ## Notes from others
