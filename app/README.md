@@ -23,3 +23,6 @@ viewer and the default URL.
   them into `app/` when needed. When the redesign is done, `app/` replaces `web/` (decided then,
   with a line under TEAM.md "Decisions").
 - Tests, `dev.py`, `warm.py` stay in `web/`. Docs on how the viewer works: `web/README.md`.
+- Step 4: default layout = Jonathan's arrangement (2026-11-14): two docks on the left. Top: field
+  request (+ progress, messages), then position + "Blink this spot". Bottom: switches above band +
+  epochs. A dragged panel leaves its dock; double-click ⠿ docks it again (saved key `spherex.app.hud.v2`).

@@ -582,3 +582,5 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   in panels around the edges. `web/` unchanged.
 - 2026-11-14 Jonathan (Claude): T55 step 3 (`app/` only): the panels over the map can be dragged anywhere
   (grip ⠿ or empty panel area), remembered per browser, double-click ⠿ resets. `web/` unchanged.
+- 2026-11-14 Jonathan (Claude): T55 step 4 (`app/` only): Jonathan's panel arrangement is the default layout
+  (two docks on the left edge). `web/` unchanged.

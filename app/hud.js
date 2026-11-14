@@ -1,11 +1,12 @@
 // T55: the floating panels over the map ([data-hud] containers in index.html) can be dragged
 // anywhere: by their grip (⠿) or by any empty part of a panel; inputs, buttons and sliders keep
 // working as usual. Positions are remembered per browser (localStorage, a convenience only: the
-// page works without it); double-clicking a grip puts that panel back in its corner.
+// page works without it); double-clicking a grip docks that panel again. Undragged panels sit in
+// the two docks on the left (default layout, index.html); a dragged one leaves its dock.
 
 import { el } from "./util.js";
 
-const KEY = "spherex.app.hud";
+const KEY = "spherex.app.hud.v2";   // v2: docked default layout; positions saved before it are dropped
 const INTERACTIVE = "input, select, button:not(.hud-grip), textarea, a, label, output, summary, [contenteditable]";
 const KEEP = 48;          // px of a panel that always stay on screen
 const THRESHOLD = 3;      // px before a press becomes a drag (so a click stays a click)
@@ -40,7 +41,7 @@ function makeDraggable(hud) {
   const first = hud.querySelector(".hud-panel");
   if (!first) return;
   const grip = el("button", { type: "button", class: "hud-grip", "aria-label": "Move this panel",
-    title: "Drag to move this panel · double-click to put it back" }, "⠿");
+    title: "Drag to move this panel · double-click to dock it again" }, "⠿");
   first.prepend(grip);
 
   grip.addEventListener("dblclick", () => {
