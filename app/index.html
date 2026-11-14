@@ -57,8 +57,6 @@
     <div class="hud-panel hud-stack">
       <div class="hud-row hud-nowrap">
         <span id="explore-pos" class="muted small"></span>
-        <button id="explore-blink" type="button" class="primary"
-                title="Build the per-epoch blink for the centre of this view (field clamped to 5–210′)">Blink</button>
       </div>
       <div class="hud-row">
         <label id="explore-band-box" hidden title="SPHEREx has 102 spectral channels; pick one">Band
@@ -71,8 +69,11 @@
           <select id="tiles-mode"><option value="local">local</option><option value="remote">US VM</option></select></label>
         <label class="muted small" title="Debug: tile outlines (green sharp, yellow still blurry, red no tile), zoom level and loading state">
           <input id="sky-debug" type="checkbox"> Debug</label>
+        <label class="muted small" title="What blinks at level 7. Survey passes: SPHEREx's 6-month all-sky passes, anywhere, right away. Field epochs: the view's field is built once the map rests (aligned single frames, traces and detections of moving objects; takes a while).">Blink
+          <select id="blink-source"><option value="passes">survey passes</option><option value="epochs">field epochs</option></select></label>
       </div>
       <div class="hud-row">
+        <span id="explore-passes" class="explore-epochs" hidden></span>
         <span id="explore-epochs" class="explore-epochs" hidden></span>
       </div>
     </div>
@@ -83,6 +84,6 @@
   <!-- bottom right: how to move the map -->
   <p class="hud-hint muted small">Drag to move · scroll or pinch to zoom · double-click to zoom in · arrow keys and +/− ·
     drag a panel by ⠿ to rearrange it (double-click ⠿ docks it again) ·
-    <strong>Go</strong> centres a position, zoomed in fully; <strong>Blink</strong> builds the field's epochs in the red box</p>
+    <strong>Go</strong> centres a position, zoomed in fully; at level 7 the map blinks by itself</p>
 </body>
 </html>

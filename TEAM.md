@@ -59,7 +59,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T20 | C: Viewer ↔ Live API: RA/Dec/size input, `?ra=&dec=&size=` in the page URL, request + poll with progress, load from `target_url`, quick picks for the official test fields (contracts v0.3) | Mati | done | `mati/T20-live-api-client` | [tasks/T20](tasks/T20-live-api-client.md). Run: `web/README.md` (API :8000, viewer :8080). Test fields in `web/presets.json` |
 | T21 | C: Everyone can run the viewer locally: one-command launcher (API + viewer), README run steps for Linux/macOS/Windows | Mati | done | `mati/T21-run-kit` | [tasks/T21](tasks/T21-run-kit.md). `python web/dev.py`, setup in README "How to run" |
 | T22 | C: Movement paths in the viewer: line + tick per frame, early→late colour, current position + name, labelled exaggerated arrow for slow movers | Joerg | done | `joerg/T22-movement-paths` | [task file](tasks/T22-movement-paths.md). From the "Draw paths" idea. Hover/click info on labels |
-| T23 | A: Labelling over time: labels that follow moving objects, motion summary + motion class per object, trail image, shift-and-stack | Joerg | doing | `joerg/T23-labels-over-time` | [task file](tasks/T23-labels-over-time.md). Umbrella for T19 (done) + T22; from 4 Ideas |
+| T23 | A: Labelling over time: labels that follow moving objects, motion summary + motion class per object, trail image, shift-and-stack | Joerg | done | `joerg/T23-labels-over-time` | [task file](tasks/T23-labels-over-time.md). Umbrella for T19 (done) + T22; from 4 Ideas. Closed 2026-11-14: labels already follow every object in every frame of every epoch; the last step was dropped |
 | T24 | All: Pin exact dependency versions so everyone runs the same | Joerg | done | `joerg/T24-pin-deps` | Lock files at root; README "Dependencies". Python 3.12+ |
 | T25 | C: Default field in the form (Barnard's Star) + hint that RA/Dec/field of view can be changed | Mati | done | `mati/T25-form-defaults` | [tasks/T25](tasks/T25-form-defaults.md). Default = `"default": true` in `web/presets.json` |
 | T26 | A: Builds survive IRSA throttling: retry 503/timeouts with backoff, one shared download limit across concurrent builds (no frames dropped) | Jonathan | done | `jonathan/T26-T28-speed` | Measured: IRSA answers `503 Server busy`, frames were silently dropped |
@@ -235,7 +235,9 @@ Dated, one line each, with why.
   210′ is the real bound, one SPHEREx detector image (2040 px × 6.15″ = 3.49°). Larger fields build
   slower. The team VM's /cutout accepts up to 6° cutouts. `web/` keeps its own 60′ form limit.
 - 2026-11-14 [Mati] CONTRACTS v0.13 (T76): discovery index = `data/survey/discoveries.json` (schema `docs/discoveries.schema.json`: candidates with class, score 0–1, plain-words reason, known, lam_um, tile) served by `GET /api/discoveries` (filters class / position / score, `random=1`). Until the survey (T75) writes one, the API serves the hand-made sample `fixtures/discoveries-sample.json` (`synthetic: true`, labelled in the viewer). Why: the viewer side (T76) can be built and tested now, and pass 2 has a fixed target format.
-- 2026-11-14 [Mati] CONTRACTS v0.14 (T64): frames carry `collection` (SPHEREx release), target.json `source_exposures` (images known at build time), new `GET /api/targets/<id>/updates` (newer images / new release → the viewer offers Rebuild). Image searches no longer use a fixed list of four collections: `pipeline/releases.py` lists the bucket's release folders (cached a day) and adds new ones (`spherex_<rel>`, `_deep`), duplicates across releases dedupe to the newest. Why: the challenge asks for a tool that is easy to update with the latest data releases; with the fixed list a QR4 / DR2 would never have appeared.
+- 2026-11-14 [Jonathan] CONTRACTS v0.14: `GET /api/pass-dates` + `x_survey_passes` in the live properties + `spherex-live-p<n>` documented. Why: `/app/` labels the blinked survey passes with when they were taken (month/year) instead of P1/P2/P3. New fields only.
+- 2026-11-14 [Jonathan] `/app/` blinks by itself at level 7 (no Blink button, no red outline); default source = survey passes; "field epochs" builds the view's field once the map rests. Why: below level 7 no motion between epochs is visible, and pass tiles on the map's own grid load far faster than a build.
+- 2026-11-14 [Mati] CONTRACTS v0.15 (T64): frames carry `collection` (SPHEREx release), target.json `source_exposures` (images known at build time), new `GET /api/targets/<id>/updates` (newer images / new release → the viewer offers Rebuild). Image searches no longer use a fixed list of four collections: `pipeline/releases.py` lists the bucket's release folders (cached a day) and adds new ones (`spherex_<rel>`, `_deep`), duplicates across releases dedupe to the newest. Why: the challenge asks for a tool that is easy to update with the latest data releases; with the fixed list a QR4 / DR2 would never have appeared.
 
 ## Ideas
 
@@ -367,6 +369,7 @@ Things waiting on a human.
   the code). One of them should take a new ID (next free: T56).
 - 2026-11-14 Mati (Claude): resolved, no answer needed any more: the four proposals (a)–(d) are on the Board: (a) → T63 (done), (b) → Joerg's T52 (done), (c) → T66, (d) → T67. The ID question is answered too (docs task = T56).
 - 2026-11-14 Mati (Claude) [→ Joerg]: T77 (your sky survey on the HPC, 17:34) and T73–T75 (discovery survey, created 17:31 and assigned to you by Mati) describe the same thing. Please merge them as you like (e.g. keep T77 as the plan with your measurements, fold T73–T75 into it or use them as its steps) and close the rest. Two points from T73 worth keeping: (1) slow movers need full resolution (brown dwarfs move 0.1–0.6 px between epochs), so coarse-to-fine should cut along time/wavelength (a sparse exposure set first), not pixels; (2) T76 (Mati) is the viewer side either way.
+- 2026-11-14 [Jonathan → Mati] `server/test_discoveries.py::test_sample_served_until_the_survey_delivers` fails on Windows: `/api/discoveries` returns `source` with a backslash (`fixtures\discoveries-sample.json`); use `.as_posix()`.
 
 ## Log
 
@@ -674,3 +677,15 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   recovered), level and shape changes between epochs; saturated sources say "can't judge". [to whoever owns
   T09] known asteroids are recovered at their predicted positions (T84 findings). [to Mati] see T84 handoff.
 - 2026-11-14 Mati (Claude): T76 done: "Candidates" panel under the map (filter by class, sort, rings + names on the map, "Show me something interesting"); a click opens the field like a quick pick with the reason line and the map band at the candidate's wavelength. Served by `GET /api/discoveries` (CONTRACTS v0.13, schema `docs/discoveries.schema.json`). Until the survey delivers it serves a hand-made sample of 7 real, known objects (WISE 0855, Eps Ind B, RW Aur, R Dra, Barnard, Kapteyn, a brown dwarf), labelled "Sample · hand-made". [→ Joerg, T75] pass 2 writes `data/survey/discoveries.json` in that format; mark recovered catalogue objects with `known`. [→ Jonathan] new APIRouter `server/discoveries.py` + one include line in `server/app.py` (like T49); `/app/` port optional (needs only the route).
+- 2026-11-14 Jonathan (Claude): T55 step 13 (`app/` + tilegen/skycache): survey passes blink by themselves
+  once the map is at level 7 (no Blink click, no build; T82 pass layers on the map's tile grid, loaded from
+  level 6 on, only fully loaded passes blink). Switch "Blink: survey passes / field epochs" next to Debug;
+  epochs = the old Blink build, now only enabled at level 7. The US VM renders pass tiles now
+  (`/tiles/live-p<n>/`, redeployed); the Live API asks it in "US VM" mode, an old VM falls back to local.
+  `web/` unchanged. [to Mati] `server/test_discoveries.py` fails on Windows: `source` is
+  `fixtures\discoveries-sample.json` (backslash), the test expects `/`.
+- 2026-11-14 [Joerg] T23 closed (done). Labels have a position in every frame of every epoch (checked: 134/134 labels, 36 frames, epochs 1–3); the open step "try on official test targets" was dropped. T14–T16 (deploy, submission, demo) stay open until the project is close to final.
+- 2026-11-14 Jonathan (Claude): T55 step 14 (`app/` + tilegen/skycache/deploy): no Blink button, red outline or
+  play button: the map blinks by itself at level 7; labels are month/year ("Aug–Sep 2025") instead of P1 / Ep. 1
+  (new `GET /api/pass-dates`, CONTRACTS v0.14). Faster pass loading: base map capped at order 6 under the passes,
+  the Live API renders a tile's other passes in the background, VM tuned (12 slots, more S3 threads), redeployed.

@@ -1,4 +1,4 @@
-"""T64: newer SPHEREx data for a built field (CONTRACTS v0.14 "Newer data").
+"""T64: newer SPHEREx data for a built field (CONTRACTS v0.15 "Newer data").
 
     GET /api/targets/<id>/updates
 

@@ -1,7 +1,10 @@
 // SPHEREx Blink (T55 redesign, /app/): the sky map is the whole page. The Live API
 // (docs/CONTRACTS.md v0.3) builds any RA/Dec field on request; its SPHEREx epochs then show as map
 // layers (blinkable), with traces and names of the field's objects drawn on the map.
-// "Go" only moves the map to the typed RA/Dec and pins it; "Blink" builds the field at the view centre.
+// "Go" only moves the map to the typed RA/Dec and pins it. Blinking is automatic at level 7 (no button,
+// no outline); the source switch next to Debug picks what blinks: "passes" (default) = SPHEREx's survey
+// passes on their own (passes.js); "epochs" = the view's field is built once the map rests, then its
+// epochs blink.
 // ?ra=&dec=&size= in the page URL goes there on load (+ &blink=1 builds it); ?api=<base> sets the API.
 //
 // Unlike web/ there is no frame viewer, analysis or side panel below the map, and no offline
@@ -15,6 +18,7 @@ import "./skylabels.js";   // T72: catalogue names anywhere on the map
 import { initHud } from "./hud.js";   // T55: drag the floating panels anywhere
 import { parseDec, parseRa } from "./coords.js";
 import { initCursorPin, isPicking, pinAt, setPicking } from "./cursorpin.js";   // T55: 📍 marker + pick mode
+import * as passes from "./passes.js";   // T55: survey passes blink by themselves at level 7
 
 const SIZE_MIN = 5;
 const SIZE_MAX = 210;   // API limit = one SPHEREx detector (3.49 deg), server/coords.py
@@ -337,14 +341,23 @@ function syncExplore(target) {
   app.shownTarget = target;
   const c = target?.center;
   if (!c) return;
-  const region = app.request?.region;
-  if (region) {
-    explore.markRegion(region);          // built from Blink: keep the outline of the view, don't move the map
-  } else {                               // opened from a link: show the field like Blink did (view = field)
-    explore.goTo(c.ra_deg, c.dec_deg, Math.max(0.25, target.size_arcmin / 60));
-    explore.markField(c.ra_deg, c.dec_deg, target.size_arcmin);
+  // built from the view (auto): don't move the map; opened from a link: show the field (view = field)
+  if (!app.request?.auto) explore.goTo(c.ra_deg, c.dec_deg, Math.max(0.25, target.size_arcmin / 60));
+  // a built field is blinked by its epochs: switch the source (its listener shows them)
+  if (passes.mode() !== "epochs") passes.setMode("epochs", { remember: false });
+  else showEpochLayers(target);
+}
+
+/** T55: Blink source changed: epochs = the shown field's layers (if any); passes = passes.js's. */
+function onBlinkSource(m) {
+  clearInterval(epochTimer);
+  if (m === "epochs") {
+    explore.hideEpochs();
+    if (app.shownTarget) showEpochLayers(app.shownTarget);
+  } else {
+    $("#explore-epochs").hidden = true;
   }
-  showEpochLayers(target);
+  updateExplorePos();
 }
 
 // T32: the field's epochs as map layers, with buttons + blink, so epochs can be compared in the map.
@@ -362,44 +375,71 @@ async function showEpochLayers(target) {
     if (!res.ok) return;
     info = await res.json();
   } catch { return; }
-  if (app.shownTarget !== target || !info.layers?.length) return;
+  if (app.shownTarget !== target || !info.layers?.length || passes.mode() !== "epochs") return;
   const layers = await explore.setEpochLayers(info.layers.map((l) => ({ ...l, url: new URL(l.url, app.api).href })));
-  if (!layers.length || app.shownTarget !== target) return;
-  const buttons = layers.map((l, i) => el("button", { type: "button", class: "link", title: l.label,
-    "aria-pressed": String(i === 0) }, `Ep. ${l.epoch}`));
+  if (!layers.length || app.shownTarget !== target || passes.mode() !== "epochs") return;
+  // T55: when, not "Ep. n": the epoch's month(s) from its label "Epoch 1 · 2025-06-03 – 2025-06-10 · …"
+  const labels = layers.map((l) => {
+    const d = (l.label ?? "").match(/\d{4}-\d{2}-\d{2}/g);
+    return el("span", { class: "pass-label", title: l.label }, d ? passes.monthSpan(d[0], d[d.length - 1]) : `epoch ${l.epoch}`);
+  });
   const pick = (i) => {
     epochShown = i;
     explore.showEpoch(i);
-    buttons.forEach((b, j) => b.setAttribute("aria-pressed", String(j === i)));
+    labels.forEach((b, j) => b.classList.toggle("current", j === i));
   };
-  buttons.forEach((b, i) => b.addEventListener("click", () => pick(i)));
-  const blink = el("button", { type: "button", class: "link", "aria-pressed": "false",
-    title: "Flip through the epochs in the map" }, "▶ Blink epochs");
-  blink.addEventListener("click", () => {
-    const on = blink.getAttribute("aria-pressed") !== "true";
-    blink.setAttribute("aria-pressed", String(on));
-    blink.textContent = on ? "❚❚ Stop" : "▶ Blink epochs";
-    clearInterval(epochTimer);
-    if (on) epochTimer = setInterval(() => pick((epochShown + 1) % layers.length), 700);
-  });
   // no caption for real data; synthetic layers stay visibly labelled (CLAUDE.md)
-  box.append(...(info.synthetic ? [el("span", { class: "muted small" }, "synthetic:")] : []), ...buttons, blink);
+  box.append(...(info.synthetic ? [el("span", { class: "muted small" }, "synthetic:")] : []), ...labels);
   box.hidden = false;
   pick(0);
+  // always blinking (like the passes), but only on the sharp map
+  epochTimer = setInterval(() => { if (passes.sharp()) pick((epochShown + 1) % layers.length); }, 800);
 }
 
-/** How much the map shows, and the field Blink would build from it (the mouse position is in the 📍 pill). */
-/** Side of the square field Blink builds: covers the whole view (its longer side), within the API's 5–210′. */
+/** Side of the square field built for the view: covers the whole view (its longer side), within 5–210′. */
 const blinkSize = (v) => clampSize(Math.ceil(Math.max(v.fovArcmin, v.heightArcmin)));
 
-/** How much the map shows, and the field Blink would build from it (the mouse position is in the 📍 pill). */
+/** How much the map shows (the mouse position is in the 📍 pill). */
 function updateExplorePos() {
   const v = explore.view();
   if (!v) return;
   const arc = (a) => (a >= 120 ? `${(a / 60).toFixed(1)}°` : `${Math.round(a)}′`);
-  const size = blinkSize(v), all = size >= Math.max(v.fovArcmin, v.heightArcmin) - 0.5;
-  $("#explore-pos").textContent = `view ${arc(v.fovArcmin)} × ${arc(v.heightArcmin)} · Blink builds ${size}′`
-    + (all ? "" : ` (max; zoom in to blink all of it)`);
+  const view = `view ${arc(v.fovArcmin)} × ${arc(v.heightArcmin)}`;
+  // T55: blinking only makes sense on the sharp map (level 7): coarser, nothing visibly moves between epochs
+  $("#explore-pos").textContent = passes.mode() === "epochs" && !passes.sharp() ? `${view} · zoom in to level 7 to blink` : view;
+  scheduleAutoBuild();
+}
+
+// ---------- T55: "field epochs" source: build the view's field by itself once the map rests at level 7 ----------
+
+const AUTO_BUILD_MS = 2000;
+let autoTimer = null;
+let autoView = null;      // view of the last scheduled check (the mouse moving fires "change" too)
+
+/** True if the last field asked for already covers this view (centre inside, about the same size). */
+function covered(v) {
+  const r = app.request;
+  if (!r) return false;
+  const d = Math.PI / 180, ra = Number(r.ra), dec = Number(r.dec);
+  const c = Math.sin(dec * d) * Math.sin(v.dec * d) + Math.cos(dec * d) * Math.cos(v.dec * d) * Math.cos((ra - v.ra) * d);
+  const sepArcmin = (Math.acos(Math.min(1, c)) / d) * 60, size = blinkSize(v);
+  return sepArcmin < r.size / 4 && size <= r.size * 1.1 && size >= r.size / 2;
+}
+
+function scheduleAutoBuild() {
+  if (passes.mode() !== "epochs" || !passes.sharp()) { clearTimeout(autoTimer); autoView = null; return; }
+  const v = explore.view();
+  if (autoView && v.ra === autoView.ra && v.dec === autoView.dec && v.fovArcmin === autoView.fovArcmin) return;
+  autoView = v;
+  clearTimeout(autoTimer);
+  autoTimer = setTimeout(() => {
+    const now = explore.view();
+    if (!now || passes.mode() !== "epochs" || !passes.sharp() || covered(now)) return;
+    const req = { ra: now.ra.toFixed(4), dec: now.dec.toFixed(4), size: blinkSize(now), auto: true };
+    fillForm(req);
+    setPageUrl(req, false, true);          // replace, not push: no history entry per pan
+    loadField(req);
+  }, AUTO_BUILD_MS);
 }
 
 function setupBand(layer) {
@@ -419,18 +459,6 @@ function setupBand(layer) {
 }
 
 async function startExplore() {
-  // T55: Blink builds what is on screen (a square over the whole view, up to the API's 210′) and the
-  // red outline marks exactly that part of the view, so after moving around during the build you find it again
-  $("#explore-blink").addEventListener("click", () => {
-    const v = explore.view();
-    if (!v) return;
-    const size = blinkSize(v);
-    const req = { ra: v.ra.toFixed(4), dec: v.dec.toFixed(4), size, region: explore.viewRegion(size) };
-    explore.markRegion(req.region);                      // shown right away, not only once it is built
-    fillForm(req);
-    setPageUrl(req, true, true);
-    loadField(req);
-  });
   const f = readForm();
   let start = {};
   try { start = { ra: parseRa(f.ra), dec: parseDec(f.dec) }; } catch { /* empty or odd form: default view */ }
@@ -446,6 +474,10 @@ async function startExplore() {
     dbg.addEventListener("change", () => explore.setDebug(dbg.checked));
     setupTilesSwitch();
     setupBand(sky.base);
+    passes.onModeChange(onBlinkSource);
+    await passes.initPasses();
+    let lastSharp = null;                     // the Blink button follows the zoom level (level 7 or not)
+    explore.onTiles(() => { const s = passes.sharp(); if (s !== lastSharp) { lastSharp = s; updateExplorePos(); } });
     if (app.goalPending) { app.goalPending = false; showGoal(); }   // Go asked before the map existed
     if (app.shownTarget) syncExplore(app.shownTarget);   // a field loaded before the map was ready
     updateExplorePos();

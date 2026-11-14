@@ -39,6 +39,9 @@ def pass_of(mjd):
 # 1 image per tile when S3 is slow (from Europe: ~0.1 MB/s per connection on 2026-11-14), more
 # next to the bucket (the Google Cloud VM sets TILEGEN_IMAGES=3).
 IMAGES_PER_TILE = int(os.environ.get("TILEGEN_IMAGES", "1"))
+# T55: a pass tile = one snapshot (+ fill where it has holes): images of one pass can be months apart
+# (Barnard's Star, pass 3: May and Aug 2026), averaging them smears movers, and it costs 3x the reads.
+PASS_IMAGES = int(os.environ.get("TILEGEN_PASS_IMAGES", "1"))
 SHARE_ORDER = 5               # tiles inside one order-5 cell use the same images (shared row chunks)
 MAX_FILL = 3                  # more images, only while the tile still has holes (image edge, bad pixels)
 FILL_UNTIL = 0.995            # stop once this fraction of the tile has data
@@ -51,8 +54,47 @@ LO_SIGMA, HI_SIGMA = -0.75, 160.0
 
 _index = None
 _index_lock = threading.Lock()
-_pool = ThreadPoolExecutor(16, thread_name_prefix="live-chunk")      # S3 row-chunk reads
-_images = ThreadPoolExecutor(8, thread_name_prefix="live-image")     # one task per image (uses _pool)
+# Shared by all tiles rendered at once. Reads wait on S3 (latency), not the CPU: the VM raises both
+# (deploy/install-app.sh), else tiles queue here however many render slots there are.
+_pool = ThreadPoolExecutor(int(os.environ.get("TILEGEN_CHUNK_THREADS", "16")), thread_name_prefix="live-chunk")      # S3 row-chunk reads
+_images = ThreadPoolExecutor(int(os.environ.get("TILEGEN_IMAGE_THREADS", "8")), thread_name_prefix="live-image")    # one task per image (uses _pool)
+
+
+def pass_dates(ra: float, dec: float, radius_deg: float = 1.2) -> list[dict]:
+    """T55: when SPHEREx imaged (ra, dec) in each survey pass: [{pass, start, end, n_images}], UTC dates
+    of the images whose centre is within radius_deg (well inside a 3.5 deg detector)."""
+    from astropy.time import Time
+
+    idx = _mirror()
+    d = idx.d
+    cand = idx.covering(ra % 360, dec, radius_deg=radius_deg)
+    if not len(cand):
+        return []
+    mid = (d["t_min"][cand] + d["t_max"][cand]) / 2
+    out = []
+    for n in sorted(set(pass_of(mid).tolist())):
+        m = np.sort(mid[pass_of(mid) == n])
+        lo, hi = Time([m[0], m[-1]], format="mjd").isot
+        out.append({"pass": int(n), "start": lo[:10], "end": hi[:10], "n_images": int(len(m))})
+    return out
+
+
+_passes = None
+
+
+def survey_passes() -> list[int]:
+    """Survey passes the image index has images from (T82/T55: the map blinks these), e.g. [1, 2, 3].
+    Before the index is ready: the passes started by today (some may still be empty)."""
+    global _passes
+    if _passes is None:
+        try:
+            d = _mirror().d
+            _passes = sorted(int(n) for n in np.unique(pass_of((d["t_min"] + d["t_max"]) / 2)))
+        except Exception:  # noqa: BLE001 - index not ready: don't cache the guess
+            import time as _t
+            now_mjd = _t.time() / 86400 + 40587
+            return list(range(1, int(pass_of(now_mjd)) + 1))
+    return _passes
 
 
 def _mirror():
@@ -230,9 +272,10 @@ def render(slice_: int, order: int, npix: int, pass_: int | None = None) -> byte
     # if those don't cover this tile, fall back to the best images for the tile itself.
     parent = npix >> (2 * (order - SHARE_ORDER))
     lon_p, lat_p = HEALPix(nside=2 ** SHARE_ORDER, order="nested").healpix_to_lonlat(parent)
-    urls = pick_images(lon_p.to_value(u.deg), lat_p.to_value(u.deg), detector, pass_=pass_)
+    k = PASS_IMAGES if pass_ else IMAGES_PER_TILE
+    urls = pick_images(lon_p.to_value(u.deg), lat_p.to_value(u.deg), detector, k=k, pass_=pass_)
     if not urls or not _covers(urls[0], lon_c.to_value(u.deg), lat_c.to_value(u.deg)):
-        urls = pick_images(lon_c.to_value(u.deg), lat_c.to_value(u.deg), detector, pass_=pass_)
+        urls = pick_images(lon_c.to_value(u.deg), lat_c.to_value(u.deg), detector, k=k, pass_=pass_)
     if not urls:
         return None
     glon, glat = _grid_lonlat(order, npix)

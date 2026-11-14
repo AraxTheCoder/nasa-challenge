@@ -27,6 +27,9 @@ const MAX_PRELOADS = 3;                   // preloads in flight at once, and onl
 // Preload tiers, in this order after every visible tile: parent (zoom out), ring around the view
 // (pan), children of the centre (zoom in), other epochs (blink).
 const PRE_PARENT = PRELOAD, PRE_RING = PRELOAD + 1e4, PRE_CHILD = PRELOAD + 2e4, PRE_EPOCH = PRELOAD + 3e4;
+// T55: overlays with meta.sharpOrder (survey passes) are what the user waits for: right after the
+// visible base tiles, before any preload, and only at that order (no coarser tiles of them).
+const EAGER = PRELOAD / 2;
 
 // ---------- HiPS layer ------------------------------------------------------------------------
 
@@ -168,7 +171,10 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   function pickOrder(layer) {
     const arcsecPerPx = (st.fov * 3600) / (st.w * st.dpr);
     const k = Math.ceil(Math.log2(TEXEL_ARCSEC_ORDER0 / arcsecPerPx));
-    return Math.max(layer.minOrder, Math.min(layer.maxOrder, k));
+    // T55: while survey passes blink on top, the base map stops one order short (no slow live renders
+    // competing with the passes'; it only shows where a pass has no data)
+    const max = layer === st.base && st.baseCap != null ? Math.min(layer.maxOrder, st.baseCap) : layer.maxOrder;
+    return Math.max(layer.minOrder, Math.min(max, k));
   }
 
   function visibleTiles(order) {
@@ -588,6 +594,10 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
 
   /** Other epochs (blink): their tiles on screen inside their field, after the shown ones. */
   function prefetch(layer) {
+    if (layer.meta?.sharpOrder) {
+      for (const [pix, d] of sharpTiles(layer.meta.sharpOrder)) request(layer, layer.meta.sharpOrder, pix, EAGER + d);
+      return;
+    }
     const order = pickOrder(layer);
     for (const pix of tilesFor(layer, order)) request(layer, order, pix, PRE_EPOCH);
   }
@@ -606,6 +616,27 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
         + Math.cos(c[1] * DEG) * Math.cos(dec * DEG) * Math.cos((c[0] - ra) * DEG))) / DEG;
       return d < reach;
     });
+  }
+
+  /** T55: tiles of order k a sharpOrder overlay needs, with their distance (px) from the centre: the
+   *  visible ones once the view shows order k; one order short of it, those a zoom in to order k
+   *  at the centre would show (loaded ahead); further out, none. */
+  function sharpTiles(k) {
+    const want = wantedOrder();
+    if (want < k - 1) return [];
+    const f = want >= k ? 1 : Math.min(1, api.fovForOrder(k) / st.fov);
+    const w = st.w * f, h = st.h * f, x0 = (st.w - w) / 2, y0 = (st.h - h) / 2;
+    const out = new Map(), step = Math.max(8, 40 * f);
+    for (let y = 0; y <= h + 0.5; y += step) {
+      for (let x = 0; x <= w + 0.5; x += step) {
+        const px = x0 + Math.min(x, w), py = y0 + Math.min(y, h);
+        const sp = fromScreen(px, py);
+        if (!sp) continue;
+        const pix = ang2pix(k, sp[0], sp[1]), d = Math.hypot(px - st.w / 2, py - st.h / 2);
+        if (!out.has(pix) || out.get(pix) > d) out.set(pix, d);
+      }
+    }
+    return [...out];
   }
 
   function markDirty() {
@@ -723,6 +754,15 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     if (keys[e.key]) { e.preventDefault(); e.stopPropagation(); keys[e.key](); }
   });
 
+  /** An overlay layer from {url, label, epoch, sharpOrder?}; cubes start on the base's band. */
+  async function makeOverlay(l) {
+    try {
+      const layer = Object.assign(new Layer(l.url, await readProperties(l.url), { slice: st.base?.slice, ...l }), { meta: l });
+      if (l.sharpOrder) layer.minOrder = l.sharpOrder;      // no coarser tiles of it are ever asked for
+      return layer;
+    } catch (e) { console.warn(e); return null; }
+  }
+
   // ----- public API -----
   const api = {
     async setBase(url, opts) {
@@ -735,6 +775,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     setSlice(i) {
       if (!st.base || st.base.depth <= 1) return;
       st.base.slice = Math.max(0, Math.min(st.base.depth - 1, i));
+      for (const l of st.overlays) if (l.depth > 1) l.slice = Math.min(l.depth - 1, st.base.slice);   // T82: pass layers
       markDirty();
     },
     /** layers: [{url, label, epoch}] — all are prefetched, one is drawn (showOverlay). */
@@ -742,15 +783,27 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       for (const l of st.overlays) for (const t of l.tiles.values()) if (t.tex) gl.deleteTexture(t.tex);
       st.overlays = [];
       st.shown = -1;
-      const made = await Promise.all(layers.map(async (l) => {
-        try { return Object.assign(new Layer(l.url, await readProperties(l.url), l), { meta: l }); }
-        catch (e) { console.warn(e); return null; }
-      }));
+      const made = await Promise.all(layers.map(makeOverlay));
       st.overlays = made.filter(Boolean);
       markDirty();
       return st.overlays.map((l) => l.meta);
     },
+    /** T55: how far overlay i is loaded for this view: {total, done, ok} tiles (done = loaded or none there). */
+    overlayProgress(i) {
+      const l = st.overlays[i];
+      if (!l) return null;
+      const k = l.meta?.sharpOrder ?? pickOrder(l);
+      const pixs = l.meta?.sharpOrder ? sharpTiles(k).map(([p]) => p) : tilesFor(l, k);
+      let done = 0, ok = 0;
+      for (const pix of pixs) {
+        const t = l.tiles.get(l.key(k, pix));
+        if (t?.state === "ok") { ok++; done++; } else if (t?.state === "missing" || t?.state === "failed") done++;
+      }
+      return { total: pixs.length, done, ok };
+    },
     showOverlay(i) { st.shown = i; markDirty(); },
+    /** T55: highest order the base map draws (null = its own maximum). */
+    setBaseCap(k) { if (st.baseCap !== k) { st.baseCap = k; markDirty(); } },
     setDebug(on) { st.debug = !!on; markDirty(); },
     /** {order, wanted, maxOrder, visible, sharp, blurry, empty, atMax, allSharp, loads, queued, errors} */
     stats() {

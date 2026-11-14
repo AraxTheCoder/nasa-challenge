@@ -1,9 +1,13 @@
-# Contracts (v0.14)
+# Contracts (v0.15)
 
-v0.14 (T64): data releases. Each frame may carry `collection` (the IRSA collection = SPHEREx release, e.g.
+v0.15 (T64): data releases. Each frame may carry `collection` (the IRSA collection = SPHEREx release, e.g.
 `spherex_qr3_deep`); target.json may carry `source_exposures` (what SPHEREx had at the centre at build time);
 `GET /api/targets/<id>/updates` says whether newer images or a new release exist (see "Newer data"). Image
 searches cover new releases automatically (`pipeline.releases`). Additive; `schema_version` stays `"0.2"`.
+
+v0.14 (T55, T82): survey passes on the sky map: `spherex-live-p<n>` layers documented, `x_survey_passes`
+in the live properties, and `GET /api/pass-dates` (when each pass imaged a point). New fields / endpoint
+only; nothing existing changes.
 
 v0.13 (T76): the discovery index: `GET /api/discoveries` and its file format
 (`docs/discoveries.schema.json`), written by the survey (T75) to `data/survey/discoveries.json`; until then the
@@ -136,7 +140,7 @@ no-data pixels, labels with motion, known objects, known / unknown / artifact de
 | `labels` | A | optional (v0.4): catalogue objects in the field with a position per frame, see below |
 | `labels_requested` | server | optional (v0.8): `true` once `GET …/labels` has run (labels may still be `[]`) |
 | `objects_requested` | server | optional (v0.11): `true` once `GET …/objects` has run (known objects + detections) |
-| `source_exposures` | A | optional (v0.14): `{count, latest_mjd, latest_utc, collections, checked_utc}`: the SPHEREx exposures covering the centre at build time (the frames are a selection of them) |
+| `source_exposures` | A | optional (v0.15): `{count, latest_mjd, latest_utc, collections, checked_utc}`: the SPHEREx exposures covering the centre at build time (the frames are a selection of them) |
 
 ### Frame
 
@@ -157,7 +161,7 @@ no-data pixels, labels with motion, known objects, known / unknown / artifact de
   From v0.2, pixels with no data (outside the rotated original frame, or masked) are fully
   transparent (alpha 0), so the viewer can show them as "no data" instead of dark sky.
 - `obs_id`, `source_url`: where the frame came from. `null` for synthetic frames.
-- `collection`: optional (v0.14): the IRSA collection the exposure belongs to = its SPHEREx release
+- `collection`: optional (v0.15): the IRSA collection the exposure belongs to = its SPHEREx release
   (`spherex_dr1`, `spherex_dr1_deep`, `spherex_qr3`, …; DR = data release, QR = quick release). Older builds
   don't have it; the release folder in `source_url` (`…/qr3/level2/…`) tells the same.
 
@@ -433,8 +437,20 @@ GET /api/sky/<survey>/Norder3/Allsky[_<slice>].png|jpg
 
 `survey`: `spherex-cube` (IRSA's SPHEREx all-sky cube, one slice per band), `spherex-d1` … `spherex-d6`
 (CDS, one per detector), `spherex-live` (the cube up to order 5, then order 6-7 tiles we render from the
-level-2 images in the AWS bucket, `tilegen/`), `2mass`, `allwise`. 404 = upstream has no such tile;
-503 + `Retry-After` = the local image index is still being built; 502 = upstream or tile generator down.
+level-2 images in the AWS bucket, `tilegen/`), `spherex-live-p<n>` (T82: the same live tiles from survey
+pass n's images only, orders 6-7; pass n = images from 2025-05-01 + (n-1) x 182.625 d), `2mass`, `allwise`.
+404 = upstream has no such tile; 503 + `Retry-After` = the local image index is still being built;
+502 = upstream or tile generator down. `spherex-live/properties` lists the passes the image index has
+images from: `x_survey_passes = 1 2 3` (v0.14).
+
+```
+GET /api/pass-dates?ra=<deg>&dec=<deg>
+→ {"ra", "dec", "passes": [{"pass": 1, "start": "2025-08-18", "end": "2025-09-30", "n_images": 65}, ...]}
+```
+
+v0.14 (T55): when SPHEREx imaged that point in each pass (UTC dates of the level-2 images whose centre is
+within 1.2 deg, all detectors); passes without images there are left out. 503 + `Retry-After` while the
+local image index is being built.
 
 ```
 GET  /api/settings                     → {"tiles": "local" | "remote", "remote_url", "remote_available"}
@@ -444,7 +460,7 @@ POST /api/settings {"tiles": "remote"} → same body; which generator renders th
 `remote` is the team's tile generator on a VM next to the bucket (`deploy/`, T47): seconds instead of
 minutes from Europe. Only the tiles go there; builds, caches and the API stay local.
 
-### Newer data (v0.14, T64)
+### Newer data (v0.15, T64)
 
 ```
 GET /api/targets/<id>/updates
@@ -466,7 +482,7 @@ Answer (200):
   "built": { ... source_exposures ... }, "now": { ... same shape, now ... } }
 ```
 
-- Newer images = exposures after `source_exposures.latest_mjd`. Fields built before v0.14 (`basis: "frames"`):
+- Newer images = exposures after `source_exposures.latest_mjd`. Fields built before v0.15 (`basis: "frames"`):
   only exposures more than 30 days after the last frame (a new survey pass) count, because the frames are a
   selection and later exposures of the last pass may just not have been picked.
 - `new_releases`: release folders in the bucket this code didn't know (2026-11-14: `dr1`, `qr2`, `qr3`); they are
