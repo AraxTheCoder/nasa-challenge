@@ -29,3 +29,7 @@ viewer and the default URL.
 - Step 5: leaner panels: no title, no ? help button/bubble, no "SPHEREx · 102 bands" caption, no
   "SPHEREx epochs here" caption (synthetic layers still say "synthetic:"), position without "cursor",
   button "Blink". Defaults: Debug on (`?debug=0` off), Traces off, Labels off (own key `spherex.app.labels`).
+- Step 6: "Show" is now "Go": jumps to the typed RA/Dec (parsed in the browser, `coords.js`, same rules
+  as server/coords.py) and marks it with a pin; no build. Zoom = 3 × Field, so Blink there builds a field
+  that size. Blink builds and adds `&blink=1` to the URL (a reload builds again). Panels: under the form one
+  panel with position + Blink on one line and Band, Labels, Tiles, Debug on the line below; bottom: epochs.

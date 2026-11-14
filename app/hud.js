@@ -6,7 +6,7 @@
 
 import { el } from "./util.js";
 
-const KEY = "spherex.app.hud.v2";   // v2: docked default layout; positions saved before it are dropped
+const KEY = "spherex.app.hud.v3";   // v3: groups field / view / epochs; positions saved before are dropped
 const INTERACTIVE = "input, select, button:not(.hud-grip), textarea, a, label, output, summary, [contenteditable]";
 const KEEP = 48;          // px of a panel that always stay on screen
 const THRESHOLD = 3;      // px before a press becomes a drag (so a click stays a click)
@@ -38,7 +38,8 @@ function reset(hud) {
 
 function makeDraggable(hud) {
   const name = hud.dataset.hud;
-  const first = hud.querySelector(".hud-panel");
+  // the grip starts the group's first line: its first .hud-row, else its first panel
+  const first = hud.querySelector(".hud-row") ?? hud.querySelector(".hud-panel");
   if (!first) return;
   const grip = el("button", { type: "button", class: "hud-grip", "aria-label": "Move this panel",
     title: "Drag to move this panel · double-click to dock it again" }, "⠿");

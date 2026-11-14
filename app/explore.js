@@ -15,6 +15,7 @@ export const DEFAULT_SURVEY = "spherex-live";
 let sky = null;
 let apiBase = null;        // T41: our server caches + prefetches the map tiles (/api/sky/<id>)
 let field = null;          // {ra, dec, size} of the blink field, drawn as an outline
+let pin = null;            // T55 "Go": {ra, dec} marked with a pin
 let epochLayers = [];
 
 export const getSky = () => sky;
@@ -25,6 +26,7 @@ export async function initExplore(container, opts = {}) {
   apiBase = opts.api ?? null;
   sky = createSky(container, { ra: opts.ra ?? 269.4463, dec: opts.dec ?? 4.7682, fov: opts.fovDeg ?? 2 });
   sky.addDrawHook(drawField);
+  sky.addDrawHook(drawPin);
   await setSurvey(DEFAULT_SURVEY);
   document.dispatchEvent(new CustomEvent("explore:ready"));   // T72: skylabels.js hooks in
   return sky;
@@ -71,6 +73,41 @@ export function redraw() { sky?.redraw(); }
 export function markField(ra, dec, sizeArcmin) {
   field = { ra, dec, size: sizeArcmin };
   sky?.redraw();
+}
+
+/** T55: mark a position with a pin (the "Go" target); null removes it. */
+export function setPin(ra, dec) {
+  pin = Number.isFinite(ra) && Number.isFinite(dec) ? { ra, dec } : null;
+  sky?.redraw();
+}
+
+/** A map pin whose tip sits on the position: round head, pointed foot, white rim, shadow. */
+function drawPin(ctx, proj) {
+  if (!pin) return;
+  const s = proj.toScreen(pin.ra, pin.dec);
+  if (!s.front) return;
+  const r = 9, h = 26;                       // head radius, tip-to-head-centre height (px)
+  const cx = s.x, cy = s.y - h;
+  ctx.save();
+  ctx.shadowColor = "rgb(0 0 0 / 0.6)";
+  ctx.shadowBlur = 6;
+  ctx.shadowOffsetY = 2;
+  ctx.beginPath();
+  const a = Math.acos(r / h);                // tangent points of the straight sides on the head
+  ctx.moveTo(s.x, s.y);
+  ctx.arc(cx, cy, r, Math.PI / 2 + a, Math.PI / 2 - a + 2 * Math.PI, false);
+  ctx.closePath();
+  ctx.fillStyle = "#ff5252";
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#fff";
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3.5, 0, 2 * Math.PI);
+  ctx.fillStyle = "#fff";
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawField(ctx, proj) {

@@ -299,6 +299,9 @@ body.fullmap { overflow: hidden; height: 100vh; }
 .hud-dragging .hud-panel { box-shadow: 0 10px 30px rgb(0 0 0 / 0.6); }
 .hud-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .hud-row label { display: inline-flex; align-items: center; gap: 6px; }
+.hud-stack { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }   /* one panel, several lines */
+.hud-nowrap { flex-wrap: nowrap; white-space: nowrap; }                                 /* position + Blink stay side by side */
+.hud-nowrap #explore-pos { flex: 1 1 auto; }
 #explore-pos { font-variant-numeric: tabular-nums; }
 .hud .topbar { border-bottom: none; padding: 10px 12px; gap: 8px 14px; }
 .hud .field-form { flex: 0 1 auto; }
