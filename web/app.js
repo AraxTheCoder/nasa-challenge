@@ -467,6 +467,7 @@ function updateExplorePos() {
 async function startExplore() {
   const sel = $("#explore-survey");
   explore.SURVEYS.forEach((s) => sel.append(el("option", { value: s.id }, s.label)));
+  sel.value = explore.DEFAULT_SURVEY;
   sel.addEventListener("change", () => explore.setSurvey(sel.value));
   $("#explore-gaia").addEventListener("change", (e) => explore.toggleCatalog("gaia", e.target.checked));
   $("#explore-simbad").addEventListener("change", (e) => explore.toggleCatalog("simbad", e.target.checked));

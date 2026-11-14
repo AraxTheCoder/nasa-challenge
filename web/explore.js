@@ -33,24 +33,16 @@ let aladin = null;     // the instance
 const catalogs = {};   // name -> catalog layer
 let epochLayers = [];  // T32: [{epoch, layer}]
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = src;
-    s.charset = "utf-8";
-    s.onload = resolve;
-    s.onerror = () => reject(new Error(`could not load ${src}`));
-    document.head.append(s);
-  });
-}
+// IRSA-hosted, so the map works even while the CDS tile servers are down (as on 2026-11-14).
+export const DEFAULT_SURVEY = "https://irsa.ipac.caltech.edu/data/hips/SPHEREx/spherex_allsky_cube";
 
 /** Create the sky view. opts: {ra, dec, fovDeg, onBlink(ra, dec, fovArcmin)} */
 export async function initExplore(container, opts) {
-  await loadScript(ALADIN_JS);
-  A = window.A;
+  // The npm build is an ES module (default export), it does not set window.A.
+  A = (await import(ALADIN_JS)).default;
   await A.init;
   aladin = A.aladin(container, {
-    survey: SURVEYS[0].id,
+    survey: DEFAULT_SURVEY,
     target: `${opts.ra ?? 269.4463} ${opts.dec ?? 4.7682}`,
     fov: opts.fovDeg ?? 2,
     cooFrame: "ICRSd",
