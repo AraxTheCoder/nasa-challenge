@@ -6,6 +6,9 @@ For each epoch of a built target, the frames of that epoch (already on the commo
     /api/hips/<tid>                                  -> {"layers": [{epoch, label, url, n_frames}]}
     /api/hips/<tid>/e<epoch>/properties              -> HiPS properties
     /api/hips/<tid>/e<epoch>/Norder<k>/Dir<d>/Npix<n>.png
+T81: also one layer per frame (`f<frame id>`, e.g. f003) and A − B differences (`d-<a>-<b>`, B fitted to
+A's brightness like the viewer's T43 difference: grey 128 = no change, white = brighter in A,
+black = brighter in B), same URL scheme: /api/hips/<tid>/f003/..., /api/hips/<tid>/d-f003-f017/...
 
 Tile pixel (row from top, col) <-> HEALPix NESTED index at nside 2^(k+9):
     npix * 512^2 + interleave(row -> even bits, col -> odd bits)
@@ -45,6 +48,26 @@ def epochs(target: dict) -> dict[int, list[dict]]:
     return dict(sorted(out.items()))
 
 
+LAYER_RE = r"^(e\d+|f\d{3,}|d-f\d{3,}-f\d{3,})$"
+
+
+def frame_layers(tid: str, target: dict) -> list[dict]:
+    """T81: one layer per frame, for the map's A/B blink and play."""
+    return [{"epoch": int(f["epoch"]), "frame_id": f["id"], "id": f["id"], "url": f"/api/hips/{tid}/{f['id']}",
+             "label": f"{f['id']} · epoch {f['epoch']} · {f.get('wavelength_um', 0):.3f} µm · D{f.get('detector', '?')}"}
+            for f in sorted(target.get("frames", []), key=lambda f: f["mjd"])]
+
+
+def has_layer(target: dict, key: str) -> bool:
+    ids = {f["id"] for f in target.get("frames", [])}
+    if key.startswith("e"):
+        return int(key[1:]) in epochs(target)
+    if key.startswith("d-"):
+        _, a, b = key.split("-")
+        return a in ids and b in ids
+    return key in ids
+
+
 def layers(tid: str, target: dict) -> list[dict]:
     res = []
     for ep, frames in epochs(target).items():
@@ -55,11 +78,13 @@ def layers(tid: str, target: dict) -> list[dict]:
     return res
 
 
-def properties(tid: str, target: dict, ep: int) -> str:
+def properties(tid: str, target: dict, ep) -> str:
     c = target["center"]
+    key = ep if isinstance(ep, str) else f"e{ep}"
+    what = {"e": f"epoch {key[1:]}", "f": f"frame {key}", "d": f"difference {key[2:].replace('-', ' − ')}"}[key[0]]
     lines = {
-        "creator_did": f"ivo://spherex-blink/{tid}/e{ep}",
-        "obs_title": f"SPHEREx epoch {ep} around RA {c['ra_deg']:.4f} Dec {c['dec_deg']:+.4f}"
+        "creator_did": f"ivo://spherex-blink/{tid}/{key}",
+        "obs_title": f"SPHEREx {what} around RA {c['ra_deg']:.4f} Dec {c['dec_deg']:+.4f}"
                      + (" (SYNTHETIC)" if target.get("synthetic") else ""),
         "dataproduct_type": "image", "hips_version": "1.4", "hips_frame": "equatorial",
         "hips_order": str(HIPS_ORDER), "hips_order_min": "0", "hips_tile_width": str(TILE),
@@ -89,6 +114,50 @@ def epoch_image(target_dir: str, mtime: float, ep: int) -> tuple[np.ndarray, np.
     return mean, cnt > 0
 
 
+@lru_cache(maxsize=256)
+def frame_image(target_dir: str, mtime: float, fid: str) -> tuple[np.ndarray, np.ndarray]:
+    """One frame (grey 0-255) and its coverage mask."""
+    from PIL import Image
+
+    d = Path(target_dir)
+    t = json.loads((d / "target.json").read_text(encoding="utf-8"))
+    f = next(f for f in t["frames"] if f["id"] == fid)
+    a = np.asarray(Image.open(d / f["image"]).convert("LA"), np.float32)
+    return a[..., 0], a[..., 1] > 0
+
+
+@lru_cache(maxsize=64)
+def diff_image(target_dir: str, mtime: float, a: str, b: str) -> tuple[np.ndarray, np.ndarray]:
+    """A − B with B fitted to A (robust linear fit over pixels valid in both, as web/diff.js does):
+    grey 128 = no change, white = brighter in A, black = brighter in B."""
+    ga, ma = frame_image(target_dir, mtime, a)
+    gb, mb = frame_image(target_dir, mtime, b)
+    both = ma & mb
+    out = np.full(ga.shape, 128.0, np.float32)
+    if both.sum() < 10:
+        return out, both
+    x, y = gb[both], ga[both]
+    keep = np.ones(x.size, bool)
+    for _ in range(3):                                   # clip outliers (the movers) and refit
+        gain, off = np.polyfit(x[keep], y[keep], 1) if keep.sum() > 10 else (1.0, 0.0)
+        r = y - (gain * x + off)
+        s = 1.4826 * np.median(np.abs(r[keep] - np.median(r[keep]))) or 1.0
+        keep = np.abs(r) < 3 * s
+    diff = ga - (gain * gb + off)
+    scale = max(np.percentile(np.abs(diff[both]), 99.5), 1.0)
+    out[both] = np.clip(128 + 127 * diff[both] / scale, 0, 255)
+    return out, both
+
+
+def layer_image(target_dir: str, mtime: float, key: str) -> tuple[np.ndarray, np.ndarray]:
+    if key.startswith("e"):
+        return epoch_image(target_dir, mtime, int(key[1:]))
+    if key.startswith("d-"):
+        _, a, b = key.split("-")
+        return diff_image(target_dir, mtime, a, b)
+    return frame_image(target_dir, mtime, key)
+
+
 def _grid_wcs(target: dict):
     from astropy.wcs import WCS
 
@@ -108,15 +177,17 @@ def _sep_deg(ra1, dec1, ra2, dec2) -> float:
     return math.degrees(math.acos(max(-1.0, min(1.0, c))))
 
 
-def tile_png(target_dir: Path, ep: int, order: int, npix: int) -> bytes | None:
-    """PNG for one tile; rendered once per target version and then kept in memory (T41)."""
+def tile_png(target_dir: Path, ep, order: int, npix: int) -> bytes | None:
+    """PNG for one tile; rendered once per target version and then kept in memory (T41).
+    ep: an epoch number, or a layer key (`e1`, `f003`, `d-f003-f017`, T81)."""
     mtime = (target_dir / "target.json").stat().st_mtime
-    return _tile_cached(str(target_dir), mtime, ep, order, npix)
+    key = ep if isinstance(ep, str) else f"e{ep}"
+    return _tile_cached(str(target_dir), mtime, key, order, npix)
 
 
-@lru_cache(maxsize=4096)
-def _tile_cached(target_dir: str, mtime: float, ep: int, order: int, npix: int) -> bytes | None:
-    return _render_tile(Path(target_dir), ep, order, npix)
+@lru_cache(maxsize=8192)
+def _tile_cached(target_dir: str, mtime: float, key: str, order: int, npix: int) -> bytes | None:
+    return _render_tile(Path(target_dir), key, order, npix)
 
 
 def tiles_touching(target: dict, order: int) -> list[int]:
@@ -144,14 +215,15 @@ def prerender(target_dir: Path) -> None:
                     pass
 
 
-def _render_tile(target_dir: Path, ep: int, order: int, npix: int) -> bytes | None:
+def _render_tile(target_dir: Path, ep, order: int, npix: int) -> bytes | None:
     """PNG (grey + alpha) for one HiPS tile, or None when the tile doesn't touch the field."""
     import astropy.units as u
     from astropy_healpix import HEALPix
     from PIL import Image
 
     t = json.loads((target_dir / "target.json").read_text(encoding="utf-8"))
-    if ep not in epochs(t):
+    key = ep if isinstance(ep, str) else f"e{ep}"
+    if not has_layer(t, key):
         return None
     c = t["center"]
     lon_c, lat_c = HEALPix(nside=2 ** order, order="nested").healpix_to_lonlat(npix)
@@ -168,7 +240,7 @@ def _render_tile(target_dir: Path, ep: int, order: int, npix: int) -> bytes | No
     ok = (col >= 0) & (col < w) & (row >= 0) & (row < h)
     if not ok.any():
         return None
-    mean, cov = epoch_image(str(target_dir), (target_dir / "target.json").stat().st_mtime, ep)
+    mean, cov = layer_image(str(target_dir), (target_dir / "target.json").stat().st_mtime, key)
     grey = np.zeros(TILE * TILE, np.uint8)
     alpha = np.zeros(TILE * TILE, np.uint8)
     rr, cc = row[ok], col[ok]

@@ -48,3 +48,7 @@ viewer and the default URL.
   while it follows the mouse it stays left of the cursor with RA/Dec to the right.
 - Step 11: one look for the 📍 everywhere (also while it follows the mouse in pick mode): needle tip on
   the point, RA/Dec centred under it.
+- Step 12: Blink builds what is on screen: a square over the whole view (its longer side; the API allows
+  5–60′, so a wider view gets its centred 60′), at the map's detail (epoch tiles go to order 7). The red
+  outline is that part of the view at the moment of the click (shown at once); the map no longer jumps
+  when the field is ready, so you can move around while it builds and find it again by the outline.

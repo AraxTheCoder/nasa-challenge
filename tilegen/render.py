@@ -27,6 +27,15 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 LIVE_ORDERS = (6, 7)
+# T82: SPHEREx maps the whole sky once per ~182.6 days from 2025-05-01 (MJD 60796). Pass n = images
+# from [start + (n-1) * PASS_DAYS, start + n * PASS_DAYS); April 2025 commissioning images count as pass 1.
+SURVEY_START_MJD = 60796.0
+PASS_DAYS = 182.625
+
+
+def pass_of(mjd):
+    """Survey pass (1, 2, 3, ...) of a time or array of times (MJD)."""
+    return np.maximum(1, np.floor((np.asarray(mjd, float) - SURVEY_START_MJD) / PASS_DAYS).astype(int) + 1)
 # 1 image per tile when S3 is slow (from Europe: ~0.1 MB/s per connection on 2026-11-14), more
 # next to the bucket (the Google Cloud VM sets TILEGEN_IMAGES=3).
 IMAGES_PER_TILE = int(os.environ.get("TILEGEN_IMAGES", "1"))
@@ -77,14 +86,17 @@ def _xy_table():
     return _XY
 
 
-def pick_images(ra: float, dec: float, detector: int, k: int = IMAGES_PER_TILE) -> list[str]:
-    """FITS URLs of up to k images of this detector covering (ra, dec), best placed first."""
+def pick_images(ra: float, dec: float, detector: int, k: int = IMAGES_PER_TILE, pass_: int | None = None) -> list[str]:
+    """FITS URLs of up to k images of this detector covering (ra, dec), best placed first.
+    pass_: only images from that survey pass (T82)."""
     from pipeline.mirror import derive_url, resolve_urls
 
     idx = _mirror()
     d = idx.d
     cand = idx.covering(ra, dec, radius_deg=FOOTPRINT_DEG)
     cand = cand[d["detector"][cand] == detector]
+    if pass_ is not None and len(cand):
+        cand = cand[pass_of((d["t_min"][cand] + d["t_max"][cand]) / 2) == pass_]
     if not len(cand):
         return []
     r, de = math.radians(ra), math.radians(dec)
@@ -203,8 +215,9 @@ def _sample(fits_url: str, glon: np.ndarray, glat: np.ndarray, sel: np.ndarray |
     return out
 
 
-def render(slice_: int, order: int, npix: int) -> bytes | None:
-    """PNG (grey + alpha) of one live tile, or None if no SPHEREx image covers it."""
+def render(slice_: int, order: int, npix: int, pass_: int | None = None) -> bytes | None:
+    """PNG (grey + alpha) of one live tile, or None if no SPHEREx image covers it.
+    pass_: only images from that survey pass (T82: blink passes anywhere on the map)."""
     import astropy.units as u
     from astropy_healpix import HEALPix
     from PIL import Image
@@ -217,9 +230,9 @@ def render(slice_: int, order: int, npix: int) -> bytes | None:
     # if those don't cover this tile, fall back to the best images for the tile itself.
     parent = npix >> (2 * (order - SHARE_ORDER))
     lon_p, lat_p = HEALPix(nside=2 ** SHARE_ORDER, order="nested").healpix_to_lonlat(parent)
-    urls = pick_images(lon_p.to_value(u.deg), lat_p.to_value(u.deg), detector)
+    urls = pick_images(lon_p.to_value(u.deg), lat_p.to_value(u.deg), detector, pass_=pass_)
     if not urls or not _covers(urls[0], lon_c.to_value(u.deg), lat_c.to_value(u.deg)):
-        urls = pick_images(lon_c.to_value(u.deg), lat_c.to_value(u.deg), detector)
+        urls = pick_images(lon_c.to_value(u.deg), lat_c.to_value(u.deg), detector, pass_=pass_)
     if not urls:
         return None
     glon, glat = _grid_lonlat(order, npix)
@@ -232,7 +245,8 @@ def render(slice_: int, order: int, npix: int) -> bytes | None:
         with np.errstate(all="ignore"):
             v = np.nanmean(np.stack(stack), axis=0)
     if v is None or np.isfinite(v).mean() < FILL_UNTIL:
-        extra = [x for x in pick_images(lon_c.to_value(u.deg), lat_c.to_value(u.deg), detector, k=len(urls) + MAX_FILL)
+        extra = [x for x in pick_images(lon_c.to_value(u.deg), lat_c.to_value(u.deg), detector, k=len(urls) + MAX_FILL,
+                                        pass_=pass_)
                  if x not in urls][:MAX_FILL]
         for url in extra:
             hole = ~np.isfinite(v) if v is not None else np.ones(npx, bool)

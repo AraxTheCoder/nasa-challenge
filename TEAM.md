@@ -117,8 +117,8 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T78 | C: Type an exact wavelength: a µm input next to the sky map's band slider (snaps to the nearest of the 102 channels, shows its exact centre) and "frames at λ" in the blink viewer (A/B = the frames nearest that wavelength in two epochs) | Mati | done | `mati/T78-wavelength-input` | [tasks/T78](tasks/T78-wavelength-input.md). Mati's request; needs porting to `app/` (T55) |
 | T79 | C: Click to measure: a plain click on the frame image measures that star (no "Measure a star" mode needed); a click anywhere on the explore map gives the spectrum + light curve of that sky point from all exposures, field or not (`GET /api/photometry?ra=&dec=`) | Joerg | done | `joerg/T79-click-spectrum` | [tasks/T79](tasks/T79-click-spectrum.md). Joerg: "nothing happens if I click on a pixel". `/app/` (T55): note for Jonathan |
 | T80 | C: Map only in `/web/`: the explore map is the one view of the sky; frame image, blink controls, wavelength filter, timeline and frame panels hidden (still in the code: `?frames=1`, offline `?data=`, `?explore=0`); spectra via map clicks (T79) | Joerg | done | `joerg/T80-map-only` | Joerg: "why are there two maps, let's only have the navigator". `/app/` migration later (Jonathan, T55) |
-| T81 | C: Frame viewer features in the map: single frames and A − B as field layers (`/api/hips/<id>/f<frame>`, `/d<a>-<b>`), the viewer's A/B, blink, play, λ filter and timeline drive the map | Joerg | doing | `joerg/T81-map-frames` | [tasks/T81](tasks/T81-map-frames.md). Touches server/hips.py + web/explore.js (Jonathan's map) |
-| T82 | A/C: Blink survey passes anywhere on the map: live tiles per 6-month pass (`spherex-live-p<n>`), "Blink passes" when zoomed in, not only inside a built field | Joerg | doing | `joerg/T81-map-frames` | [tasks/T82](tasks/T82-blink-passes.md). Touches tilegen + skycache (Jonathan); the US VM needs a redeploy for pass tiles, local until then |
+| T81 | C: Frame viewer features in the map: single frames and A − B as field layers (`/api/hips/<id>/f<frame>`, `/d<a>-<b>`), the viewer's A/B, blink, play, λ filter and timeline drive the map | Joerg | done | `joerg/T81-map-frames` | [tasks/T81](tasks/T81-map-frames.md). Touches server/hips.py + web/explore.js (Jonathan's map) |
+| T82 | A/C: Blink survey passes anywhere on the map: live tiles per 6-month pass (`spherex-live-p<n>`), "Blink passes" when zoomed in, not only inside a built field | Joerg | done | `joerg/T81-map-frames` | [tasks/T82](tasks/T82-blink-passes.md). Touches tilegen + skycache (Jonathan); the US VM needs a redeploy for pass tiles, local until then |
 
 ## Decisions
 
@@ -647,3 +647,12 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Jonathan (Claude): T55 step 10 (`app/` only): standing 📍 = tip on the point, RA/Dec centred below. `web/` unchanged.
 - 2026-11-14 Jonathan (Claude): T55 step 11 (`app/` only): 📍 looks the same when following the mouse (tip on the point, RA/Dec below). `web/` unchanged.
 - 2026-11-14 Mati (Claude): T59 done, in the viewer instead of the pipeline (builds keep only 2 frames per epoch+detector, so a server co-add would gain √2): a "Stack" select next to A − B adds the shown frame's epoch (all 6 detectors, ~3.5× deeper) or its detector (all epochs, ~2.4×), with each frame's background removed; blink and Play all show the stack of each frame's group. Covers the challenge considerations "add together the data of each detector" and "add together images taken at different times". Display only, no API/contract change.
+- 2026-11-14 Jonathan (Claude): T55 step 12 (`app/` only): Blink builds the visible view (square over it, ≤ 60′ = API
+  limit) instead of a third of it; the red outline marks that view; no jump when the field is ready. `web/` unchanged.
+
+- 2026-11-14 [Joerg + Claude] T81 + T82 done. The map does what the frame viewer did: A/B, blink, play,
+  λ filter, timeline and A − B act on the map (frames and differences are field layers,
+  `/api/hips/<id>/f003`, `/d-f003-f017`). Survey passes blink anywhere when zoomed in to 2° (P1/P2/P3,
+  `/api/sky/spherex-live-p<n>`). [to Jonathan] tilegen/skycache/sky.js/explore.js touched (pass_ parameter,
+  pass layers, addOverlays, overlays follow the band); the VM needs a redeploy before it can render pass tiles,
+  until then the Live API renders them locally. `/app/`: same events (`viewer:frame`, `viewer:diff`) if you port it.

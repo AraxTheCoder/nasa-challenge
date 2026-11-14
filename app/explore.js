@@ -71,11 +71,11 @@ export function screenAt(ra, dec) {
   return s && s.front ? [s.x, s.y] : null;
 }
 
-/** Current view centre (deg) and field of view (arcmin, horizontal). */
+/** Current view centre (deg) and field of view (arcmin: fovArcmin horizontal, heightArcmin vertical). */
 export function view() {
   if (!sky) return null;
   const v = sky.view();
-  return { ra: v.ra, dec: v.dec, fovArcmin: v.fov * 60 };
+  return { ra: v.ra, dec: v.dec, fovArcmin: v.fov * 60, heightArcmin: (v.fov * 60 * v.height) / v.width };
 }
 
 export function on(ev, fn) { sky?.on(ev, fn); }
@@ -83,28 +83,59 @@ export function setDebug(on) { sky?.setDebug(on); }
 export function addDrawHook(fn) { sky?.addDrawHook(fn); }
 export function redraw() { sky?.redraw(); }
 
+/** Red outline = a square field of sizeArcmin around (ra, dec) (a link to a built field). */
 export function markField(ra, dec, sizeArcmin) {
-  field = { ra, dec, size: sizeArcmin };
+  const h = sizeArcmin / 120, c = Math.cos((dec * Math.PI) / 180) || 1e-6;
+  const corners = [[-h, -h], [h, -h], [h, h], [-h, h], [-h, -h]];
+  const pts = [];
+  for (let i = 0; i < 4; i++) {
+    const [ax, ay] = corners[i], [bx, by] = corners[i + 1];
+    for (let t = 0; t < 8; t++) {            // densified, so the outline follows the projection
+      pts.push([ra + (ax + ((bx - ax) * t) / 8) / c, dec + ay + ((by - ay) * t) / 8]);
+    }
+  }
+  markRegion(pts);
+}
+
+/** Red outline = this closed polygon of [ra, dec] points (deg). */
+export function markRegion(points) {
+  field = points?.length > 2 ? points : null;
   sky?.redraw();
+}
+
+/**
+ * T55 Blink: the part of the current view a centred square field of sizeArcmin covers (the whole
+ * view when it fits), as [ra, dec] points along its edges, so the red outline shows what is built.
+ */
+export function viewRegion(sizeArcmin) {
+  if (!sky) return null;
+  const v = sky.view();
+  const pxPerArcmin = v.width / (v.fov * 60), half = (sizeArcmin / 2) * pxPerArcmin;
+  const x0 = Math.max(0, v.width / 2 - half), x1 = Math.min(v.width, v.width / 2 + half);
+  const y0 = Math.max(0, v.height / 2 - half), y1 = Math.min(v.height, v.height / 2 + half);
+  const corners = [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]];
+  const pts = [];
+  for (let i = 0; i < 4; i++) {
+    const [ax, ay] = corners[i], [bx, by] = corners[i + 1];
+    for (let t = 0; t < 16; t++) {
+      const p = sky.proj.fromScreen(ax + ((bx - ax) * t) / 16, ay + ((by - ay) * t) / 16);
+      if (p) pts.push(p);
+    }
+  }
+  return pts;
 }
 
 function drawField(ctx, proj) {
   if (!field) return;
-  const h = field.size / 120, c = Math.cos((field.dec * Math.PI) / 180) || 1e-6;
-  const corners = [[-h, -h], [h, -h], [h, h], [-h, h], [-h, -h]];
   ctx.save();
   ctx.strokeStyle = "#ff5252";
   ctx.lineWidth = 2;
   ctx.beginPath();
   let started = false;
-  for (let i = 0; i < 4; i++) {
-    const [ax, ay] = corners[i], [bx, by] = corners[i + 1];
-    for (let t = 0; t <= 8; t++) {           // densified, so the outline follows the projection
-      const x = ax + ((bx - ax) * t) / 8, y = ay + ((by - ay) * t) / 8;
-      const s = proj.toScreen(field.ra + x / c, field.dec + y);
-      if (!s.front) { started = false; continue; }
-      if (!started) { ctx.moveTo(s.x, s.y); started = true; } else ctx.lineTo(s.x, s.y);
-    }
+  for (const [ra, dec] of [...field, field[0]]) {
+    const s = proj.toScreen(ra, dec);
+    if (!s.front) { started = false; continue; }
+    if (!started) { ctx.moveTo(s.x, s.y); started = true; } else ctx.lineTo(s.x, s.y);
   }
   ctx.stroke();
   ctx.restore();
