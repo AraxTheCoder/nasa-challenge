@@ -472,7 +472,8 @@ function showBlinkStatus() {
   if (!out) return;
   const tile = autoField.tile;
   let text;
-  if (tile === null) text = "Blink: zoom in to level 7";
+  if (!passes.passesOn()) text = "Blink: zoom in to level 6";
+  else if (tile === null) text = "Blink: survey passes · field epochs at level 7";
   else if (passes.mode() === "epochs") text = "Blink: field epochs";
   else {
     text = "Blink: survey passes";
@@ -521,7 +522,11 @@ async function startExplore() {
     passes.onModeChange(onBlinkSource);
     await passes.initPasses();
     let lastSharp = null;                     // the source follows the zoom level (level 7 or not)
-    explore.onTiles(() => { const s = passes.sharp(); if (s !== lastSharp) { lastSharp = s; decideSource(); } });
+    // the source follows the zoom level: passes from level 6, field epochs at 7
+    explore.onTiles(() => {
+      const s = `${passes.passesOn()}${passes.sharp()}`;
+      if (s !== lastSharp) { lastSharp = s; decideSource(); }
+    });
     if (app.goalPending) { app.goalPending = false; showGoal(); }   // Go asked before the map existed
     if (app.shownTarget) syncExplore(app.shownTarget);   // a field loaded before the map was ready
     updateExplorePos();

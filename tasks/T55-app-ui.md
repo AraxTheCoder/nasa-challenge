@@ -53,6 +53,8 @@ Rework the UI without blocking anyone: the redesign lives in `app/` (URL `/app/`
         grid for everyone, so built once) and its epochs blink while the view stays on the tile; out of the
         tile or zoomed out → passes again. Text indicator "Blink: …" instead of the switch. Tiles mode
         `balanced` (default): local + VM by measured throughput (`tilegen/client.py`)
+  - [x] Step 16 (Jonathan, 2026-11-14): passes blink from level 6 (field epochs at 7); base under the passes
+        capped at order 5; pass labels per visit ("Apr & Oct 2025", `visits` in `/api/pass-dates`)
 - [ ] Port relevant `web/` changes made after the copy
 - [ ] When done: decide (TEAM.md Decisions) whether `app/` replaces `web/`
 

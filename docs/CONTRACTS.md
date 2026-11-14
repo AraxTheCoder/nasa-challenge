@@ -497,11 +497,13 @@ images from: `x_survey_passes = 1 2 3` (v0.14).
 
 ```
 GET /api/pass-dates?ra=<deg>&dec=<deg>
-→ {"ra", "dec", "passes": [{"pass": 1, "start": "2025-08-18", "end": "2025-09-30", "n_images": 65}, ...]}
+→ {"ra", "dec", "passes": [{"pass": 1, "start": "2025-08-18", "end": "2025-09-30", "n_images": 65,
+                            "visits": [{"start", "end", "n_images"}, ...]}, ...]}
 ```
 
 v0.14 (T55): when SPHEREx imaged that point in each pass (UTC dates of the level-2 images whose centre is
-within 1.2 deg, all detectors); passes without images there are left out. 503 + `Retry-After` while the
+within 1.2 deg, all detectors); passes without images there are left out. `visits` (v0.16): the pass's images
+grouped by gaps > 30 d; near a pass boundary one pass can hold two visits half a year apart. 503 + `Retry-After` while the
 local image index is being built.
 
 ```

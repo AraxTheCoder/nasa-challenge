@@ -168,11 +168,11 @@ export function surveyPasses() {
 }
 
 /** Put one overlay per pass on the map (replaces the field's epochs). Returns the layers made. */
-export async function setPassLayers(passes, order) {
+export async function setPassLayers(passes) {
   if (!sky || !apiBase) return [];
   const base = apiBase.replace(/\/$/, "");
   epochLayers = await sky.setOverlays(passes.map((n) => ({
-    url: `${base}/api/sky/spherex-live-p${n}`, label: `Survey pass ${n}`, epoch: null, pass: n, sharpOrder: order })));
+    url: `${base}/api/sky/spherex-live-p${n}`, label: `Survey pass ${n}`, epoch: null, pass: n, eager: true })));
   return epochLayers;
 }
 

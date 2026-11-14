@@ -27,8 +27,9 @@ const MAX_PRELOADS = 3;                   // preloads in flight at once, and onl
 // Preload tiers, in this order after every visible tile: parent (zoom out), ring around the view
 // (pan), children of the centre (zoom in), other epochs (blink).
 const PRE_PARENT = PRELOAD, PRE_RING = PRELOAD + 1e4, PRE_CHILD = PRELOAD + 2e4, PRE_EPOCH = PRELOAD + 3e4;
-// T55: overlays with meta.sharpOrder (survey passes) are what the user waits for: right after the
-// visible base tiles, before any preload, and only at that order (no coarser tiles of them).
+// T55: overlays with meta.eager (survey passes) are what the user waits for: right after the visible
+// base tiles, before any preload, only at the order the view needs (within the layer's orders), and from
+// one order before the layer starts (the tiles a zoom in at the centre would show).
 const EAGER = PRELOAD / 2;
 
 // ---------- HiPS layer ------------------------------------------------------------------------
@@ -594,8 +595,9 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
 
   /** Other epochs (blink): their tiles on screen inside their field, after the shown ones. */
   function prefetch(layer) {
-    if (layer.meta?.sharpOrder) {
-      for (const [pix, d] of sharpTiles(layer.meta.sharpOrder)) request(layer, layer.meta.sharpOrder, pix, EAGER + d);
+    if (layer.meta?.eager) {
+      const k = eagerOrder(layer);
+      for (const [pix, d] of sharpTiles(k)) request(layer, k, pix, EAGER + d);
       return;
     }
     const order = pickOrder(layer);
@@ -618,7 +620,12 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     });
   }
 
-  /** T55: tiles of order k a sharpOrder overlay needs, with their distance (px) from the centre: the
+  /** T55: the order an eager overlay is loaded at: the one the view wants, within the layer's orders. */
+  function eagerOrder(layer) {
+    return Math.max(layer.minOrder, Math.min(layer.maxOrder, wantedOrder()));
+  }
+
+  /** T55: tiles of order k an eager overlay needs, with their distance (px) from the centre: the
    *  visible ones once the view shows order k; one order short of it, those a zoom in to order k
    *  at the centre would show (loaded ahead); further out, none. */
   function sharpTiles(k) {
@@ -754,11 +761,10 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     if (keys[e.key]) { e.preventDefault(); e.stopPropagation(); keys[e.key](); }
   });
 
-  /** An overlay layer from {url, label, epoch, sharpOrder?}; cubes start on the base's band. */
+  /** An overlay layer from {url, label, epoch, eager?}; cubes start on the base's band. */
   async function makeOverlay(l) {
     try {
       const layer = Object.assign(new Layer(l.url, await readProperties(l.url), { slice: st.base?.slice, ...l }), { meta: l });
-      if (l.sharpOrder) layer.minOrder = l.sharpOrder;      // no coarser tiles of it are ever asked for
       return layer;
     } catch (e) { console.warn(e); return null; }
   }
@@ -792,8 +798,8 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     overlayProgress(i) {
       const l = st.overlays[i];
       if (!l) return null;
-      const k = l.meta?.sharpOrder ?? pickOrder(l);
-      const pixs = l.meta?.sharpOrder ? sharpTiles(k).map(([p]) => p) : tilesFor(l, k);
+      const k = l.meta?.eager ? eagerOrder(l) : pickOrder(l);
+      const pixs = l.meta?.eager ? sharpTiles(k).map(([p]) => p) : tilesFor(l, k);
       let done = 0, ok = 0;
       for (const pix of pixs) {
         const t = l.tiles.get(l.key(k, pix));

@@ -1,8 +1,9 @@
-// T55 (/app/): blink SPHEREx's six-month survey passes by themselves, anywhere on the map, as soon as the
-// map is sharp (HiPS order 7, 3.2″ texels): below that nothing that moves between passes is visible.
+// T55 (/app/): blink SPHEREx's six-month survey passes by themselves, anywhere on the map, from level 6 on
+// (the pass layers' live orders 6-7; coarser, the IRSA cube combines all passes). Field epochs (app.js) come
+// at level 7, where the map is fully sharp.
 // Pass layers are the Live API's spherex-live-p<n> (T82): live tiles from one pass's images only, on the
 // same HEALPix grid as the map, so the screen's tiles are rendered once and cached for everyone.
-// Loading starts one zoom level earlier (order 6: the tiles a zoom in at the centre would show), and only
+// Loading starts one zoom level earlier (order 5: the tiles a zoom in at the centre would show), and only
 // passes whose visible tiles are all loaded take part, so the blink never shows half-loaded passes.
 // Always running: no play / pause, no buttons. Each pass is labelled with when SPHEREx imaged the view
 // centre in it (GET /api/pass-dates), e.g. "Aug–Sep 2025".
@@ -13,7 +14,8 @@
 import { $, el } from "./util.js";
 import * as explore from "./explore.js";
 
-export const SHARP_ORDER = 7;    // deepest live order: blink only here
+export const SHARP_ORDER = 7;    // deepest live order: the field epochs blink only here
+export const PASS_ORDER = 6;     // the pass layers' first live order: they blink from here on
 const STEP_MS = 800;
 const DATES_MOVE_DEG = 0.3;      // ask for the dates again once the centre moved this far
 
@@ -22,6 +24,7 @@ const st = { mode: "passes", passes: [], layers: false, shown: -1, labels: [], n
 
 export const mode = () => st.mode;
 export const sharp = () => (explore.wantedOrder() ?? 0) >= SHARP_ORDER;
+export const passesOn = () => (explore.wantedOrder() ?? 0) >= PASS_ORDER;
 export function onModeChange(fn) { st.listeners.push(fn); }
 
 /** "passes" or "epochs" (app.js decides; the options object is accepted for older callers). */
@@ -30,7 +33,9 @@ export async function setMode(m, _opts = {}) {
   const changed = m !== st.mode;
   st.mode = m;
   $("#explore-passes").hidden = m !== "passes";
-  explore.setBaseCap(m === "passes" ? SHARP_ORDER - 1 : null);
+  // under blinking passes the base map only shows through their holes: the IRSA cube (order 5) is enough
+  // there, and its tiles are no live renders competing with the passes'
+  explore.setBaseCap(m === "passes" ? PASS_ORDER - 1 : null);
   if (m === "passes") await loadLayers();
   else { st.layers = false; st.shown = -1; }        // the field's epochs replace the pass layers
   update();
@@ -41,16 +46,16 @@ async function loadLayers() {
   if (st.layers || !st.passes.length) return;
   st.layers = true;
   st.shown = -1;
-  const made = await explore.setPassLayers(st.passes, SHARP_ORDER);
+  const made = await explore.setPassLayers(st.passes);
   if (st.mode !== "passes") return;
   if (!made.length) { st.layers = false; st.note.textContent = "survey passes unavailable (Live API?)"; }
 }
 
 function show(i) {
+  st.labels.forEach((b, j) => b.classList.toggle("current", j === i));   // also after a reset of st.shown
   if (i === st.shown) return;                        // showOverlay redraws: only on a change
   st.shown = i;
   explore.showOverlay(i);
-  st.labels.forEach((b, j) => b.classList.toggle("current", j === i));
 }
 
 /** Per pass: "ready" (all visible tiles loaded, some with data), "empty" (none has data) or "loading". */
@@ -67,7 +72,7 @@ const readyOf = (s) => s.map((x, i) => (x.state === "ready" ? i : -1)).filter((i
 
 function update() {
   if (st.mode !== "passes" || !st.layers) return;
-  const s = states(), on = sharp();
+  const s = states(), on = passesOn();
   st.labels.forEach((b, i) => {
     const { state, p } = s[i];
     b.hidden = state === "empty";
@@ -82,8 +87,8 @@ function update() {
   if (!on) {
     show(-1);
     const order = explore.wantedOrder() ?? 0;
-    st.note.textContent = order >= SHARP_ORDER - 1 ? ["zoom in once more to blink", progress].filter(Boolean).join(" · ")
-      : "zoom in to level 7 to blink";
+    st.note.textContent = order >= PASS_ORDER - 1 ? ["zoom in once more to blink", progress].filter(Boolean).join(" · ")
+      : "zoom in to level 6 to blink";
     return;
   }
   st.note.textContent = progress;
@@ -93,7 +98,7 @@ function update() {
 }
 
 function step() {
-  if (st.mode !== "passes" || !sharp()) return;
+  if (st.mode !== "passes" || !passesOn()) return;
   const ready = readyOf(states());
   if (ready.length < 2) return;
   show(ready[(ready.indexOf(st.shown) + 1) % ready.length]);
@@ -111,6 +116,19 @@ export function monthSpan(start, end) {
   return `${MONTHS[m0 - 1]} ${y0}–${MONTHS[m1 - 1]} ${y1}`;
 }
 
+/** A pass's label: its visits here, e.g. "Mar 2026", "Apr & Oct 2025", "Oct 2025 & Apr 2026". */
+export function visitLabel(d) {
+  const v = d.visits?.length ? d.visits : [d];
+  if (v.length === 1) return monthSpan(v[0].start, v[0].end);
+  const parts = v.map((x) => monthSpan(x.start, x.end));
+  const year = (t) => t.slice(-4);
+  if (v.every((x) => /^[A-Z][a-z]{2}(–[A-Z][a-z]{2})? \d{4}$/.test(monthSpan(x.start, x.end)))
+      && new Set(parts.map(year)).size === 1) {
+    return parts.map((p) => p.slice(0, -5)).join(" & ") + ` ${year(parts[0])}`;    // same year: "Apr & Oct 2025"
+  }
+  return parts.join(" & ");
+}
+
 const sep = (a, b) => {
   const d = Math.PI / 180;
   const c = Math.sin(a.dec * d) * Math.sin(b.dec * d) + Math.cos(a.dec * d) * Math.cos(b.dec * d) * Math.cos((a.ra - b.ra) * d);
@@ -121,7 +139,7 @@ function labelPass(i, text) { st.labels[i].textContent = text; }
 
 async function askDates() {
   const v = explore.view(), api = explore.getApiBase();
-  if (!v || !api || (explore.wantedOrder() ?? 0) < SHARP_ORDER - 1) return;
+  if (!v || !api || (explore.wantedOrder() ?? 0) < PASS_ORDER - 1) return;
   if (st.datesAt && sep(st.datesAt, v) < DATES_MOVE_DEG) return;
   const at = { ra: v.ra, dec: v.dec };
   st.datesAt = at;
@@ -133,7 +151,7 @@ async function askDates() {
     st.dates = new Map(body.passes.map((p) => [p.pass, p]));
     st.passes.forEach((n, i) => {
       const d = st.dates.get(n);
-      labelPass(i, d ? monthSpan(d.start, d.end) : `pass ${n}`);
+      labelPass(i, d ? visitLabel(d) : `pass ${n}`);
     });
   } catch {
     st.datesAt = null;                               // ask again on the next move

@@ -70,12 +70,22 @@ def pass_dates(ra: float, dec: float, radius_deg: float = 1.2) -> list[dict]:
     cand = idx.covering(ra % 360, dec, radius_deg=radius_deg)
     if not len(cand):
         return []
+    from pipeline.query import assign_epochs
+
     mid = (d["t_min"][cand] + d["t_max"][cand]) / 2
     out = []
     for n in sorted(set(pass_of(mid).tolist())):
         m = np.sort(mid[pass_of(mid) == n])
         lo, hi = Time([m[0], m[-1]], format="mjd").isot
-        out.append({"pass": int(n), "start": lo[:10], "end": hi[:10], "n_images": int(len(m))})
+        # visits = groups of images > 30 d apart (pipeline.query): near a pass boundary one pass can hold
+        # two visits half a year apart (Epsilon Indi B, pass 1: Apr and Oct 2025)
+        ep = assign_epochs(m)
+        visits = []
+        for e in sorted(set(ep.tolist())):
+            v = m[ep == e]
+            a0, a1 = Time([v[0], v[-1]], format="mjd").isot
+            visits.append({"start": a0[:10], "end": a1[:10], "n_images": int(len(v))})
+        out.append({"pass": int(n), "start": lo[:10], "end": hi[:10], "n_images": int(len(m)), "visits": visits})
     return out
 
 

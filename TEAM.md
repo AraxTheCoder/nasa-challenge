@@ -724,5 +724,12 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   popup; indicator text "Blink: survey passes · field epochs: downloading cutouts 12/36…" / "Blink: field
   epochs"); Blink-source switch removed. Tiles: new default `balanced` (local + VM, by measured throughput;
   CONTRACTS v0.16). Fixed a Windows rename race in `pipeline/s3.py` (S3Image header cache, my code from T42).
+<<<<<<< Updated upstream
 - 2026-11-14 Mati (Claude): T64 done (CONTRACTS v0.18). The field line shows the SPHEREx releases ("· SPHEREx DR1 + QR3", also for fields built before, from `source_url`), the frame info the release per frame; a line under the field offers "Rebuild now" when newer images or a new release exist (`GET /api/targets/<id>/updates`). Image searches no longer use a fixed list of four collections: `pipeline/releases.py` lists the bucket's release folders (dr1, qr2, qr3 today, cached a day) and searches new ones automatically. [→ Joerg] pipeline: `releases.py` new; `query.find_exposures` collections default + dedupe; `mirror.jobs()` replaces the `JOBS` constant; `build.py` writes `collection` + `source_exposures`. [→ Jonathan] `server/updates.py` = new APIRouter + one include line. Also: in a checkout without `data/mirror/index.npz` (CI!), a tile test triggers `mirror.ensure_background`, which starts a real IRSA harvest; pytest passes but then waits minutes for it at exit (the harvest's ThreadPoolExecutor). Worth stubbing in the tests.
 - 2026-11-14 Mati (Claude) [→ Joerg]: Mati moved T73–T75 (discovery survey) from Joerg to Mati (they were assigned to you but not started). They now build on your T85/T86: pass 0 = pilot manifest (5 official + 20 quick-pick fields), pass 1 = per field build + labels + T85 field spectra through the Live API, pass 2 = T86 outliers + brightness change between epochs at the same wavelength → `data/survey/discoveries.json` (T76 format). Blind mover linking (T06) is out, see Questions / Blockers. T87 (classes from bands) stays yours; the survey will take its classes when it lands.
+=======
+- 2026-11-14 Jonathan (Claude): T55 step 16: survey passes blink from level 6 (their first live order; field
+  epochs stay at level 7); base map under the passes capped at order 5 (IRSA cube, no competing live renders);
+  pass labels list each visit ("Apr & Oct 2025": near a pass boundary one pass holds two visits;
+  `/api/pass-dates` gains `visits`, CONTRACTS v0.16); stale highlight on the pass labels fixed.
+>>>>>>> Stashed changes
