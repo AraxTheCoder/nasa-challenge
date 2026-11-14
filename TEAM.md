@@ -319,6 +319,18 @@ Things waiting on a human.
   `detect.known_objects.add_known_objects(target)` → `detect.classify.classify_detections(target)`. Tracks need
   per-frame `frame_id, ra_deg, dec_deg, x, y`; `status` may be left out. Details in tasks/T08.
 
+- 2026-11-14 [Joerg + Codex → Jonathan, T42] Tile queue stall diagnosed on current main
+  (`35ed3ad`): browser aborts off-screen fetches, but synchronous `/api/sky` handlers continue S3
+  work; `SkyCache.prefetch_around` also submits 8 neighbours + 4 children for each completed live
+  tile, sharing the six `_live_slots` with visible requests, without viewport cancellation or
+  submission deduplication. Offline captured-executor reproduction: one order-6 request schedules
+  12 live jobs (8 order 6, 4 order 7); repeated before caching schedules 24. Health and cached
+  properties still respond in 16 ms / 1 ms, so that is not evidence of a frozen API. Suggested first
+  fix in your active T42 area: disable speculative prefetch into live orders (including order-5
+  children), then prioritize visible live requests and stop disconnected jobs before acquiring a
+  live slot. Consider single-flight protection for shared S3Image metadata/chunks too: current
+  `.part` paths can collide across tile workers. No production code changed by Joerg's session.
+
 ## Log
 
 Append-only, newest at the bottom. Format: `date time [name] done / next / gotchas`.
