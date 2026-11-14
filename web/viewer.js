@@ -30,6 +30,13 @@ const state = {
 };
 
 export const currentTarget = () => state.target;
+
+/** Show one frame (stops blinking). For other modules, e.g. objects.js jumping to an object. */
+export function showFrame(id) {
+  if (!frameById(id)) return;
+  stopBlink();
+  show(id);
+}
 export const isSynthetic = (t) => t.synthetic !== false; // missing flag counts as synthetic
 
 /** Light checks only; the full schema is docs/target.schema.json and is enforced upstream. */

@@ -74,6 +74,7 @@
           <div>
             <h2 id="target-name"></h2>
             <p id="target-meta" class="muted"></p>
+            <p id="objects-summary" class="objects-summary"></p>
           </div>
           <div class="target-actions">
             <button id="btn-copy" type="button" class="link" title="Copy a link to this field">Copy link</button>
@@ -134,6 +135,14 @@
       <section class="panel">
         <h3>Shown frame</h3>
         <dl id="frame-info" class="info"></dl>
+      </section>
+
+      <section class="panel" aria-labelledby="objects-title">
+        <h3 id="objects-title">Objects <span id="objects-count" class="muted"></span></h3>
+        <label id="objects-artifacts" class="small muted objects-toggle" hidden>
+          <input id="objects-show-artifacts" type="checkbox"><span>show artifacts (<span id="objects-artifacts-n">0</span>)</span>
+        </label>
+        <ul id="objects-list" class="objects"></ul>
       </section>
 
       <section class="panel">
