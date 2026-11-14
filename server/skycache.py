@@ -18,6 +18,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from tilegen.janitor import used   # T94: cache hits keep tiles in the size-capped cache (LRU)
+
 SURVEYS = {
     "spherex-cube": ["https://irsa.ipac.caltech.edu/data/hips/SPHEREx/spherex_allsky_cube"],
     **{f"spherex-d{d}": [f"https://alasky.cds.unistra.fr/SPHEREx/D{d}", f"https://alaskybis.cds.unistra.fr/SPHEREx/D{d}"]
@@ -120,6 +122,7 @@ class SkyCache:
         f = self.root / survey / path
         if f.exists():
             data = f.read_bytes()
+            used(f)                                    # T94: least recently used tiles go first
             return None if data == MISSING else data
         key = f"{survey}/{path}"
         with self._lock:
@@ -212,6 +215,7 @@ class SkyCache:
                 f = self.root / "spherex-live-rgb" / path
                 if f.exists():
                     data = f.read_bytes()
+                    used(f)
                     return None if data == MISSING else data
                 data = self._compose([("spherex-cube", with_slice(path, s)) for s in CUBE_COLOUR_SLICES])
                 f.parent.mkdir(parents=True, exist_ok=True)
@@ -351,12 +355,14 @@ class SkyCache:
         grey, alpha = [], []
         for t in tiles:
             if t is None:
-                grey.append(np.zeros(shape, np.float32)); alpha.append(np.zeros(shape, bool))
+                grey.append(np.zeros(shape, np.float32))
+                alpha.append(np.zeros(shape, bool))
                 continue
             im = Image.open(io.BytesIO(t))
             has_alpha = im.mode in ("LA", "RGBA", "PA") or "transparency" in im.info
             a = np.asarray(im.convert("LA"), np.float32)
-            grey.append(a[..., 0]); alpha.append(a[..., 1] > 0 if has_alpha else a[..., 0] > 0)
+            grey.append(a[..., 0])
+            alpha.append(a[..., 1] > 0 if has_alpha else a[..., 0] > 0)
         chans = []
         for pair in ((5, 6), (3, 4), (1, 2)):
             acc = sum(np.where(alpha[d - 1], grey[d - 1], 0) for d in pair)

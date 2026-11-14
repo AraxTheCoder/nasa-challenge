@@ -22,6 +22,9 @@ const MIN_FOV = 1 / 60;                   // 1 arcmin
 const MAX_TEXTURES = 200;           // 1 MB of GPU memory each
 const MAX_PARALLEL_LOADS = 6;             // = what a browser opens per host over HTTP/1.1
 const MAX_SLOW_LOADS = 4;                 // live-rendered tiles; leaves 2 connections for the rest
+// T94: float rounding put the order-0 zoom limit at log2 = 1e-16 for ~20% of window widths / pixel ratios, and
+// ceil() made that "wants 1": an exact boundary counts as the lower order
+const ORDER_EPS = 1e-9;
 const FAILED_RETRY_MS = 30000;            // T94: a tile that failed 5 times is asked again after this
 const PRELOAD = 1e6;                      // prio >= PRELOAD: preload (other epochs, parent tiles)
 const MAX_PRELOADS = 3;                   // preloads in flight at once, and only when nothing visible waits
@@ -178,7 +181,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   // ----- tiles -----
   function pickOrder(layer) {
     const arcsecPerPx = (st.fov * 3600) / (st.w * st.dpr);
-    const k = Math.ceil(Math.log2(TEXEL_ARCSEC_ORDER0 / arcsecPerPx));
+    const k = Math.ceil(Math.log2(TEXEL_ARCSEC_ORDER0 / arcsecPerPx) - ORDER_EPS);
     // T55: while survey passes blink on top, the base map stops one order short (no slow live renders
     // competing with the passes'; it only shows where a pass has no data)
     const max = layer === st.base && st.baseCap != null ? Math.min(layer.maxOrder, st.baseCap) : layer.maxOrder;
@@ -550,7 +553,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   /** Order the screen would need for 1 texel per device pixel (may exceed what the map has). */
   function wantedOrder() {
     const arcsecPerPx = (st.fov * 3600) / (st.w * st.dpr);
-    return Math.ceil(Math.log2(TEXEL_ARCSEC_ORDER0 / arcsecPerPx));
+    return Math.ceil(Math.log2(TEXEL_ARCSEC_ORDER0 / arcsecPerPx) - ORDER_EPS);
   }
 
   // ----- debug overlay (toggle): tile outlines + zoom/loading state -----

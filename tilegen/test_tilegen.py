@@ -354,3 +354,19 @@ def test_janitor_trims_oldest_first_and_keeps_free_space(tmp_path, monkeypatch):
     monkeypatch.setattr(shutil, "disk_usage", lambda p: Usage(10_000, 9_900, 100))
     janitor.trim([(a, 1e9), (b, 1e9)], keep_free=300)            # needs 200 more bytes: two oldest go
     assert sorted(p.name for p in a.iterdir()) == ["c8.npz", "c9.npz"] and (b / "t.png").exists()
+
+
+
+def test_janitor_drops_least_recently_used_not_oldest(tmp_path, monkeypatch):
+    """T94: a cache hit (`used`) keeps an old file; the unused ones go first."""
+    import os
+
+    from tilegen import janitor
+
+    for i in range(4):
+        f = tmp_path / f"c{i}"
+        f.write_bytes(b"x" * 100)
+        os.utime(f, (1000 + i, 1000 + i))      # c0 oldest written
+    janitor.used(tmp_path / "c0")             # ... but just read from the cache
+    janitor.trim([(tmp_path, 250)])
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["c0", "c3"]

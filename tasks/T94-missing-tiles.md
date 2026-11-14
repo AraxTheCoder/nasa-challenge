@@ -36,6 +36,12 @@ again later; false-colour field epochs load; no holes at the poles when zooming 
   Both checked in web/tests/overview_check.mjs (each fails without its fix).
 - 2026-11-14 the local chunk cache had 17 GB: the Live API's janitor trims it to 10 GB.
 
+- 2026-11-14 "stops at screen wants 1": at the zoom limit log2 came out 1e-16 above 0 for ~20% of window widths /
+  pixel ratios (fuzzed 200 000), ceil() made it 1. An exact boundary now counts as the lower order (ORDER_EPS).
+- 2026-11-14 janitor = least recently used, not oldest: cache hits refresh the file's mtime (at most every 10
+  min; the file system's atime is unreliable), the janitor drops the oldest mtime first. Jonathan: cutouts are
+  capped, not wiped.
+
 ## Questions / needs from others
 
 ## Handoff

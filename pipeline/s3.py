@@ -310,6 +310,16 @@ _fetchers = ThreadPoolExecutor(16, thread_name_prefix="chunk-image-rows")
 CHUNK_ROOT = Path("data/raw/s3chunks")
 
 
+def _used(path: Path) -> None:
+    """T94: a cache hit marks the file as used, so the cache cap (tilegen/janitor.py) drops least recently used
+    chunks first."""
+    try:
+        from tilegen.janitor import used
+    except ImportError:          # pipeline/ without tilegen: nothing trims this cache anyway
+        return
+    used(path)
+
+
 class NotInBucket(FileNotFoundError):
     """The path is not in the bucket (e.g. a reprocessed l2b_retry file): resolve the real path."""
 
@@ -337,6 +347,7 @@ class S3Image:
         meta_f = self.dir / "meta.json"
         if meta_f.exists():
             meta = json.loads(meta_f.read_text(encoding="utf-8"))
+            _used(meta_f)
         else:
             try:
                 head = _get(self.url, 0, 16 * BLOCK)          # primary + IMAGE header in one go
@@ -395,6 +406,7 @@ class S3Image:
         f = self.dir / f"r{CHUNK_ROWS}_{i:03d}.npz"
         if f.exists():
             z = np.load(f)
+            _used(f)
             out = (z["img"], z["bad"], float(z["med"]), float(z["sig"]))
             self._remember(key, out)
             return out

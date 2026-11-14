@@ -21,7 +21,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from . import render
+from . import janitor, render
 
 TILE_RE = re.compile(r"^Norder(\d+)/Dir(\d+)/Npix(\d+)(?:_(\d+))?\.png$")
 MISSING = b"MISSING"
@@ -140,6 +140,7 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
         fresh = None                               # bytes rendered by this request (also when not cached)
         if f.exists():
             stats["cached"] += 1
+            janitor.used(f)                        # T94: least recently used tiles go first
         else:
             with lock:
                 ev = inflight.get(path)
@@ -218,6 +219,7 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
             cut_stats["seconds"] += time.time() - t0
         else:
             cut_stats["cached"] += 1
+            janitor.used(gz)                       # T94: least recently used cutouts go first
         return Response(gz.read_bytes(), media_type="application/gzip", headers=headers)
 
     @app.get("/cutout/health")

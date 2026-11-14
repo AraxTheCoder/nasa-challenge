@@ -98,7 +98,7 @@ assert.ok(!draws.some((d) => d.url?.endsWith('Allsky_1.png')), 'old-band overvie
 // for nothing there
 sky._zoomAt(1e6, 600, 400);
 await settle();
-assert.ok(sky.stats().wanted >= 0, `zoomed out no further than order 0 (wants ${sky.stats().wanted})`);
+assert.ok(sky.stats().wanted === 0, `zoomed out all the way, the screen wants order 0 (wants ${sky.stats().wanted})`);
 assert.ok(sky.view().fov <= sky.fovForOrder(0) + 1e-9, `field of view ${sky.view().fov} stops at order 0's ${sky.fovForOrder(0)}`);
 const passProps = props.replace('hips_cube_depth = 102', 'hips_cube_depth = 102' + String.fromCharCode(10) + 'hips_order_min = 6');
 const before = globalThis.fetch;

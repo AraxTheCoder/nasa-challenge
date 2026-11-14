@@ -6,8 +6,10 @@ the disk filled up and every tile that needed new rows failed (HTTP 500), so the
 
     start([(Path("data/raw/s3chunks"), 8e9), (Path("data/tilegen_cache"), 4e9)], keep_free=3e9)
 
-Every `interval` seconds each folder is trimmed to its cap, oldest written files first; when the disk has
-less than `keep_free` bytes free, more is deleted (oldest first, across the folders) until it has.
+Every `interval` seconds each folder is trimmed to its cap, least recently used files first; when the disk
+has less than `keep_free` bytes free, more is deleted (least recently used first, across the folders).
+"Used" = the file's mtime: written, or read from the cache (the readers call `used(path)`; the file system's
+own access time is unreliable: Linux relatime updates it once a day at most, Windows often not at all).
 """
 from __future__ import annotations
 
@@ -16,6 +18,18 @@ import shutil
 import threading
 import time
 from pathlib import Path
+
+
+USED_EVERY_S = 600   # a cache hit refreshes a file's mtime at most this often (one utime per file per 10 min)
+
+
+def used(path) -> None:
+    """Mark a cache file as just used, so the janitor keeps it (least recently used goes first)."""
+    try:
+        if time.time() - os.stat(path).st_mtime > USED_EVERY_S:
+            os.utime(path, None)
+    except OSError:
+        pass
 
 
 def _files(root: Path) -> list[tuple[float, int, Path]]:
@@ -34,7 +48,8 @@ def _files(root: Path) -> list[tuple[float, int, Path]]:
 
 
 def trim(folders: list[tuple[Path, float]], keep_free: float = 0.0) -> int:
-    """Delete the oldest files until every folder is under its cap and the disk has keep_free bytes free.
+    """Delete the least recently used files (oldest mtime, see `used`) until every folder is under its cap
+    and the disk has keep_free bytes free.
     Returns the number of bytes deleted."""
     deleted = 0
     pools = []
