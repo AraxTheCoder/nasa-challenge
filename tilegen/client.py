@@ -28,16 +28,16 @@ class TileGenerator:
     def info(self) -> dict:
         return {"tiles": self.mode, "remote_url": self.remote_url, "remote_available": bool(self.remote_url)}
 
-    def get(self, slice_: int, order: int, npix: int) -> bytes | None:
-        if self.remote:
+    def get(self, slice_: int, order: int, npix: int, pass_: int | None = None) -> bytes | None:
+        if self.remote and pass_ is None:     # T82: the VM renders no pass tiles (yet): those stay local
             return self._remote(slice_, order, npix)
         from pipeline.mirror import IndexNotReady
 
         from . import render
         try:
-            return render.render(slice_, order, npix)
+            return render.render(slice_, order, npix, pass_=pass_) if pass_ else render.render(slice_, order, npix)
         except IndexNotReady:
-            if self.remote_url:            # fresh checkout: the remote generator stands in meanwhile
+            if self.remote_url and pass_ is None:   # fresh checkout: the remote generator stands in meanwhile
                 return self._remote(slice_, order, npix)
             raise
 

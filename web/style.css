@@ -341,9 +341,8 @@ button.link:hover { text-decoration: underline; }
 .ph-context p { margin: 6px 0; }
 .ph-hint-mark { color: var(--warn); }
 
-/* Map only (default, see app.js): no frame image or its controls; the field's name, objects, spectrum
-   and provenance stay. ?frames=1 shows the frame viewer again. */
-body.map-only #empty, body.map-only #stage, body.map-only .viewer .controls, body.map-only #diff-note,
-body.map-only .viewer .compare, body.map-only #timeline, body.map-only .tl-legend, body.map-only .viewer > .hint,
-body.map-only #viewer-body > .hint, body.map-only #paths-controls, body.map-only #trail-controls, body.map-only #ph-measure,
-body.map-only .panel:has(#frame-info), body.map-only .panel:has(#frame-table) { display: none !important; }
+/* Map only (default, see app.js): no frame image or what is drawn on it; the frame viewer's controls
+   (A/B, blink, A − B, play, λ filter, timeline, frame panels) drive the map instead (T81, mapframes.js).
+   ?frames=1 shows the frame image again. */
+body.map-only #empty, body.map-only #stage, body.map-only #paths-controls, body.map-only #trail-controls,
+body.map-only #ph-measure { display: none !important; }
