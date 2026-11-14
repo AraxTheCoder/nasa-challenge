@@ -488,3 +488,36 @@ def test_target_request_for_one_detector(tmp_path):
     r = c.get("/api/target?ra=10&dec=5&size=20&detector=3")
     assert r.json()["id"].endswith("-d3")
     assert c.get("/api/target?ra=10&dec=5&size=20&detector=9").status_code == 400
+
+
+def test_motion_endpoint(tmp_path, monkeypatch):
+    """T91: start=0 only reads; the default starts a job (202) and answers the measured motion (200)."""
+    import json
+
+    import pipeline.astrometry as AS
+
+    monkeypatch.setattr(AS, "ROOT", tmp_path / "motion")
+    tid = "c0100000-p200000-s15"
+    target = {"id": tid, "synthetic": False, "center": {"ra_deg": 10.0, "dec_deg": 20.0}, "size_arcmin": 15,
+              "frames": [{"id": "f0", "mjd": 60800.0}],
+              "labels": [{"id": "l0", "name": "Fast Star", "source": "simbad", "mag": 9.0, "pm_mas_yr": 5000,
+                          "positions": [{"frame_id": "f0", "ra_deg": 10.0, "dec_deg": 20.0}]}]}
+    (tmp_path / tid).mkdir()
+    (tmp_path / tid / "target.json").write_text(json.dumps(target))
+
+    def fake(t, name, processes=None, progress=None):
+        progress(1, 1)
+        return {"version": AS.VERSION, "status": "ready", "id": "l0", "name": "Fast Star", "pm_total_arcsec_yr": 5.01}
+
+    monkeypatch.setattr(AS, "measure_motion_uncached", fake)
+    client = TestClient(create_app(tmp_path))
+    url = f"/api/targets/{tid}/motion"
+    assert client.get(url, params={"name": "Fast Star", "start": 0}).json()["status"] == "not_started"
+    r = client.get(url, params={"name": "Fast Star"})
+    for _ in range(100):
+        if r.status_code == 200:
+            break
+        time.sleep(0.02)
+        r = client.get(url, params={"name": "l0", "start": 0})
+    assert r.status_code == 200 and r.json()["pm_total_arcsec_yr"] == 5.01 and r.json()["target_id"] == tid
+    assert client.get(url, params={"name": "Nobody"}).status_code == 404

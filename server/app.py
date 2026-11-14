@@ -19,6 +19,7 @@ from .skycache import SkyCache
 from .builder import REPO, Builder
 from .photometry import router as photometry_router  # T49
 from .fieldspectra import router as fieldspectra_router  # T85/T86
+from .motion import router as motion_router  # T91
 from .updates import router as updates_router  # T64
 from .coords import CoordError, parse_dec, parse_ra, parse_size, target_id
 
@@ -43,6 +44,7 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
     limits.start_sweeper(Path(cache_root).parent, builder.building_ids)   # T58: cache cap (only with --public)
     app.include_router(photometry_router)  # T49: /api/targets/<id>/photometry
     app.include_router(fieldspectra_router)  # T85/T86: /api/targets/<id>/spectral-outliers
+    app.include_router(motion_router)  # T91: /api/targets/<id>/motion?name=
     app.include_router(updates_router)  # T64: /api/targets/<id>/updates
 
     def reply(job) -> JSONResponse:

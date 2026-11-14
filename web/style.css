@@ -414,3 +414,5 @@ body.map-only #ph-measure { display: none !important; }
 .ol-card-x { margin-left: auto; font-size: 18px; line-height: 1; padding: 0 4px; }
 .ol-card-actions { display: flex; gap: 12px; align-items: center; margin-top: 6px; }
 .ol-maptoggle { margin-left: auto; color: var(--muted); }
+/* T91: motion measured by SPHEREx */
+.ph-motion-big { font-size: 1.35em; font-weight: 600; margin: 4px 0; }
