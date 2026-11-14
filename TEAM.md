@@ -77,6 +77,11 @@ Dated, one line each, with why.
   pair differences still cancel stars cleanly (checked by eye on 5 pairs).
 - 2026-11-14 Jonathan also works on track C (alongside B). Why: people claim tasks, not tracks;
   the track only says which folder a task lives in.
+- 2026-11-14 [Jonathan] **DECIDED by Jonathan, Joerg + Mati please ack:** the tool serves *live*
+  SPHEREx data for any RA/Dec the user enters, fetched from IRSA on request and cached, not
+  pre-baked targets. Why: the official Objectives say users enter coordinates and get that patch
+  as a video; pre-baked only would miss the core requirement. Replaces "no live API calls" in the
+  PROPOSED architecture; CONTRACTS needs a v0.3 (request API + cache) before code depends on it.
 
 ## Ideas
 

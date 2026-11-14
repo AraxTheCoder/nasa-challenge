@@ -1,7 +1,7 @@
 # Challenge: Planet X and SPHEREx
 
 > The official challenge text (Details tab) is pasted below verbatim, retrieved 2026-11-14.
-> Resources, judging criteria and submission requirements are still TODO. Where the official
+> Resources tab pasted too. Judging criteria and submission requirements are still TODO. Where the official
 > text is here, it wins over everything else in this repo.
 
 Source: Space Apps 2026 challenge page "Planet X and SPHEREx" (Details tab).
@@ -43,7 +43,25 @@ For data and resources related to this challenge, refer to the Resources tab at 
 
 ## Official resources
 
-_TODO: paste the list of data sets, tools and links from the Resources tab._
+Verbatim from the Resources tab, retrieved 2026-11-14 (link targets were not copied, only titles).
+
+> NASA does not endorse any non-U.S. Government entity and is not responsible for information contained on non-U.S. Government websites. For non-U.S. Government websites, participants must comply with any data use parameters of that specific website.
+
+### NASA Data & Resources
+
+- **NASA/IPAC Infrared Science Archive:** SPHEREx resources
+- **SPHEREx Tutorial Notebooks:** Example Jupyter notebooks for how to access the SPHEREx data via Python.
+- **WiseView:** A similar tool made for viewing data from an earlier NASA mission called WISE. It’s been used by the public to make hundreds of discoveries. Feel free to use it as a model or as inspiration!
+- **Gaia Mission Data:** Be sure to use the latest data release (Data Release 3).
+
+### Space Agency Partner Resources
+
+CSA (Canadian Space Agency)
+
+- **NEOSSat: Observing Asteroids, Space Debris and Exoplanets:** Learn about NEOSSat, the world's first space telescope dedicated to detecting and tracking asteroids, comets, satellites, and space debris. This CSA resource highlights how Canada is helping protect our understanding of near-Earth space by contributing to international efforts to identify and monitor objects that could pose risks to Earth or spacecraft.
+- **Canadian Astronomy Data Centre (CADC):** The CADC provides access to a vast collection of astronomical observations from Canadian and international telescopes and space missions. Through this resource, participants can explore real scientific data used by astronomers to study stars, galaxies, exoplanets, asteroids, and other celestial objects.
+- **NEOSSat Data Tutorial:** This tutorial demonstrates how to use Python to visualize data from Canada's NEOSSat mission. Follow step-by-step instructions to access spacecraft observations, create visualizations, and explore data collected by Canada's space telescope.
+- **NEOSSat Dataset:** This dataset contains observations collected by NEOSSat, Canada's Near-Earth Object Surveillance Satellite. The data supports the detection and tracking of asteroids, comets, satellites, and space debris. Explore real observations from Canada's space telescope and learn how objects are monitored in near-Earth space.
 
 ## Judging criteria
 
