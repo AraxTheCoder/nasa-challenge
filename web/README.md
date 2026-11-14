@@ -72,3 +72,10 @@ header and a watermark on the image.
 python -m pip install -r requirements-dev.lock && playwright install chromium   # once, from the repo root
 python web/tests/browser_test.py            # starts the API (:8001) + static server (:8081) itself
 ```
+
+## Map only (T80)
+
+By default the page shows only the explore map: the field's epochs, traces and names appear in it,
+and a click anywhere gives that point's spectrum and light curve (T79). The frame viewer (frame image,
+blink A/B, A − B, play, wavelength filter, timeline, frame panels) is still in the code: add `?frames=1`
+to the URL. Offline folders (`?data=`) and `?explore=0` show it automatically.
