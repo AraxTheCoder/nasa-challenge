@@ -176,8 +176,8 @@ function loadFromUrl() {
   const req = { ra, dec, size: clampSize(Number(p.get("size")) || SIZE_DEFAULT) };
   fillForm(req);
   const blink = p.get("blink") === "1";
-  // a link to a built field shows it like Blink did: view = 3 × field; a plain link like Go
-  if (goTo(req, blink ? { fovDeg: (req.size * 3) / 60 } : {}) && blink) loadField(req);
+  // a link to a built field shows the field (view = field size, square outline); a plain link like Go
+  if (goTo(req, blink ? { fovDeg: req.size / 60 } : {}) && blink) loadField(req);
   return true;
 }
 
@@ -337,8 +337,13 @@ function syncExplore(target) {
   app.shownTarget = target;
   const c = target?.center;
   if (!c) return;
-  explore.goTo(c.ra_deg, c.dec_deg, Math.max(0.25, (target.size_arcmin * 3) / 60));
-  explore.markField(c.ra_deg, c.dec_deg, target.size_arcmin);
+  const region = app.request?.region;
+  if (region) {
+    explore.markRegion(region);          // built from Blink: keep the outline of the view, don't move the map
+  } else {                               // opened from a link: show the field like Blink did (view = field)
+    explore.goTo(c.ra_deg, c.dec_deg, Math.max(0.25, target.size_arcmin / 60));
+    explore.markField(c.ra_deg, c.dec_deg, target.size_arcmin);
+  }
   showEpochLayers(target);
 }
 
@@ -384,11 +389,17 @@ async function showEpochLayers(target) {
 }
 
 /** How much the map shows, and the field Blink would build from it (the mouse position is in the 📍 pill). */
+/** Side of the square field Blink builds: covers the whole view (its longer side), within the API's 5–60′. */
+const blinkSize = (v) => clampSize(Math.ceil(Math.max(v.fovArcmin, v.heightArcmin)));
+
+/** How much the map shows, and the field Blink would build from it (the mouse position is in the 📍 pill). */
 function updateExplorePos() {
   const v = explore.view();
   if (!v) return;
-  const view = v.fovArcmin >= 120 ? `${(v.fovArcmin / 60).toFixed(1)}°` : `${Math.round(v.fovArcmin)}′`;
-  $("#explore-pos").textContent = `view ${view} · Blink builds ${clampSize(v.fovArcmin / 3)}′`;
+  const arc = (a) => (a >= 120 ? `${(a / 60).toFixed(1)}°` : `${Math.round(a)}′`);
+  const size = blinkSize(v), all = size >= Math.max(v.fovArcmin, v.heightArcmin) - 0.5;
+  $("#explore-pos").textContent = `view ${arc(v.fovArcmin)} × ${arc(v.heightArcmin)} · Blink builds ${size}′`
+    + (all ? "" : ` (max; zoom in to blink all of it)`);
 }
 
 function setupBand(layer) {
@@ -408,10 +419,14 @@ function setupBand(layer) {
 }
 
 async function startExplore() {
+  // T55: Blink builds what is on screen (a square over the whole view, up to the API's 60′) and the
+  // red outline marks exactly that part of the view, so after moving around during the build you find it again
   $("#explore-blink").addEventListener("click", () => {
     const v = explore.view();
     if (!v) return;
-    const req = { ra: v.ra.toFixed(4), dec: v.dec.toFixed(4), size: clampSize(v.fovArcmin / 3) };
+    const size = blinkSize(v);
+    const req = { ra: v.ra.toFixed(4), dec: v.dec.toFixed(4), size, region: explore.viewRegion(size) };
+    explore.markRegion(req.region);                      // shown right away, not only once it is built
     fillForm(req);
     setPageUrl(req, true, true);
     loadField(req);

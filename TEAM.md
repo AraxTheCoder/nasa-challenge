@@ -647,3 +647,5 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Jonathan (Claude): T55 step 10 (`app/` only): standing 📍 = tip on the point, RA/Dec centred below. `web/` unchanged.
 - 2026-11-14 Jonathan (Claude): T55 step 11 (`app/` only): 📍 looks the same when following the mouse (tip on the point, RA/Dec below). `web/` unchanged.
 - 2026-11-14 Mati (Claude): T59 done, in the viewer instead of the pipeline (builds keep only 2 frames per epoch+detector, so a server co-add would gain √2): a "Stack" select next to A − B adds the shown frame's epoch (all 6 detectors, ~3.5× deeper) or its detector (all epochs, ~2.4×), with each frame's background removed; blink and Play all show the stack of each frame's group. Covers the challenge considerations "add together the data of each detector" and "add together images taken at different times". Display only, no API/contract change.
+- 2026-11-14 Jonathan (Claude): T55 step 12 (`app/` only): Blink builds the visible view (square over it, ≤ 60′ = API
+  limit) instead of a third of it; the red outline marks that view; no jump when the field is ready. `web/` unchanged.
