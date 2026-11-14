@@ -80,7 +80,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T41 | C: Faster map images: server-side HiPS tile cache + prefetch (neighbours, children, Allsky), browser skips stale tiles and loads the centre first, epoch tiles cached and pre-rendered | Jonathan | done | `jonathan/T41-fast-tiles` | IRSA tiles 0.7 s first byte, Allsky 4.3 s, HTTP/1.1 (6 per browser) |
 | T42 | A/C: Live deep zoom everywhere: order 6-7 SPHEREx tiles computed on demand from AWS level-2 images (band's detector, 3 images, cached row chunks, noise-normalised stretch); IRSA cube up to order 5; S3 404 -> resolve real path, not IRSA cutouts | Jonathan | doing | `jonathan/T42-live-zoom` | Red box = orientation only |
 | T43 | C: Difference view A − B in the viewer (challenge: "subtract images taken at different times"): stars cancel for matched pairs, movers show as white/black pairs | Mati | done | `mati/T43-difference` | [tasks/T43](tasks/T43-difference-view.md). Button "A − B" / key `D`; best with a matched pair |
-| T45 | C: Play the series like a video (core Objective): Play/Pause through all frames in the filter or one per epoch at matched wavelength, speed + loop | Mati | doing | `mati/T45-play` | [tasks/T45](tasks/T45-play-series.md). From gap-scan idea #1; after T46 |
+| T45 | C: Play the series like a video (core Objective): Play/Pause through all frames in the filter or one per epoch at matched wavelength, speed + loop | Mati | done | `mati/T45-play` | [tasks/T45](tasks/T45-play-series.md). "▶ Play all" / key `P`; modes: all frames in the filter, 1 per epoch at A's λ |
 | T46 | All: tests on every push (GitHub Actions): pytest + browser test (fixture mode) + fixture schema check | Mati | done | `mati/T46-ci` | [tasks/T46](tasks/T46-ci.md). `.github/workflows/tests.yml`; first run: check the Actions tab |
 
 ## Decisions
@@ -249,6 +249,10 @@ Format: `[name] idea — status: new`. Agents don't act on an idea until a human
   connection in the afternoon (another us-east-1 bucket too), so live deep-zoom tiles take 20-60 s;
   next to the bucket they should take ~1 s. Needs: Dockerfile, warm-up script, HTTPS, guide; would
   also cover T14. — status: new
+- [Mati] Split the two big web files before they tangle (Claude's size check, 2026-11-14): `web/viewer.js`
+  582 lines, `web/app.js` 605. Move filter / pairs / matching / playback out of `viewer.js` into `compare.js`,
+  and the sky-map wiring (T30/T36/T42) out of `app.js` into the explore module. Pure refactor, no framework
+  needed; the browser test (CI) guards it. ~1 h. — status: new
 
 ## Questions / Blockers
 
@@ -491,3 +495,6 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   `web/tests/browser_test.py` (fixture mode, `?explore=0`, no external servers). Rehearsed in a fresh clone +
   venv: 80 tests + browser test green. For everyone: run the same two commands before pushing; keep tests
   offline. Repo is private and no `gh` here, so the first GitHub run needs a human look at the Actions tab.
+- 2026-11-14 [Mati + Claude] Done: T45 "▶ Play all" (`P`): the series as a little film (core Objective), all
+  frames in the filter or 1 per epoch at A's λ, loops, shares the Interval slider; ends blink / difference /
+  trail view. 7 browser checks; all tests green. Idea added: split `viewer.js` / `app.js` (size check).
