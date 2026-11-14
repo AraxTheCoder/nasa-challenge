@@ -8,6 +8,7 @@
 //   viewer:frame  {frameId}  a frame was shown
 
 import { $, el } from "./util.js";
+import "./trail.js"; // T23 trail view, same viewer events
 
 const SVG = "http://www.w3.org/2000/svg";
 document.head.append(el("link", { rel: "stylesheet", href: new URL("./paths.css", import.meta.url).href }));
