@@ -134,12 +134,18 @@
           <button id="btn-b" type="button" class="slot slot-b" title="Show frame B">B</button>
           <button id="btn-diff" type="button" class="diff-btn" aria-pressed="false"
                   title="Show A − B: steady stars cancel, movers show as a white/black pair (D)">A − B</button>
-          <label class="stack-pick" title="Add frames together so faint sources stand out: all detectors of the shown frame's epoch, or its detector over all epochs (T59)">Stack
+          <label class="stack-pick" title="Add frames together so faint sources stand out: all detectors of the shown frame's epoch, its detector over all epochs (T59), or shifted along an object or a guessed motion (T69)">Stack
             <select id="stack-mode">
               <option value="off">off</option>
               <option value="epoch">per epoch</option>
               <option value="detector">per detector</option>
+              <option value="object">along the selected object</option>
+              <option value="motion">along a guessed motion</option>
             </select></label>
+          <span id="stack-motion" class="stack-motion" hidden>
+            <input id="stack-rate" type="number" min="0.01" max="3600" step="0.05" value="0.25" aria-label="Guessed rate in arcseconds per hour">″/h
+            toward <input id="stack-pa" type="number" min="0" max="360" step="5" value="90" aria-label="Guessed direction in degrees east of north">°
+          </span>
           <button id="btn-film" type="button" class="play" aria-pressed="false"
                   title="Play the frames one after another, like a short film (P)">▶ Play all</button>
           <select id="film-mode" aria-label="What Play all shows" title="All frames inside the wavelength filter, or one frame per epoch at the wavelength closest to A">

@@ -1,5 +1,5 @@
 // T59: checks for web/stack.js. Run: node web/tests/stack_check.mjs
-import { NO_DATA, frameScale, stackGroup, stackPixels } from "../stack.js";
+import { NO_DATA, frameScale, shiftsAlong, shiftsForMotion, stackGroup, stackPixels } from "../stack.js";
 
 let fails = 0;
 const check = (ok, msg) => { console.log(`${ok ? "PASS" : "FAIL"} ${msg}`); if (!ok) fails++; };
@@ -40,6 +40,27 @@ for (let y = 0; y < H; y++) for (let x = 0; x < 32; x++) stepped[(y * W + x) * 4
 const flat = stackPixels([stepped, frame(0)], W, H);
 const half = (x0) => { let t = 0, k = 0; for (let y = 8; y < 56; y += 2) for (let x = x0; x < x0 + 16; x += 2) { t += at(flat, x, y); k++; } return t / k; };
 check(Math.abs(half(4) - half(44)) < 15, `background removed per frame: no step between halves (${half(4).toFixed(0)} vs ${half(44).toFixed(0)})`);
+
+// shift-and-stack: a faint source moving 3 px per frame vanishes in a plain stack but adds up along its motion
+const moving = (k, amp) => {
+  const d = frame(0);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const p = (y * W + x) * 4, r2 = (x - (14 + 3 * k)) ** 2 + (y - 32) ** 2;
+    d[p] = Math.min(255, d[p] + amp * Math.exp(-r2 / 2));
+  }
+  return d;
+};
+const mv = Array.from({ length: 12 }, (_, k) => moving(k, 10));
+const plain = stackPixels(mv, W, H), along = stackPixels(mv, W, H, mv.map((_, k) => ({ dx: 3 * k, dy: 0 })));
+check(at(along, 14, 32) - sky(along) > 2 * Math.max(1, at(plain, 14, 32) - sky(plain)),
+  `shift-and-stack: the mover adds up along its motion (plain +${at(plain, 14, 32) - Math.round(sky(plain))}, along +${at(along, 14, 32) - Math.round(sky(along))})`);
+const fr = [{ id: "f0", mjd: 100.0 }, { id: "f1", mjd: 100.5 }, { id: "f2", mjd: 101.0 }];
+const along2 = shiftsAlong(fr, [{ frame_id: "f1", x: 10, y: 5 }, { frame_id: "f2", x: 13, y: 9 }]);
+check(along2.frames.map((f) => f.id).join() === "f1,f2" && along2.shifts[1].dx === 3 && along2.shifts[1].dy === 4,
+  "shifts along an object's positions, relative to its first one");
+const m = shiftsForMotion(fr, fr[0], 6.15, 90, 6.15);   // 1 px per hour toward the east (= -x)
+check(Math.abs(m[1].dx + 12) < 1e-9 && Math.abs(m[1].dy) < 1e-9 && m[0].dx === 0,
+  "guessed motion: 6.15″/h east is -1 px/h in x (12 px after 12 h)");
 
 const F = [{ id: "a", epoch: 1, detector: 2 }, { id: "b", epoch: 1, detector: 5 }, { id: "c", epoch: 2, detector: 2 }];
 check(stackGroup(F, F[0], "epoch").map((f) => f.id).join() === "a,b" && stackGroup(F, F[0], "detector").map((f) => f.id).join() === "a,c"

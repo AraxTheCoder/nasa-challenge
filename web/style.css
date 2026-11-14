@@ -192,6 +192,8 @@ button.link:hover { text-decoration: underline; }
 #lam-at-note { flex-basis: 100%; }
 /* T59: stacks */
 .stack-pick { display: inline-flex; align-items: center; gap: 4px; }
+.stack-motion { display: inline-flex; align-items: center; gap: 4px; }
+#stack-rate, #stack-pa { width: 5em; }
 
 /* ---------- build progress ---------- */
 .job {
