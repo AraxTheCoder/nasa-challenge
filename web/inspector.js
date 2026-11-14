@@ -5,7 +5,7 @@
 // "Brightness here" is read from the display PNG (already stretched, 0-255), so it is a relative
 // value for comparing frames, not a calibrated flux.
 
-import { $, el, fmtNum } from "./util.js";
+import { $, el, fmtNum, sourceName } from "./util.js";
 import { showFrame } from "./viewer.js";
 
 const st = { target: null, obj: null, frameId: null, samples: new Map() };
@@ -67,8 +67,9 @@ function render() {
   const cur = pos.get(st.frameId) ?? o.positions[0];
   const info = [
     ["Type", o.info + (o.otype && o.otype !== "*" ? ` (${o.otype})` : "")],
-    ["Catalogue", o.source === "simbad" ? "SIMBAD" : o.source === "gaia_dr3" ? "Gaia DR3" : (o.source ?? "–")],
-    ...(o.mag != null ? [["Brightness", `G = ${fmtNum(o.mag, 2)} mag`]] : []),
+    ["Catalogue", sourceName(o.source)],
+    ...(o.note ? [["About", o.note]] : []),
+    ...(o.mag != null ? [["Brightness", `${o.magBand ?? "G"} = ${fmtNum(o.mag, 2)} mag`]] : []),
     ...motionRows(o),
     ...(cur ? [["Position now", `${sexa(cur.ra_deg, true)} ${sexa(cur.dec_deg, false)}`], ["", `${fmtNum(cur.ra_deg, 5)}°, ${fmtNum(cur.dec_deg, 5)}°`]] : []),
     ...(o.synthetic ? [["Note", "synthetic, not a real object"]] : []),

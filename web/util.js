@@ -47,3 +47,9 @@ export function isTyping(target) {
   const input = target.closest("input");
   return !!input && !["radio", "checkbox", "range", "button", "submit"].includes(input.type);
 }
+
+/** T52: catalogue names for label `source` values (CONTRACTS v0.11). */
+const SOURCE_NAMES = { simbad: "SIMBAD", gaia_dr3: "Gaia DR3", vsx: "VSX (AAVSO variable stars)",
+  catwise2020: "CatWISE2020", horizons: "JPL Horizons", mpcorb: "MPC orbits (computed here)",
+  "jpl-sbident": "JPL SB Identification", skybot: "IMCCE SkyBoT" };
+export const sourceName = (s) => SOURCE_NAMES[s] ?? s ?? "–";

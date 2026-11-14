@@ -292,6 +292,21 @@ class Jpl:
         col = fields.index("Object name") if "Object name" in fields else 0
         return [r[col] for r in rows]
 
+    def positions_id(self, command: str, jds: list[float]) -> list[tuple[float, float]]:
+        """T52: like positions() for a Horizons ID such as '599' (Jupiter) or '501' (Io)."""
+        unique = sorted(set(jds))
+        params = {
+            "format": "json", "COMMAND": f"'{command}'", "OBJ_DATA": "'NO'", "MAKE_EPHEM": "'YES'",
+            "EPHEM_TYPE": "'OBSERVER'", "CENTER": f"'500@{SPHEREX}'", "QUANTITIES": "'1'", "ANG_FORMAT": "'DEG'",
+            "CSV_FORMAT": "'YES'", "TIME_TYPE": "'UT'", "TLIST_TYPE": "'JD'",
+            "TLIST": " ".join(f"'{jd:.6f}'" for jd in unique),
+        }
+        rows = parse_horizons_table(self._get(HORIZONS, params, "JPL Horizons (observer: SPHEREx)")["result"])
+        if len(rows) != len(unique):
+            raise ValueError(f"Horizons returned {len(rows)} rows for {len(unique)} times")
+        at = {jd: (float(r[3]), float(r[4])) for jd, r in zip(unique, rows)}
+        return [at[jd] for jd in jds]
+
     def positions(self, name: str, jds: list[float]) -> list[tuple[float, float]]:
         """Astrometric (ICRF) RA/Dec in degrees of a small body seen from SPHEREx, one per jd.
 

@@ -189,6 +189,11 @@ Dated, one line each, with why.
   the default URL and the working demo. Why: the UI can be reworked without blocking the others.
 - 2026-11-14 Mati: CONTRACTS v0.11 (T56): the file now matches the code. Removed pre-baked `web/targets/`, its size budget and `pipeline.publish` (obsolete since v0.3 live data); documented the Live API routes the viewer already uses (`/objects`, `/sky/…`, `/settings`, `/health`), `labels_requested` / `objects_requested`, the real `build_target` / `detect` signatures; label `source` may be `"synthetic"` (fixtures only, viewer marks it not real); second fixture `fixtures/targets/demo-epochs/` (schema 0.2, every optional field). Additive, no code has to change.
 
+- 2026-11-14 [Joerg] CONTRACTS v0.12: label sources `vsx`, `catwise2020`, `horizons` + optional `note`,
+  `mag_band`; `known_objects[].source` `mpcorb`; the server starts `/objects` (known objects) itself
+  after each build. Why: name variables, brown dwarfs and planets (official targets include two
+  of each kind), and known asteroids no longer hold up builds (T51, T52). Additive.
+
 ## Ideas
 
 Format: `[name] idea — status: new`. Agents don't act on an idea until a human moves it to the Board.

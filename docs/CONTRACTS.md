@@ -1,4 +1,9 @@
-# Contracts (v0.11)
+# Contracts (v0.12)
+
+v0.12 (T52, T51): labels get more sources: `vsx` (variable stars), `catwise2020` (red moving WISE sources,
+brown dwarf candidates), `horizons` (planets and moons, seen from SPHEREx); optional `note` (one line about
+the object) and `mag_band` (band of `mag`, absent = G). `known_objects[].source` may be `mpcorb` (computed
+from the MPC orbit catalogue), `skybot` or `jpl-sbident`. Additive; `schema_version` stays `"0.2"`.
 
 v0.11 (T56) brings this file in line with the code: no pre-baked `web/targets/` and no `pipeline.publish`
 (made obsolete by v0.3 live data); entry points and signatures as they are; the Live API routes the viewer
@@ -372,8 +377,9 @@ When done, `target.json` has `labels` filled (same format as before, T19) and `"
 
 ### Known objects on request (v0.11, T51)
 
-Builds don't ask JPL either (SkyBoT + Horizons take minutes per field, and JPL allows ~20 searches per
-5 min). The viewer asks once the field is shown, unless `objects_requested` is set or the target is synthetic:
+Builds don't wait for known objects either. The server starts the lookup after every live build (local MPC
+orbit catalogue, ~2-3 s; SkyBoT or JPL as fallbacks, slower), and the viewer polls it once the field is
+shown, unless `objects_requested` is set or the target is synthetic:
 
 ```
 GET /api/targets/<id>/objects  → 202 {"status": "building", "n": null, "message"} while running (poll),

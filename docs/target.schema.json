@@ -322,9 +322,12 @@
             "enum": [
               "simbad",
               "gaia_dr3",
-              "synthetic"
+              "synthetic",
+              "vsx",
+              "catwise2020",
+              "horizons"
             ],
-            "description": "v0.11: synthetic = made-up object in a synthetic fixture, never on real frames"
+            "description": "v0.11: synthetic = made-up object in a synthetic fixture, never on real frames; v0.12 (T52): vsx = variable stars, catwise2020 = red moving WISE sources, horizons = planets and moons"
           },
           "named": {
             "type": "boolean"
@@ -419,6 +422,14 @@
             "items": {
               "type": "string"
             }
+          },
+          "note": {
+            "type": "string",
+            "description": "v0.11 (T52): one line about the object, e.g. VSX type, period and range"
+          },
+          "mag_band": {
+            "type": "string",
+            "description": "v0.11 (T52): band of `mag` (G = Gaia, V or a VSX passband, W2 = WISE); absent = G"
           }
         }
       }
