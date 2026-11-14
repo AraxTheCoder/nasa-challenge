@@ -13,7 +13,7 @@ async function sync() {
   if (!mapOnly() || st.epochMode) return;
   if (st.diff) {
     const p = currentPair?.();
-    if (p?.a && p?.b) { await explore.showLayer(`d-${p.a}-${p.b}`); return; }
+    if (p?.a?.id && p?.b?.id) { await explore.showLayer(`d-${p.a.id}-${p.b.id}`); return; }   // a, b: frame objects
   }
   if (st.frame) await explore.showLayer(st.frame);
 }
