@@ -9,6 +9,7 @@
 
 import { $, el } from "./util.js";
 import "./trail.js"; // T23 trail view, same viewer events
+import "./inspector.js"; // T23 object inspector, opened by clicking an object
 
 const SVG = "http://www.w3.org/2000/svg";
 document.head.append(el("link", { rel: "stylesheet", href: new URL("./paths.css", import.meta.url).href }));
@@ -201,7 +202,7 @@ function fillTip(o) {
   t.replaceChildren(
     el("strong", {}, o.name),
     el("dl", {}, ...rows.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)])),
-    tip.pinned ? el("div", { class: "paths-tip-foot" }, link, el("button", { type: "button", class: "link", onclick: () => hideTip(true) }, "Close")) : el("div", { class: "paths-tip-foot muted" }, "click to pin"),
+    tip.pinned ? el("div", { class: "paths-tip-foot" }, link, el("button", { type: "button", class: "link", onclick: () => hideTip(true) }, "Close")) : el("div", { class: "paths-tip-foot muted" }, "click for the inspector"),
   );
   // place next to the object, flipped to stay inside the stage
   const stage = $("#stage").getBoundingClientRect();
@@ -233,8 +234,8 @@ document.addEventListener("pointerout", (e) => {
 document.addEventListener("click", (e) => {
   if (e.target.classList?.contains("path-hit")) {
     const o = hitObject(e);
-    tip.pinned = !(tip.pinned && tip.obj === o); tip.obj = o;
-    if (tip.pinned) fillTip(o); else hideTip(true);
+    hideTip(true);
+    document.dispatchEvent(new CustomEvent("paths:select", { detail: { obj: o } }));
   } else if (tip.pinned && !e.target.closest?.("#paths-tip")) hideTip(true);
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideTip(true); });

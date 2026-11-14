@@ -25,7 +25,7 @@ visible without blinking: a trail image and, later, shift-and-stack along a moti
       seen in one burst only, ~150 px/day for the main belt), distant solar-system body (big jump
       between epochs, slow drift within one). For detections: agree the rule with Jonathan (T06/T08)
 - [x] Show the class next to the name in the viewer + in the hover info
-- [ ] Object inspector: click an object → side panel with coordinates, catalogue matches (SIMBAD,
+- [x] Object inspector (`web/inspector.js`): click an object → side panel with coordinates, catalogue matches (SIMBAD,
       Gaia), observation history per frame (time, epoch, wavelength, position, and brightness at
       that spot), motion data; Barnard's Star as the demo object. Grows out of T22's pinned tooltip;
       coordinate with Mati's objects list (T13)
@@ -50,6 +50,9 @@ visible without blinking: a trail image and, later, shift-and-stack along a moti
   two epochs (about one default 15′ field) and ~1 px/day within an epoch.
 
 ## Questions / needs from others
+- [to Mati] The inspector opens on a `paths:select` event with `{obj}` (same shape as in
+  `paths.js`: name, info, source, mag, otype, pm, motion, positions, synthetic). If your objects
+  list (T13) dispatches it on row click, list and image open the same panel.
 - [to Jonathan] Detections (T06/T08) already carry `motion.rate_arcsec_per_hr` and `pa_deg`. The
   motion class could be computed in `detect` (your side) or in a shared helper; which do you prefer?
 
