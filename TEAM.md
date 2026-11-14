@@ -263,6 +263,11 @@ Ideas are numbered (I1, I2, …) to refer to them; numbers stay fixed, a new ide
   transits (0.01 %) are far too shallow. Validation: known transiting planets / eclipsing binaries with
   ephemerides (NASA Exoplanet Archive, VSX): predict which SPHEREx exposures fall in transit (a hot Jupiter is
   in transit ~3–4 % of the time, so ~5 of the ~170 exposure times per spot) and check the dip is there.
+  **Note (Mati): best first step is validation, not discovery.** Take known transiting planets and eclipsing
+  binaries whose transit times are published (NASA Exoplanet Archive, VSX), predict which SPHEREx exposures fell
+  during a transit, and check that the dip is there and has the right depth. If it works, that's a strong demo
+  ("we see a known planet passing in front of its star in SPHEREx data"), and it sets the depth limit for any
+  real search later.
   (from the outlier-heatmap discussion, 2026-11-14) — status: new
 
 ## Questions / Blockers
@@ -634,3 +639,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   Go centres + zooms to order 7; epochs merged into the band panel. `web/` unchanged.
 - 2026-11-14 Mati (Claude): Mati's outlier method (expected spectral profile per source → measured vs expected → heatmap of outliers) written into T75 (Notes from others) with two rules: boundaries calibrated per tile from the data, and only consistent outliers count. Pointer in T76. Joerg: please read before the scoring step.
 - 2026-11-14 Mati (Claude): ideas I23 (one-field pilot of the expected-vs-measured spectrum method) and I24 (dimming: transits, eclipses, dust; validate on known transiting planets) added on Mati's request.
+- 2026-11-14 Mati (Claude): note added to idea I24: validation on known transiting planets / eclipsing binaries comes first (demo + depth limit), discovery later.
