@@ -135,6 +135,8 @@ def main() -> int:
     ap.add_argument("--web-port", type=int, default=8080)
     ap.add_argument("--lan", action="store_true", help="listen on all interfaces so others on your network can open it")
     ap.add_argument("--no-browser", action="store_true")
+    ap.add_argument("--warm", action="store_true",
+                    help="also pre-build the official test fields (web/warm.py) once the API is up")
     args = ap.parse_args()
     sys.stdout.reconfigure(line_buffering=True)  # show the URL even when output is piped
 
@@ -194,6 +196,8 @@ def main() -> int:
         print("  Ctrl+C stops both.\n")
         if not args.no_browser:
             open_browser(url)
+        if args.warm:
+            subprocess.Popen([sys.executable, str(REPO / "web" / "warm.py"), "--api", f"http://127.0.0.1:{args.api_port}"])
         api.wait()
         return api.returncode or 0
     except KeyboardInterrupt:
