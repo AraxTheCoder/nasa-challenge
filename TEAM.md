@@ -125,7 +125,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T87 | B: What it is, from the bands: temperature, IR excess, ices (3.0 / 4.27 / 4.67 µm), CH4 3.3 and H2O 1.4 / 1.9 µm (brown dwarfs), CO 2.3 µm, PAH 3.3, Pa-α / Br-α, galaxy 1.6 µm bump; per source a class or hint | Joerg | open | | [tasks/T87](tasks/T87-band-features.md). Needs T85; after T86 |
 | T88 | C: Unusual spectra on the map: "Unusual spectra" toggle in the map bar (measures the field if needed), rings + rank on the outliers, click → card with the reason, spectrum and charts; linked to the T86 panel | Joerg | done | `joerg/T88-outliers-map` | [tasks/T88](tasks/T88-outliers-map.md). Uses explore.js's public draw hook only, no change to the map code |
 | T89 | C/A: Band switching that works on the map (passes per detector, instant within a detector; field epochs per band, builds only the shown detector) + a false-colour layer of all bands (passes and field epochs) | Jonathan | done | `main` | [tasks/T89](tasks/T89-bands-false-colour.md). `app/` + tilegen/server; per-detector builds touch the build filter |
-| T90 | C: Merge `/app/` (T55 redesign) back into `/web/`: first screen = the app/ map (automatic blink, floating panels), scroll down for every web/ widget (frame viewer, analysis, spectra, candidates, outliers…); nothing dropped from either | Jonathan | doing | `jonathan/T90-merge-app-web` | [tasks/T90](tasks/T90-merge-app-into-web.md). Touches all of web/ |
+| T90 | C: Merge `/app/` (T55 redesign) back into `/web/`: first screen = the app/ map (automatic blink, floating panels), scroll down for every web/ widget (frame viewer, analysis, spectra, candidates, outliers…); nothing dropped from either | Jonathan | done | `jonathan/T90-merge-app-web` | [tasks/T90](tasks/T90-merge-app-into-web.md). Touches all of web/ |
 
 ## Decisions
 
@@ -250,6 +250,7 @@ Dated, one line each, with why.
 - 2026-11-14 [Jonathan] CONTRACTS v0.19: `visits` per pass in `/api/pass-dates`. Why: near a pass boundary a pass holds two visits half a year apart (Epsilon Indi B: Apr & Oct 2025); the map labels them separately.
 - 2026-11-14 [Jonathan] CONTRACTS v0.20 (T89): `&detector=` on `/api/target`, epoch layers `e<n>d<det>` / `e<n>c`, sky layers `spherex-live-p<n>-rgb`, live-order slices rounded to the detector. Why: the band slider did nothing for field epochs (mean of all detectors) and re-rendered identical pass tiles for each of a detector's 17 channels; a one-detector field builds in 31 s instead of ~100 s.
 - 2026-11-14 [Jonathan] CONTRACTS v0.21 (T89): `spherex-live-rgb` (false-colour map at every zoom) and IRSA's blank cube slices 50/51 served from 49/52. Why: false colour did nothing zoomed out, and the band 2.399 µm (slice 50) left the zoomed-out map black.
+- 2026-11-14 [Jonathan] T90: `/web/` is now one page: first screen = the T55 map (automatic blink, floating panels), scroll down for every web/ feature (map tools, candidates, field form, frame viewer, analysis, spectra, objects, frames, provenance). Nothing of web/ or app/ dropped. `/app/` stays as it is until we decide to remove it. Why: one viewer for the demo, and the others keep all their widgets.
 
 ## Ideas
 
@@ -400,6 +401,7 @@ Things waiting on a human.
   Still useful later for slow distant bodies (T10 Planet X mode) with shift-and-stack (T69), and for the
   "follows the detector" artifact rule (T67).
 - 2026-11-14 [Joerg → Jonathan] T89: proposal to feed your false colour / band layers with deep per-detector (and per-epoch) stacks from the T85 cutouts (~40 exposures per detector instead of 2); details in tasks/T89 "Notes from others". Your call; I won't touch it unless you say so.
+- 2026-11-14 [Jonathan → all] After T90, CLAUDE.md's rule "`app/` is Jonathan's UI redesign, everyone else works in `web/`" is out of date: the redesign lives in `web/` now. Proposal: everyone works in `web/` again, `app/` gets deleted once you've looked at `/web/`. Say so here (or just delete it).
 
 ## Log
 
@@ -749,3 +751,9 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Jonathan (Claude): T89 follow-up: false colour now at every zoom (base map `spherex-live-rgb`: IRSA cube
   one channel per detector to order 5, live tiles above); cube slices 50/51 (blank at IRSA) from 49/52; Debug says
   "NO DATA" instead of "SHARP" when no visible tile has data.
+- 2026-11-14 Jonathan (Claude): T90 done: `/app/` merged into `/web/`. First screen = the T55 map (Go, 📍, panels,
+  automatic blink of survey passes / tile field epochs, band per detector, false colour, balanced tiles); scroll
+  down for everything web/ had: map tools (base map, N↑, T82 pass buttons, Blink this spot), candidates, the field
+  form (Show), frame viewer, analysis, spectra, objects, frames, provenance. The frame viewer / pass buttons take the
+  map over until the view moves to another tile. [to everyone] pull and look at `/web/` before building on it;
+  `web/tests/browser_test.py` not run by me (please run it). `overview_check.mjs` adapted to T89 (Joerg's T48 test).

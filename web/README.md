@@ -29,6 +29,18 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `tests/browser_test.py` | end-to-end browser test against `python -m server --fixture` (also in CI) |
 | `tests/*.mjs` | Node checks, e.g. HEALPix geometry against astropy-healpix |
 
+## Page layout (T90)
+
+One page. The first screen is the T55 map: the sky map fills the window and the controls float over it
+(`hud.js`, draggable; `cursorpin.js` for the 📍, `coords.js` for RA/Dec input). "Go" only moves the map.
+Blinking starts by itself (`autoblink.js` + `app.js`): from level 6 the survey passes, at level 7 resting on
+one HiPS order-6 tile builds that tile's field for the shown band in the background and blinks its epochs;
+the band slider (+ typed µm) and "false colour" apply to all of it. Scroll the page (scrollbar on the right;
+the mouse wheel over the map zooms) for everything else: map tools (base map, N↑, the T82 pass buttons,
+"Blink this spot"), candidates, the field form ("Show" builds a field of a chosen size), the frame viewer,
+analysis, spectra, objects, frames, provenance. Using the map tools or the frame viewer takes the map over
+until the view moves to another tile; the "Blink:" text on the map says what is shown.
+
 ## Run locally
 
 Easiest, from the repo root with the venv active (setup steps: top-level `README.md`):

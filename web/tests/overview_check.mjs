@@ -85,10 +85,13 @@ await settle();
 checkOverview(1);
 assert.ok(sky.stats().errors > 0, 'failed detail does not erase overview');
 mode = 'success';
-sky.setSlice(2);
+// T89/T90: live tiles (orders 6-7) only depend on the detector (17 channels each) and are asked for with the
+// detector's first slice: switch to another detector (slice 18 -> live tiles _17, the cube overview _18)
+sky.setSlice(18);
 await settle();
-checkOverview(2);
-assert.ok(draws.some((d) => d.url?.includes('/Npix') && d.url.endsWith('_2.png')), 'new-band sharp tiles render');
+checkOverview(18);
+assert.ok(draws.some((d) => d.url?.includes('/Npix') && d.url.endsWith('_17.png')), 'new-band sharp tiles render');
 assert.ok(sky.stats().sharp > 0, 'loaded detail replaces the blurry fallback');
-assert.ok(!draws.some((d) => d.url?.endsWith('_1.png')), 'old-band imagery is not drawn after a band switch');
+assert.ok(!draws.some((d) => d.url?.includes('/Npix') && /Npix\d+\.png$/.test(d.url)), 'old-band (detector 1) imagery is not drawn after a band switch');
+assert.ok(!draws.some((d) => d.url?.endsWith('Allsky_1.png')), 'old-band overview is not drawn after a band switch');
 console.log('PASS deep zoom: overview covers centre while detail loads/fails; correct atlas UVs; band switch and sharp replacement');

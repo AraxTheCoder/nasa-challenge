@@ -275,20 +275,83 @@ button.link:hover { text-decoration: underline; }
 .focus-ring { fill: none; stroke: var(--warn); stroke-width: 2.5; animation: focus-pulse 1.4s ease-in-out infinite; }
 @keyframes focus-pulse { 50% { stroke-opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .focus-ring { animation: none; } }
-/* T30/T36 sky map (own renderer, sky.js) */
-.explore { max-width: 1280px; margin: 0 auto; padding: 8px 16px 0; }
-.explore-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 8px; }
-.explore-bar label { display: inline-flex; align-items: center; gap: 6px; }
-.explore-bar .spacer { flex: 1; }
-.explore-note { margin: 6px 0; }
-.sky-stage { position: relative; width: 100%; height: min(72vh, 760px); border: 1px solid var(--border);
-  border-radius: 8px; overflow: hidden; background: #05080f; }
+/* T30/T36 sky map (own renderer, sky.js).
+   T55 /app/: the map fills the whole window; the controls float over it in panels. Default layout:
+   two docks on the left edge (.hud-dock-top: field request, then "Blink this spot"; .hud-dock-bottom:
+   switches above band + epochs). .hud = one draggable group, .hud-panel = its clickable glass card.
+   A dragged group leaves its dock (.hud-moved = fixed at its own spot, hud.js). Docks and groups let
+   drags through to the map; only the panels catch the mouse. */
+.sky-stage { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: #05080f; }
+body.fullmap { overflow: hidden; height: 100vh; }
+.hud-dock { position: fixed; left: 12px; z-index: 10; display: flex; flex-direction: column; align-items: flex-start;
+  gap: 8px; max-width: min(760px, calc(100vw - 24px)); pointer-events: none; }
+.hud-dock-top { top: 12px; }
+.hud-dock-bottom { bottom: 12px; }
+.hud { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-width: 100%;
+  pointer-events: none; margin: 0; }
+.hud > * { pointer-events: auto; }
+.hud-moved { position: fixed; z-index: 11; max-width: none; }
+.hud-hint { position: fixed; right: 16px; bottom: 14px; z-index: 5; max-width: min(420px, 40vw); margin: 0;
+  text-align: right; pointer-events: none; text-shadow: 0 1px 3px #000; opacity: 0.75; }
+.hud-panel {
+  background: rgb(20 24 33 / 0.82); border: 1px solid rgb(255 255 255 / 0.10); border-radius: 10px;
+  padding: 8px 12px; box-shadow: 0 6px 20px rgb(0 0 0 / 0.45);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.hud-panel:empty, .hud-row:not(:has(> :not([hidden]):not(.hud-grip))) { display: none; }   /* nothing to show yet */
+/* T55 drag handles (hud.js): grip, plus any empty part of a panel, moves the whole corner group */
+.hud-panel { cursor: grab; touch-action: none; }
+.hud-panel input, .hud-panel select, .hud-panel button, .hud-panel label, .hud-panel output { cursor: auto; }
+.hud-panel button, .hud-panel select, .hud-panel label { cursor: pointer; }
+.hud-grip { cursor: grab !important; background: none; border: none; padding: 0 2px; margin-right: -4px;
+  color: var(--muted); font-size: 16px; line-height: 1; letter-spacing: -1px; user-select: none; touch-action: none; }
+.hud-grip:hover { color: var(--text); }
+.hud-dragging, .hud-dragging .hud-panel, .hud-dragging .hud-grip { cursor: grabbing !important; }
+.hud-dragging .hud-panel { box-shadow: 0 10px 30px rgb(0 0 0 / 0.6); }
+.hud-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.hud-row label { display: inline-flex; align-items: center; gap: 6px; }
+.hud-stack { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }   /* one panel, several lines */
+.hud-nowrap { flex-wrap: nowrap; white-space: nowrap; }                                 /* position + Blink stay side by side */
+.hud-nowrap #explore-pos { flex: 1 1 auto; }
+#explore-pos { font-variant-numeric: tabular-nums; }
+/* T55 📍 marker (cursorpin.js): needle tip on the point (the mouse in pick mode), RA/Dec in two lines
+   centred under it. Fades out 5 s after Go / a pick.
+   --pin-tip-y: where the needle tip sits in the glyph (fraction of its height from the top); tune per emoji font. */
+.cursor-pin { position: fixed; left: 0; top: 0; z-index: 30; pointer-events: none; will-change: transform;
+  --pin-tip-y: 94%; transition: opacity 0.8s ease; }
+.cursor-pin-fading { opacity: 0; }
+.cursor-pin-icon { position: absolute; left: 0; top: 0; transform: translate(-50%, calc(-1 * var(--pin-tip-y)));
+  font-size: 28px; line-height: 1; filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.7)); }
+body.pin-picking .sky-stage canvas { cursor: crosshair !important; }   /* pick mode: the cursor marks the spot */
+#pin-btn { padding: 4px 9px; font-size: 16px; line-height: 1.2; }
+#pin-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
+.cursor-pin-pill { position: absolute; left: 0; top: 6px; transform: translateX(-50%); white-space: nowrap;
+  display: flex; flex-direction: column; align-items: center; padding: 3px 9px; border-radius: 9px;
+  font-size: 12px; line-height: 1.35; font-variant-numeric: tabular-nums;
+  background: rgb(20 24 33 / 0.88); border: 1px solid rgb(255 255 255 / 0.15); color: var(--text);
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.5); }
+.hud .topbar { border-bottom: none; padding: 10px 12px; gap: 8px 14px; }
+.hud .field-form { flex: 0 1 auto; }
+.hud .job { margin: 0; max-width: none; background: rgb(15 26 43 / 0.9); border-color: var(--accent); }
+.hud .messages { padding: 0; }
+.hud .msg { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+@media (max-width: 900px) { .hud-hint { display: none; } }   /* the docks need the room */
+/* Hover card of the map names (skylabels.js); was in paths.css with the frame viewer */
+.paths-tip {
+  position: absolute; z-index: 5; max-width: 300px; padding: 8px 10px; border-radius: 6px;
+  background: rgba(14, 17, 24, 0.94); border: 1px solid var(--border); color: var(--text);
+  font-size: 12px; line-height: 1.4; pointer-events: auto; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.paths-tip strong { display: block; font-size: 13px; margin-bottom: 4px; color: #ffe2a8; }
+.paths-tip dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; }
+.paths-tip dt { color: var(--muted); }
+.paths-tip dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.paths-tip-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 11px; }
 .sky-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .sky-stage .sky-gl { cursor: grab; outline: none; }
 .sky-stage .sky-gl:active { cursor: grabbing; }
 .explore-epochs { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .explore-epochs button[aria-pressed="true"] { outline: 2px solid currentColor; }
-@media (max-width: 600px) { .sky-stage { height: 60vh; } }
 
 /* ---------- T43: difference view A − B ---------- */
 .diff-canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
@@ -342,6 +405,11 @@ button.link:hover { text-decoration: underline; }
 .ph-context h4 { margin: 4px 0; }
 .ph-context p { margin: 6px 0; }
 .ph-hint-mark { color: var(--warn); }
+
+/* T55: pass / epoch dates; the shown one highlighted, passes still loading for this view dimmed */
+.pass-label { padding: 1px 6px; border-radius: 4px; font-size: 0.85em; opacity: 0.75; white-space: nowrap; }
+.pass-label.current { opacity: 1; outline: 2px solid currentColor; }
+.pass-label.loading { opacity: 0.4; }
 
 /* Map only (default, see app.js): no frame image or what is drawn on it; the frame viewer's controls
    (A/B, blink, A − B, play, λ filter, timeline, frame panels) drive the map instead (T81, mapframes.js).
@@ -429,3 +497,24 @@ body.map-only #ph-measure { display: none !important; }
 .ol-card-x { margin-left: auto; font-size: 18px; line-height: 1; padding: 0 4px; }
 .ol-card-actions { display: flex; gap: 12px; align-items: center; margin-top: 6px; }
 .ol-maptoggle { margin-left: auto; color: var(--muted); }
+
+/* ---------- T90: one page. First screen = the T55 map (.mapstage, one viewport high, scrolls away
+   with the page); below it everything else of web/. The map's panels, hint and grips sit inside it
+   (absolute, not fixed), so they never cover the content below. ---------- */
+.mapstage { position: relative; height: 100vh; height: 100dvh; overflow: hidden; background: #05080f; }
+.mapstage .sky-stage { position: absolute; inset: 0; }
+.mapstage .hud-dock, .mapstage .hud-moved, .mapstage .hud-hint { position: absolute; }
+.mapstage[hidden] { display: none; }
+.to-below { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 6;
+  background: rgb(15 26 43 / 0.75); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px;
+  color: var(--muted); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.to-below:hover { color: var(--text); }
+.hud .pick-why { margin: 0; max-width: 520px; }
+/* the map's other controls (web/ explore bar), below the first screen */
+.map-tools { max-width: 1248px; margin: 12px auto 0; }
+@media (max-width: 1280px) { .map-tools { margin: 12px 16px 0; } }
+.explore-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 8px; }
+.explore-bar label { display: inline-flex; align-items: center; gap: 6px; }
+.explore-bar .spacer { flex: 1; }
+.explore-note { margin: 6px 0; }
+.build-bar { margin-top: 12px; }
