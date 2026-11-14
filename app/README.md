@@ -26,3 +26,6 @@ viewer and the default URL.
 - Step 4: default layout = Jonathan's arrangement (2026-11-14): two docks on the left. Top: field
   request (+ progress, messages), then position + "Blink this spot". Bottom: switches above band +
   epochs. A dragged panel leaves its dock; double-click ⠿ docks it again (saved key `spherex.app.hud.v2`).
+- Step 5: leaner panels: no title, no ? help button/bubble, no "SPHEREx · 102 bands" caption, no
+  "SPHEREx epochs here" caption (synthetic layers still say "synthetic:"), position without "cursor",
+  button "Blink". Defaults: Debug on (`?debug=0` off), Traces off, Labels off (own key `spherex.app.labels`).

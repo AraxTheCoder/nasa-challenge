@@ -24,14 +24,11 @@ const STEP_LABELS = {
   detect: "Looking for moving sources",
 };
 
-// RA/Dec help bubble under the form (T29). Off while we test the site; switch on for the demo.
-// The page URL can override it: ?tip=1 shows it, ?tip=0 hides it.
-const FORM_TIP_ENABLED = false;
-const TIP_DISMISSED_KEY = "spherex-blink.formTipDismissed";
-
-// T40: catalogue labels default ON; the choice is remembered per browser.
+// Catalogue labels: default OFF in /app/ (web/ defaults on); the choice is remembered per browser
+// under its own key, so switching it in /web/ (same origin) doesn't change /app/.
+const LABELS_KEY = "spherex.app.labels";
 function labelsPref() {
-  try { return localStorage.getItem("spherex.labels") !== "0"; } catch { return true; }
+  try { return localStorage.getItem(LABELS_KEY) === "1"; } catch { return false; }
 }
 
 const app = {
@@ -225,60 +222,6 @@ function hideJob() {
   app.jobTimer = null;
 }
 
-// ---------- RA/Dec help bubble ----------
-
-function tipEnabled() {
-  const q = params().get("tip");
-  return q === "1" ? true : q === "0" ? false : FORM_TIP_ENABLED;
-}
-
-function tipDismissed() {
-  try {
-    return localStorage.getItem(TIP_DISMISSED_KEY) === "1";
-  } catch {
-    return false; // storage blocked: just show it again next time
-  }
-}
-
-/** force: the "?" button opens it even when automatic showing is off or "Got it" was clicked. */
-function showTip({ force = false } = {}) {
-  if (!force && (!tipEnabled() || tipDismissed())) return;
-  $("#form-tip").hidden = false;
-  $("#form-help").setAttribute("aria-expanded", "true");
-  placeTip();
-}
-
-/**
- * One-row form (desktop): bubble right under the RA input, arrow pointing at it.
- * Stacked form (phone): bubble under the whole form, so it never covers an input you type into.
- */
-function placeTip() {
-  const tip = $("#form-tip");
-  if (tip.hidden) return;
-  const form = $("#field-form");
-  const ra = form.ra;
-  const stacked = form.dec.offsetTop > ra.offsetTop;
-  const controls = [...form.querySelectorAll("input, select, button[type=submit]")].filter((c) => c.offsetParent);
-  const bottom = stacked
-    ? Math.max(...controls.map((c) => c.offsetTop + c.offsetHeight))
-    : ra.offsetTop + ra.offsetHeight;
-  const left = Math.max(0, Math.min(ra.offsetLeft, form.clientWidth - tip.offsetWidth));
-  tip.style.left = `${left}px`;
-  tip.style.top = `${bottom + 10}px`;
-  tip.style.setProperty("--arrow-x", `${Math.max(12, ra.offsetLeft - left + 16)}px`);
-}
-
-function hideTip({ remember = false } = {}) {
-  $("#form-tip").hidden = true;
-  $("#form-help").setAttribute("aria-expanded", "false");
-  if (!remember) return;
-  try {
-    localStorage.setItem(TIP_DISMISSED_KEY, "1");
-  } catch {
-    // storage blocked: it comes back on the next visit, which is fine
-  }
-}
-
 async function loadPresets() {
   let fields = [];
   try {
@@ -311,21 +254,13 @@ async function warnIfApiDown(fieldRequested) {
 function bindPage() {
   $("#field-form").addEventListener("submit", (e) => {
     e.preventDefault();
-    hideTip();
     const req = readForm();
     if (!req.ra || !req.dec) return;
     fillForm(req);
     setPageUrl(req, true);
     loadField(req);
   });
-  $("#preset").addEventListener("change", () => { hideTip(); onPresetPicked(); });
-  $("#field-form").addEventListener("focusin", (e) => {
-    if (e.target.name === "ra" || e.target.name === "dec") showTip();
-  });
-  $("#form-tip-close").addEventListener("click", () => hideTip({ remember: true }));
-  $("#form-help").addEventListener("click", () => ($("#form-tip").hidden ? showTip({ force: true }) : hideTip()));
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideTip(); });
-  window.addEventListener("resize", placeTip);
+  $("#preset").addEventListener("change", onPresetPicked);
   $("#field-form").addEventListener("input", (e) => {
     if (e.target.name === "ra" || e.target.name === "dec") syncPresetSelect();
   });
@@ -394,8 +329,8 @@ async function showEpochLayers(target) {
     clearInterval(epochTimer);
     if (on) epochTimer = setInterval(() => pick((epochShown + 1) % layers.length), 700);
   });
-  box.append(el("span", { class: "muted small" }, info.synthetic ? "Epochs (synthetic):" : "SPHEREx epochs here:"),
-    ...buttons, blink);
+  // no caption for real data; synthetic layers stay visibly labelled (CLAUDE.md)
+  box.append(...(info.synthetic ? [el("span", { class: "muted small" }, "synthetic:")] : []), ...buttons, blink);
   box.hidden = false;
   pick(0);
 }
@@ -404,7 +339,7 @@ function updateExplorePos(_view, cursor) {
   const v = explore.view();
   if (!v) return;
   const f = (x) => `${x >= 0 ? "+" : ""}${x.toFixed(4)}°`;
-  const where = cursor ? `cursor RA ${cursor[0].toFixed(4)}° Dec ${f(cursor[1])}` : `RA ${v.ra.toFixed(4)}° Dec ${f(v.dec)}`;
+  const where = cursor ? `RA ${cursor[0].toFixed(4)}° Dec ${f(cursor[1])}` : `RA ${v.ra.toFixed(4)}° Dec ${f(v.dec)}`;
   $("#explore-pos").textContent = `${where} · view ${v.fovArcmin >= 120 ? (v.fovArcmin / 60).toFixed(1) + "°" : Math.round(v.fovArcmin) + "′"}`;
 }
 
@@ -439,9 +374,9 @@ async function startExplore() {
       ra: Number(f.ra) || undefined, dec: Number(f.dec) || undefined, fovDeg: 2, api: app.api,
     });
     sky.on("change", updateExplorePos);
-    // Debug overlay (tile outlines, max-zoom / sharp indicator); ?debug=1 switches it on at load
+    // Debug overlay (tile outlines, max-zoom / sharp indicator): on by default in /app/; ?debug=0 starts it off
     const dbg = $("#sky-debug");
-    dbg.checked = params().get("debug") === "1";
+    dbg.checked = params().get("debug") !== "0";
     explore.setDebug(dbg.checked);
     dbg.addEventListener("change", () => explore.setDebug(dbg.checked));
     setupTilesSwitch();
@@ -481,7 +416,7 @@ async function setupTilesSwitch() {
 
 async function setLabels(on) {
   app.labelsOn = on;
-  try { localStorage.setItem("spherex.labels", on ? "1" : "0"); } catch { /* private mode: not remembered */ }
+  try { localStorage.setItem(LABELS_KEY, on ? "1" : "0"); } catch { /* private mode: not remembered */ }
   $("#labels-toggle").checked = on;
   document.dispatchEvent(new CustomEvent("labels:changed", { detail: { on } }));  // skylabels.js follows
   const t = app.shownTarget;
@@ -557,10 +492,7 @@ async function main() {
   await loadPresets();
   startExplore();   // not awaited: the map loads in the background
   const requested = loadFromUrl();
-  if (!requested) {
-    fillDefaults();
-    showTip();
-  }
+  if (!requested) fillDefaults();
   await warnIfApiDown(requested);
 }
 

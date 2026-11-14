@@ -23,6 +23,8 @@ Rework the UI without blocking anyone: the redesign lives in `app/` (URL `/app/`
         remembered per browser, double-click ⠿ resets a panel (`app/hud.js`)
   - [x] Step 4 (Jonathan, 2026-11-14): Jonathan's arrangement is the default: left docks, top = field
         request then Blink this spot, bottom = switches above band + epochs; hint moved bottom right
+  - [x] Step 5 (Jonathan, 2026-11-14): no title, no ? help, no map/epochs captions, no "cursor", button
+        "Blink"; defaults Debug on, Traces off, Labels off
 - [ ] Port relevant `web/` changes made after the copy
 - [ ] When done: decide (TEAM.md Decisions) whether `app/` replaces `web/`
 

@@ -10,7 +10,7 @@ import { getApiBase, getSky } from "./explore.js";
 const MAX_FOV_DEG = 2.0;     // wider views: too many objects, too little room
 const DEBOUNCE_MS = 350;
 const COLOURS = { simbad: "#9cc3ff", vsx: "#ffb36b", catwise2020: "#e88bff" };
-const st = { on: true, region: null, labels: [], pending: null, timer: null, hooked: false, placed: [],
+const st = { on: false, region: null, labels: [], pending: null, timer: null, hooked: false, placed: [],
   traced: new Set(), tip: null };
 
 function namesBudget(fov) { return fov > 1 ? 20 : fov > 0.4 ? 40 : 120; }
