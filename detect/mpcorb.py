@@ -14,7 +14,9 @@ Per field:
    geocentre if that fails). Checked against JPL Horizons: see tasks/T51.
 3. Objects with a position inside the field and V <= vmag_lim (H, G magnitude) are kept.
 
-Comets are not included (CometEls.txt has other elements; few comets are bright enough).
+T53: comets from CometEls.txt the same way (perihelion elements, elliptic or hyperbolic two-body for
+the start state, then the same n-body step; no non-gravitational forces). Their total magnitude
+m = H + 5 log(delta) + 2.5 K log(r) is for the whole coma, so the limit is COMET_MAG_SLACK looser.
 """
 from __future__ import annotations
 
@@ -31,6 +33,9 @@ import numpy as np
 
 ROOT = Path("data/mpcorb")
 MPCORB_URL = "https://minorplanetcenter.net/iau/MPCORB/MPCORB.DAT.gz"
+COMETS_URL = "https://minorplanetcenter.net/iau/MPCORB/CometEls.txt"
+COMET_MARGIN_DEG = 2.0            # comets: two-body search without the per-epoch trick (only ~1000)
+COMET_MAG_SLACK = 1.0
 # Two-body vs n-body after 388 days (ecliptic field, 3116 objects): median 0.010 deg, 99% 0.027 deg,
 # worst 0.73 deg, all near-Earth objects (planet encounters). Margin per object accordingly.
 COARSE_MARGIN_DEG = 0.15
@@ -103,6 +108,82 @@ def build(src: Path = ROOT / "MPCORB.DAT.gz", out: Path = ROOT / "orbits.npz") -
     retrieved = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(src.stat().st_mtime))
     np.savez(out, name=np.asarray(names, dtype="S"), retrieved_utc=np.asarray(retrieved), **arrays)
     return len(names)
+
+
+def _calendar_jd(year: int, month: int, day: float) -> float:
+    a = (14 - month) // 12
+    y, m = year + 4800 - a, month + 12 * a - 3
+    return int(day) + (153 * m + 2) // 5 + 365 * y + y // 4 - y // 100 + y // 400 - 32045 - 0.5 + (day - int(day))
+
+
+def build_comets(src: Path = ROOT / "CometEls.txt", out: Path = ROOT / "comets.npz") -> int:
+    """MPC one-line comet elements -> npz (q, e, perihelion JD, angles, epoch, H, K, name)."""
+    cols = {k: [] for k in ("q", "e", "tp", "w", "node", "inc", "epoch", "H", "K")}
+    names = []
+    for line in src.read_text(encoding="ascii", errors="replace").splitlines():
+        if len(line) < 103:
+            continue
+        try:
+            tp = _calendar_jd(int(line[14:18]), int(line[19:21]), float(line[22:29]))
+            ep = line[81:89].strip()
+            epoch = _calendar_jd(int(ep[:4]), int(ep[4:6]), float(ep[6:8])) if ep else tp
+            row = (float(line[30:39]), float(line[41:49]), tp, float(line[51:59]), float(line[61:69]),
+                   float(line[71:79]), epoch, float(line[91:95] or 99), float(line[96:100] or 4.0))
+        except ValueError:
+            continue
+        for k, v in zip(cols, row):
+            cols[k].append(v)
+        names.append(line[102:158].strip())
+    np.savez(out, name=np.asarray(names, dtype="S"), **{k: np.asarray(v, float) for k, v in cols.items()})
+    return len(names)
+
+
+_comets: dict | None = None
+
+
+def load_comets(root: Path = ROOT) -> dict | None:
+    global _comets
+    if _comets is None and (root / "comets.npz").is_file():
+        with np.load(root / "comets.npz") as z:
+            d = {k: z[k] for k in z.files}
+        d["P"], d["Q"] = _rotation(d["w"], d["node"], d["inc"])
+        _comets = d
+    return _comets
+
+
+def comet_state(c: dict, idx, jd_tt: float, velocity: bool = False):
+    """Heliocentric equatorial position (3, N) [and velocity] of comets, two-body from perihelion."""
+    q, e, dt = c["q"][idx], c["e"][idx], jd_tt - c["tp"][idx]
+    P, Q = c["P"][:, idx], c["Q"][:, idx]
+    x, y = np.zeros(len(q)), np.zeros(len(q))
+    vx, vy = np.zeros(len(q)), np.zeros(len(q))
+    ell = e < 1
+    if ell.any():                                       # elliptic: Kepler
+        a = q[ell] / (1 - e[ell]); ee = e[ell]
+        n = K_GAUSS / a ** 1.5
+        M = np.remainder(n * dt[ell] + np.pi, 2 * np.pi) - np.pi
+        E = M + ee * np.sin(M)
+        for _ in range(30):
+            E = E - (E - ee * np.sin(E) - M) / (1 - ee * np.cos(E))
+        b = a * np.sqrt(1 - ee * ee)
+        x[ell], y[ell] = a * (np.cos(E) - ee), b * np.sin(E)
+        edot = n / (1 - ee * np.cos(E))
+        vx[ell], vy[ell] = -a * np.sin(E) * edot, b * np.cos(E) * edot
+    hyp = ~ell
+    if hyp.any():                                       # hyperbolic (and e = 1, nudged): e sinh H - H = M
+        ee = np.maximum(e[hyp], 1 + 1e-9)
+        a = q[hyp] / (ee - 1)
+        n = K_GAUSS / a ** 1.5
+        M = n * dt[hyp]
+        H = np.arcsinh(M / ee)
+        for _ in range(50):
+            H = H - (ee * np.sinh(H) - H - M) / (ee * np.cosh(H) - 1)
+        b = a * np.sqrt(ee * ee - 1)
+        x[hyp], y[hyp] = a * (ee - np.cosh(H)), b * np.sinh(H)
+        hdot = n / (ee * np.cosh(H) - 1)
+        vx[hyp], vy[hyp] = -a * np.sinh(H) * hdot, b * np.cosh(H) * hdot
+    r = P * x + Q * y
+    return (r, P * vx + Q * vy) if velocity else r
 
 
 def available(root: Path = ROOT) -> bool:
@@ -198,12 +279,9 @@ def _rk4(r, v, jd, h, pert: Perturbers):
     return r + h / 6 * (k1r + 2 * k2r + 2 * k3r + k4r), v + h / 6 * (k1v + 2 * k2v + 2 * k3v + k4v)
 
 
-def integrate(el: dict, idx, jds_tt: list[float], step: float = 1.0) -> dict[float, tuple]:
-    """Heliocentric (r, v) of objects idx at each jd_tt, n-body from the catalogue epoch.
-    All objects of one call must share an epoch (true for nearly all of MPCORB)."""
-    epoch = float(el["epoch"][idx][0])
+def propagate(r0: np.ndarray, v0: np.ndarray, epoch: float, jds_tt: list[float], step: float = 1.0) -> dict:
+    """n-body (Sun + planets) from heliocentric states (3, N) at `epoch` to each jd_tt: {jd: (r, v)}."""
     pert = Perturbers(min(min(jds_tt), epoch), max(max(jds_tt), epoch))
-    r0, v0 = kepler_state(el, idx, epoch, velocity=True)
     out = {}
     for direction in (1, -1):
         targets = sorted((j for j in jds_tt if (j - epoch) * direction >= 0), key=lambda j: (j - epoch) * direction)
@@ -214,6 +292,19 @@ def integrate(el: dict, idx, jds_tt: list[float], step: float = 1.0) -> dict[flo
                 r, v = _rk4(r, v, jd, h, pert)
                 jd += h
             out[target] = (r.copy(), v.copy())
+    return out
+
+
+def integrate(el: dict, idx, jds_tt: list[float], step: float = 1.0) -> dict[float, tuple]:
+    """Heliocentric (r, v) of asteroids idx at each jd_tt, n-body from their catalogue epochs
+    (grouped: nearly all of MPCORB shares one epoch, a few hundred objects do not)."""
+    idx = np.asarray(idx)
+    out = {jd: (np.zeros((3, len(idx))), np.zeros((3, len(idx)))) for jd in jds_tt}
+    for epoch in np.unique(el["epoch"][idx]):
+        sel = np.flatnonzero(el["epoch"][idx] == epoch)
+        r0, v0 = kepler_state(el, idx[sel], float(epoch), velocity=True)
+        for jd, (r, v) in propagate(r0, v0, float(epoch), jds_tt, step).items():
+            out[jd][0][:, sel], out[jd][1][:, sel] = r, v
     return out
 
 
@@ -288,28 +379,13 @@ def candidates(el: dict, centre: np.ndarray, radius_deg: float, visit_jds_tt: li
     return idx[keep]
 
 
-def find(target: dict, vmag_lim: float, observer_km: dict[float, list[float]] | None = None,
-         grid=None) -> list[dict]:
-    """known_objects for a target dict from the local catalogue (same format as known_objects.py).
+def _name(arr, i: int) -> str:
+    n = arr[i]
+    return n.decode() if isinstance(n, bytes) else str(n)
 
-    observer_km: SPHEREx geocentric position (km) per frame mjd (UTC); missing -> geocentre."""
-    from pipeline.labels import Grid
-    from .known_objects import group_visits
 
-    el = load()
-    grid = grid or Grid(target)
-    frames = target["frames"]
-    c = target["center"]
-    centre = _unit(c["ra_deg"], c["dec_deg"])
-    visits = group_visits(frames)
-    visit_jds = [(v[0]["mjd"] + v[-1]["mjd"]) / 2 + 2400000.5 + TT_MINUS_UTC_DAYS for v in visits]
-    idx = candidates(el, centre, grid.radius_deg, visit_jds, vmag_lim)
-    if not len(idx):
-        return []
-    frame_jd = {f["id"]: f["mjd"] + 2400000.5 + TT_MINUS_UTC_DAYS for f in frames}
-    states = integrate(el, idx, sorted(set(frame_jd.values())))
-    earth = dict(zip(sorted(states), _earth_helio(sorted(states)).T))
-
+def _track(frames, frame_jd, states, earth, observer_km, grid, mag_fn, vmag_lim, names) -> list[dict]:
+    """Positions inside the field per object, light time + observer; kept if bright enough once."""
     tracks: dict[int, list[dict]] = {}
     bright: set[int] = set()
     for f in frames:
@@ -324,26 +400,76 @@ def find(target: dict, vmag_lim: float, observer_km: dict[float, list[float]] | 
         ra, dec = _radec(d)
         x, y = grid.to_xy(ra, dec)
         x, y = np.asarray(x, float), np.asarray(y, float)
-        vm = _vmag(el["H"][idx], el["G"][idx], r - v * tau, d)
+        vm = mag_fn(r - v * tau, d)
         for k in np.flatnonzero(np.isfinite(x) & np.isfinite(y)):
             if not grid.contains(float(x[k]), float(y[k])):
                 continue
-            tracks.setdefault(int(idx[k]), []).append(
+            tracks.setdefault(k, []).append(
                 {"frame_id": f["id"], "ra_deg": round(float(ra[k]), 6), "dec_deg": round(float(dec[k]), 6),
                  "x": round(float(x[k]), 2), "y": round(float(y[k]), 2)})
             if vm[k] <= vmag_lim:
-                bright.add(int(idx[k]))
-    def name(i: int) -> str:
-        n = el["name"][i]
-        return n.decode() if isinstance(n, bytes) else str(n)
-    return [{"name": name(i), "source": "mpcorb", "synthetic": False, "positions": pos}
-            for i, pos in sorted(tracks.items(), key=lambda kv: name(kv[0])) if i in bright]
+                bright.add(k)
+    return [{"name": names(k), "source": "mpcorb", "synthetic": False, "positions": pos}
+            for k, pos in tracks.items() if k in bright]
+
+
+def comet_candidates(c: dict, centre: np.ndarray, radius_deg: float, visit_jds_tt: list[float]) -> np.ndarray:
+    idx = np.arange(len(c["q"]))
+    keep = np.zeros(len(idx), bool)
+    earth = _earth_helio(visit_jds_tt)
+    cos_lim = math.cos(math.radians(radius_deg + COMET_MARGIN_DEG))
+    for k, jd in enumerate(visit_jds_tt):
+        d = comet_state(c, idx, jd) - earth[:, k:k + 1]
+        keep |= (centre @ d) / np.linalg.norm(d, axis=0) >= cos_lim
+    return idx[keep]
+
+
+def find(target: dict, vmag_lim: float, observer_km: dict[float, list[float]] | None = None,
+         grid=None) -> list[dict]:
+    """known_objects for a target dict from the local catalogues (same format as known_objects.py).
+
+    observer_km: SPHEREx geocentric position (km) per frame mjd (UTC); missing -> geocentre."""
+    from pipeline.labels import Grid
+    from .known_objects import group_visits
+
+    el = load()
+    grid = grid or Grid(target)
+    frames = target["frames"]
+    c = target["center"]
+    centre = _unit(c["ra_deg"], c["dec_deg"])
+    visits = group_visits(frames)
+    visit_jds = [(v[0]["mjd"] + v[-1]["mjd"]) / 2 + 2400000.5 + TT_MINUS_UTC_DAYS for v in visits]
+    frame_jd = {f["id"]: f["mjd"] + 2400000.5 + TT_MINUS_UTC_DAYS for f in frames}
+    jds = sorted(set(frame_jd.values()))
+    earth = dict(zip(jds, _earth_helio(jds).T))
+    found = []
+
+    idx = candidates(el, centre, grid.radius_deg, visit_jds, vmag_lim)
+    if len(idx):
+        states = integrate(el, idx, jds)
+        found += _track(frames, frame_jd, states, earth, observer_km, grid,
+                        lambda rh, d: _vmag(el["H"][idx], el["G"][idx], rh, d), vmag_lim,
+                        lambda k: _name(el["name"], int(idx[k])))
+
+    co = load_comets()
+    cidx = comet_candidates(co, centre, grid.radius_deg, visit_jds) if co is not None else []
+    for epoch in np.unique(co["epoch"][cidx]) if len(cidx) else []:
+        sel = cidx[co["epoch"][cidx] == epoch]
+        r0, v0 = comet_state(co, sel, float(epoch), velocity=True)
+        states = propagate(r0, v0, float(epoch), jds)
+        found += _track(frames, frame_jd, states, earth, observer_km, grid,
+                        lambda rh, d, sel=sel: co["H"][sel] + 5 * np.log10(np.linalg.norm(d, axis=0))
+                        + 2.5 * co["K"][sel] * np.log10(np.linalg.norm(rh, axis=0)),
+                        vmag_lim + COMET_MAG_SLACK, lambda k, sel=sel: _name(co["name"], int(sel[k])))
+    return sorted(found, key=lambda o: o["name"])
 
 
 def provenance() -> dict:
     el = load()
+    co = load_comets()
+    n_comets = f" + {len(co['name'])} comets ({COMETS_URL})" if co is not None else ""
     return {"service": "MPC orbit catalogue MPCORB.DAT (local copy; n-body to frame times, T51)",
-            "query": f"{MPCORB_URL}; {len(el['name'])} asteroids; coarse two-body search, then Sun + 8 planets RK4",
+            "query": f"{MPCORB_URL}; {len(el['name'])} asteroids{n_comets}; coarse two-body search, then Sun + 8 planets RK4",
             "retrieved_utc": str(el["retrieved_utc"])}
 
 
@@ -358,13 +484,16 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     ROOT.mkdir(parents=True, exist_ok=True)
     if args.cmd == "fetch":
-        part = ROOT / "MPCORB.DAT.gz.part"
-        urllib.request.urlretrieve(MPCORB_URL, part)
-        part.replace(ROOT / "MPCORB.DAT.gz")
-        print(f"downloaded {(ROOT / 'MPCORB.DAT.gz').stat().st_size / 1e6:.0f} MB")
+        for url, name in ((MPCORB_URL, "MPCORB.DAT.gz"), (COMETS_URL, "CometEls.txt")):
+            part = ROOT / (name + ".part")
+            urllib.request.urlretrieve(url, part)
+            part.replace(ROOT / name)
+            print(f"downloaded {name}: {(ROOT / name).stat().st_size / 1e6:.1f} MB")
     elif args.cmd == "build":
         t0 = time.time()
         print(f"{build()} asteroids -> {ROOT / 'orbits.npz'} in {time.time() - t0:.0f} s")
+        if (ROOT / "CometEls.txt").is_file():
+            print(f"{build_comets()} comets -> {ROOT / 'comets.npz'}")
     else:
         t = json.loads((args.target_dir / "target.json").read_text(encoding="utf-8"))
         t0 = time.time()
