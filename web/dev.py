@@ -155,16 +155,22 @@ def main() -> int:
         fixture = not has_module("pipeline.build")
 
     host = "0.0.0.0" if args.lan else "127.0.0.1"
-    for name, port in (("API", args.api_port), ("viewer", args.web_port)):
-        if not port_free(host, port):
-            flag = "--api-port" if name == "API" else "--web-port"
-            print(f"Port {port} for the {name} is already in use (another server still running?).\n"
-                  f"Stop it, or pick another port, e.g.  python web/dev.py {flag} {port + 1}", file=sys.stderr)
+    # T44: a taken port is common (an old server, another tool): move on to the next free one instead of failing
+    for name, attr in (("API", "api_port"), ("viewer", "web_port")):
+        port = getattr(args, attr)
+        free = next((p for p in range(port, port + 20) if port_free(host, p)), None)
+        if free is None:
+            print(f"Ports {port}-{port + 19} for the {name} are all in use; pick one with --{attr.replace('_', '-')}",
+                  file=sys.stderr)
             return 1
+        if free != port:
+            print(f"Port {port} for the {name} is in use, using {free} instead.")
+        setattr(args, attr, free)
 
     cmd = [sys.executable, "-m", "server", "--host", host, "--port", str(args.api_port)]
     if fixture:
-        cmd.append("--fixture")
+        # T44: own cache, so fixture mode never serves real fields cached by live mode (and vice versa)
+        cmd += ["--fixture", "--cache", str(REPO / "data" / "targets-fixture")]
     api = subprocess.Popen(cmd, cwd=REPO)
 
     # Closing the terminal or a `kill` sends SIGTERM/SIGHUP, not Ctrl+C: treat them the same so the
