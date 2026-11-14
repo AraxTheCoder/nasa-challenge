@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stitched epochs prototype</title>
+<style>
+  :root { color-scheme: dark; --bg: #0b0d12; --panel: #141821; --line: #2a3142; --text: #e6e9ef; --muted: #8b93a7; --a: #6cb4ff; --hot: #ffd27a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+  header { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  h1 { font-size: 16px; margin: 0; }
+  .muted { color: var(--muted); font-size: 12px; }
+  button { font: inherit; color: var(--text); background: #1b2030; border: 1px solid var(--line); border-radius: 6px; padding: 5px 11px; cursor: pointer; }
+  button[aria-pressed="true"] { border-color: var(--a); background: #1d2a44; }
+  #aladin { width: 100%; height: 100%; }
+  #status { font: 12px ui-monospace, Menlo, monospace; color: var(--hot); }
+  label { display: inline-flex; gap: 6px; align-items: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SPHEREx stitched epochs · Barnard’s Star · prototype</h1>
+  <span id="epochs"></span>
+  <button id="blink" aria-pressed="false">▶ Blink</button>
+  <label class="muted">opacity <input id="op" type="range" min="0" max="100" value="100"></label>
+  <label class="muted"><input id="mk" type="checkbox" checked> catalogue position per epoch</label>
+  <span id="status">loading Aladin Lite…</span>
+  <span class="muted">Background: CDS SPHEREx QR2 all-sky colour map (all epochs combined). On top: our D1 mosaic per epoch, 5 images each. Drag to pan, scroll to zoom.</span>
+</header>
+<div id="aladin"></div>
+<script type="module">
+const status = (t) => { document.getElementById("status").textContent = t; };
+window.addEventListener("error", (e) => status("error: " + e.message));
+// same pinned ES-module build as web/explore.js (T30): the classic script no longer works
+const A = (await import("https://cdn.jsdelivr.net/npm/aladin-lite@3.8.2/dist/aladin.js")).default;
+const summary = await (await fetch("summary.json")).json();
+// Barnard's Star, SIMBAD J2000 + proper motion (mas/yr; pmra includes cos dec)
+const B = { ra: 269.4520769586187, dec: 4.693364966576667, pmra: -801.551, pmdec: 10362.394 };
+const posAt = (iso) => {
+  const yr = (Date.parse(iso) - Date.parse("2000-01-01T12:00:00Z")) / (365.25 * 864e5);
+  return [B.ra + B.pmra * yr / 3.6e6 / Math.cos(B.dec * Math.PI / 180), B.dec + B.pmdec * yr / 3.6e6];
+};
+await A.init;
+const aladin = A.aladin("#aladin", { survey: "CDS/P/SPHEREx/QR2/color", fov: summary.field_deg * 0.9,
+  target: `${summary.ra_deg} ${summary.dec_deg}`, cooFrame: "ICRSd", showReticle: false, showCooGrid: false });
+const base = new URL(".", location.href).href;
+const layers = summary.epochs.map((e) => {
+  const url = base + `epoch${e.epoch}`;
+  const opts = { name: `epoch ${e.epoch}`, imgFormat: "fits" };
+  const l = typeof A.imageHiPS === "function" ? A.imageHiPS(url, opts)
+          : aladin.createImageSurvey(`proto-epoch${e.epoch}`, opts.name, url, "equatorial", 9, opts);
+  aladin.setOverlayImageLayer(l, `epoch${e.epoch}`);
+  try { l.setColormap("grayscale", { stretch: "asinh" }); } catch {}
+  try { l.setCuts(summary.cuts[0], summary.cuts[1]); } catch {}
+  return l;
+});
+const cat = A.catalog({ name: "Barnard's Star per epoch", sourceSize: 18, color: "#ffd27a", shape: "circle" });
+aladin.addCatalog(cat);
+let cur = 0, timer = null;
+function show(i) {
+  cur = i;
+  layers.forEach((l, k) => { try { l.setOpacity(k === i ? +document.getElementById("op").value / 100 : 0); } catch {} });
+  document.querySelectorAll("#epochs button").forEach((b, k) => b.setAttribute("aria-pressed", k === i));
+  cat.removeAll?.() ?? cat.clear?.();
+  if (document.getElementById("mk").checked) {
+    const e = summary.epochs[i]; const [ra, dec] = posAt(e.dates[0] + "T12:00:00Z");
+    cat.addSources([A.marker(ra, dec, { popupTitle: "Barnard's Star", popupDesc: `catalogue position for ${e.dates[0]}` })]);
+  }
+  const e = summary.epochs[i];
+  status(`epoch ${e.epoch}: ${e.dates[0]} – ${e.dates[1]}, ${e.n_images} images stitched, ${(e.coverage * 100).toFixed(0)} % covered`);
+}
+document.getElementById("epochs").append(...summary.epochs.map((e, i) => {
+  const b = document.createElement("button"); b.textContent = `Epoch ${e.epoch} · ${e.dates[0].slice(0, 7)}`;
+  b.onclick = () => { stop(); show(i); }; return b;
+}));
+const stop = () => { clearInterval(timer); timer = null; document.getElementById("blink").setAttribute("aria-pressed", "false"); document.getElementById("blink").textContent = "▶ Blink"; };
+document.getElementById("blink").onclick = () => {
+  if (timer) return stop();
+  timer = setInterval(() => show((cur + 1) % layers.length), 700);
+  document.getElementById("blink").setAttribute("aria-pressed", "true"); document.getElementById("blink").textContent = "❚❚ Pause";
+};
+document.getElementById("op").oninput = () => show(cur);
+document.getElementById("mk").onchange = () => show(cur);
+show(0);
+</script>
+</body>
+</html>
