@@ -30,7 +30,8 @@ RAW_ROOT = Path("data/raw")
 # Hardware/bad-pixel bits (TEAM.md Log, T01). SOURCE (21) and OUTLIER (19) are deliberately kept.
 HW_MASK = sum(1 << b for b in (0, 1, 2, 6, 9, 10, 11, 14, 17, 25, 26, 27, 28))
 PER_GROUP = 2        # images per (epoch, detector); 3 epochs x 6 detectors x 2 = 36 cutouts
-THREADS = 8
+THREADS = 8          # IRSA cutout service: more parallel requests only get more 503s
+S3_THREADS = 24      # AWS bucket (T33): not throttled, 7 MB/s at 32 parallel from Europe
 TIMEOUT_S = 180
 
 Progress = Callable[..., None]
@@ -128,6 +129,14 @@ def fetch(fits_url: str, ra: float, dec: float, size_deg: float, raw_root: Path 
     d = _cutout_dir(fits_url, ra, dec, raw_root)
     d.mkdir(parents=True, exist_ok=True)
     path = d / f"{size:.4f}.fits"
+    # T33: AWS Open Data bucket first (HTTP Range, only the rows we need), IRSA cutouts as fallback.
+    try:
+        from . import s3
+        return s3.fetch_cutout(fits_url, ra, dec, size, path)
+    except LookupError:
+        raise
+    except Exception as e:  # noqa: BLE001 - e.g. a file not (yet) in the bucket
+        print(f"S3 read failed, using IRSA cutout: {fits_url.rsplit('/', 1)[-1]}: {e}")
     content = _get_with_retry(cutout_url(fits_url, ra, dec, size))
     tmp = path.with_suffix(f".{threading.get_ident()}.part")
     tmp.write_bytes(content)
@@ -158,6 +167,17 @@ def cached_exposures(ra: float, dec: float, refresh: bool = False, raw_root: Pat
                    encoding="utf-8")
     tmp.replace(path)
     return exposures, prov
+
+
+def source_of(path: Path, fits_url: str, ra: float, dec: float) -> str:
+    """The URL the cached cutout was read from: S3 (with the detector rows kept) or an IRSA cutout."""
+    from astropy.io import fits
+
+    h = fits.getheader(path, 0)
+    if "S3SRC" in h:
+        from .s3 import s3_url
+        return f"{s3_url(fits_url)}#rows={h.get('S3CUT', '').replace(' ', '')}"
+    return cutout_url(fits_url, ra, dec, float(path.stem))
 
 
 # -- T03: align + wavelength -------------------------------------------------------------------------
@@ -261,7 +281,7 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
     errors = []
     report("download", 0, len(chosen), f"{len(chosen)} of {len(exposures)} SPHEREx images, "
                                        f"{n_cached} already cached")
-    with ThreadPoolExecutor(THREADS) as pool:
+    with ThreadPoolExecutor(S3_THREADS) as pool:
         futs = {pool.submit(fetch, e.fits_url, ra_deg, dec_deg, cut_deg): i for i, e in enumerate(chosen)}
         for n, f in enumerate(as_completed(futs), 1):
             try:
@@ -306,7 +326,7 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
             continue
         if np.isfinite(img).mean() < 0.2:
             continue                      # target barely on this image
-        u = cutout_url(e.fits_url, ra_deg, dec_deg, float(p.stem))   # the cutout actually used
+        u = source_of(p, e.fits_url, ra_deg, dec_deg)                 # where the pixels came from
         fid = f"f{len(frames):03d}"
         render_png(img, out / "frames" / f"{fid}.png")
         frames.append({
@@ -326,7 +346,7 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
         "size_arcmin": size_arcmin,
         "image": {"width": npix, "height": npix, "pixel_scale_arcsec": PIXEL_SCALE_ARCSEC},
         "provenance": [prov_query, {
-            "service": "IRSA SPHEREx cutouts",
+            "service": "SPHEREx level-2 images: AWS Open Data s3://nasa-irsa-spherex (HTTP Range) or IRSA cutouts",
             "query": f"{len(chosen)} cutouts (per frame: source_url; {n_cached} from cache), "
                      f"needed size {cut_deg:.4f} deg, "
                      f"{per_group} per epoch+detector of {len(exposures)} images; "
