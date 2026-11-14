@@ -74,6 +74,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T35 | C: Tracing over the stitched sky: paths, per-epoch markers and names of moving / important objects drawn on the explore map (T30/T32), following the epoch blink | Joerg | review | `joerg/T35-sky-traces` | [task file](tasks/T35-sky-traces.md). From Joerg's idea |
 | T36 | C: Own sky map as the main view (no Aladin, no dependency): WebGL HiPS renderer (HEALPix tiles, SIN projection), drag/zoom/pinch like Google Earth, SPHEREx epochs as layers, blink in the map; frame viewer stays below as detail | Jonathan | doing | `jonathan/T36-sky-map` | Replaces the T30 Aladin panel |
 | T37 | A/C: Catalogue labels only on request: builds skip labels; `GET /api/targets/<id>/labels` computes them in the background; viewer has a Labels switch | Jonathan | doing | `jonathan/T36-sky-map` | SIMBAD labels cost 30 s in deep fields (labels.py untouched) |
+| T38 | A: Fast labels: vectorised tracks (all objects x frames at once), ranked cap of 400 SIMBAD + 400 Gaia per field, grid-based duplicate merge, SIMBAD + Gaia in parallel, 15 s per mirror | Joerg | done | (merged as e715788) | Deep field (COSMOS, 30,785 SIMBAD objects): 23 s -> 5.5 s, labels 50+ MB -> 1.2 MB. Official fields: same important labels |
 
 ## Decisions
 
@@ -143,6 +144,10 @@ Dated, one line each, with why.
 - 2026-11-14 [Joerg] CONTRACTS v0.7: labels carry `importance` (0 field object … 4 Gaia-only) and
   `aliases` (duplicates within 3" merged). Why: real fields had 40-270 labels; the official target
   WISE 0855 was hidden because its SIMBAD name looks like a catalogue number (T34).
+- 2026-11-14 [Joerg] T38: `pipeline/labels.py` keeps at most 400 SIMBAD objects (ranked: notable motion
+  + the field's object always, then notable types, classic names, other names, catalogue numbers,
+  nearest the centre first) and the 400 brightest Gaia stars (G < 16). Why: deep fields returned
+  ~30,000 objects; labelling took 23-30 s and wrote 50+ MB of labels. Now 1-7 s, mostly network.
 
 ## Ideas
 
@@ -368,3 +373,8 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   FOV change 7.8 s. IRSA cutouts remain the fallback. Labels get a 5 s budget and are finished in
   the background. Found: `labels.simbad_labels` takes 30 s in deep fields (COSMOS: 29,328 SIMBAD
   rows x 30 frames = 1.4 M scalar WCS calls in `_track`), the TAP calls themselves take < 1 s.
+- 2026-11-14 [Joerg → Jonathan] Your T37 finding (30 s labels in deep fields) was my `_track`: one WCS
+  call per object per frame. T38 (commit e715788) vectorises it, caps labels at ~800 per field and runs
+  SIMBAD + Gaia in parallel: COSMOS-like field 23 s -> 5.5 s, official fields 1-7 s (network-bound),
+  same important labels. Your 5 s budget + late labels still make sense for slow catalogue servers;
+  whether T37 still needs labels-on-request is your call.
