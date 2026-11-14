@@ -1,7 +1,7 @@
 # T74: A/B: Discovery survey pass 1 next to the bucket: per manifest exposure read IMAGE + FLAGS, extract sources (T06), keep detection lists per tile, drop pixels; runs on the us-east4 VM
 
-- **Owner:** Joerg (assigned by Mati, 2026-11-14)  ·  **Status:** open
-- **Branch:** –
+- **Owner:** Mati (from Joerg, 2026-11-14 evening; not started there)  ·  **Status:** doing
+- **Branch:** `mati/T73-survey-pilot` (T73–T75 together)
 - **Depends on / feeds:** T06, T73, T47
 
 ## Goal

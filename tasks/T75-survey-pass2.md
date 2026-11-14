@@ -1,7 +1,7 @@
 # T75: B: Discovery survey pass 2 (HPC): flag tiles from the pass-1 lists (moved / appeared / changed at matched λ / odd spectrum), then all exposures there at full resolution, forced photometry, spectra, candidates with class + score + reason
 
-- **Owner:** Joerg (assigned by Mati, 2026-11-14)  ·  **Status:** open
-- **Branch:** –
+- **Owner:** Mati (from Joerg, 2026-11-14 evening; not started there)  ·  **Status:** doing
+- **Branch:** `mati/T73-survey-pilot` (T73–T75 together)
 - **Depends on / feeds:** T74, T08, T09, T63
 
 ## Goal

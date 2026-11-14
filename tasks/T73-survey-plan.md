@@ -1,7 +1,7 @@
 # T73: A: Discovery survey pass 0 + pilot: catalogue targets and a sparse exposure set per sky tile (~2 per epoch × detector, matched λ) as a manifest for pass 1; pilot regions chosen
 
-- **Owner:** Joerg (assigned by Mati, 2026-11-14)  ·  **Status:** open
-- **Branch:** –
+- **Owner:** Mati (from Joerg, 2026-11-14 evening; not started there)  ·  **Status:** doing
+- **Branch:** `mati/T73-survey-pilot` (T73–T75 together)
 - **Depends on / feeds:** T31, T51, T52
 
 ## Goal
