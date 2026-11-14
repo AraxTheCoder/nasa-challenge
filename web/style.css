@@ -17,6 +17,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -70,8 +71,10 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   .layout { grid-template-columns: minmax(0, 1fr); }
 }
 
-.target-head { margin-bottom: 10px; }
+.target-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.target-head h2 { overflow-wrap: anywhere; }
 .target-head p { margin: 2px 0 0; }
+.target-actions { display: flex; gap: 4px; flex-shrink: 0; }
 
 /* ---------- stage ---------- */
 .stage {
@@ -144,3 +147,42 @@ table.frames { width: 100%; border-collapse: collapse; font-size: 12px; font-var
 .provenance code { overflow-wrap: anywhere; }
 
 .footer { padding: 8px 16px 16px; max-width: 1280px; margin: 0 auto; }
+
+/* ---------- field request form (live mode) ---------- */
+.field-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; flex: 1 1 520px; }
+.field-form label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.field-form input {
+  font: inherit; color: var(--text); background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px;
+}
+.field-form input[type="text"] { width: 13ch; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; }
+.field-form input[type="number"] { width: 6ch; }
+.field-form input:invalid:not(:placeholder-shown) { border-color: var(--error); }
+button.primary { background: var(--accent); color: #04111f; border-color: var(--accent); font-weight: 600; }
+button.link { background: none; border: none; color: var(--accent); padding: 4px 6px; }
+button.link:hover { text-decoration: underline; }
+
+/* ---------- build progress ---------- */
+.job {
+  margin: 12px 16px 0; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 8px;
+  background: #0f1a2b; max-width: 1248px;
+}
+@media (min-width: 1280px) { .job { margin-left: auto; margin-right: auto; } }
+.job-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.job-head .link { margin-left: auto; }
+.job progress { width: 100%; height: 8px; margin-top: 8px; accent-color: var(--accent); }
+.job p { margin: 6px 0 0; overflow-wrap: anywhere; }
+#job-elapsed { font-variant-numeric: tabular-nums; }
+
+/* ---------- empty state ---------- */
+.empty {
+  border: 1px dashed var(--border); border-radius: 8px; padding: 32px 24px; max-width: 640px;
+}
+.empty h2 { margin-bottom: 8px; }
+.empty p { margin: 0; }
+
+@media (max-width: 600px) {
+  .field-form input[type="text"] { width: 100%; }
+  .field-form label:has(input[type="text"]) { flex: 1 1 100%; }
+  .field-form label:has(input[type="text"]) input { flex: 1; }
+}

@@ -1,93 +1,41 @@
-// SPHEREx Blink: static viewer (T11).
-// Reads only <data-root>/index.json, <data-root>/<id>/target.json and the frame images
-// (see docs/CONTRACTS.md). No build step, no live API calls.
+// SPHEREx Blink: page controller. Two ways to get data:
+//  - live (default): the Live API (docs/CONTRACTS.md v0.3) builds any RA/Dec field on request.
+//    ?ra=&dec=&size= in the page URL requests that field on load; ?api=<base> sets the API address.
+//  - offline (?data=<folder>): read a static targets folder with an index.json, no server needed
+//    (e.g. ?data=../fixtures/targets/). ?target=<id> picks a target there.
 //
-// Data root: ?data=<url> if given, otherwise the first of DATA_ROOTS that has an index.json.
-// `targets/` is what gets deployed; `../fixtures/targets/` is the dev fallback when the repo root
-// is served (python3 -m http.server, then open /web/).
+// Modules: api.js (Live API client), viewer.js (frames + blink), util.js (helpers).
 
-const DATA_ROOTS = ["targets/", "../fixtures/targets/"];
-const SCHEMA_VERSIONS = ["0.1", "0.2"]; // target.json versions this viewer understands
+import { DEFAULT_API, ApiError, health, requestField } from "./api.js";
+import { $, el, fmtElapsed } from "./util.js";
+import { checkTarget, clearTarget, initViewer, showTarget, stopBlink } from "./viewer.js";
 
-const state = {
-  root: null,
-  index: null,
-  target: null,
-  base: null,        // URL of the open target folder, ends with "/"
-  frames: [],        // sorted by mjd
-  imgs: new Map(),   // frame id -> <img>
-  broken: new Set(), // frame ids whose image failed to load
-  aId: null,
-  bId: null,
-  shownId: null,
-  playing: false,
-  intervalMs: 500,
-  timer: null,
-  loadToken: 0,
+const SIZE_MIN = 5;
+const SIZE_MAX = 60;
+const SIZE_DEFAULT = 15;
+const STEP_LABELS = {
+  query: "Searching IRSA for SPHEREx images",
+  download: "Downloading cutouts",
+  align: "Aligning frames",
+  render: "Rendering frames",
+  detect: "Looking for moving sources",
 };
 
-const $ = (sel) => document.querySelector(sel);
+const app = {
+  api: DEFAULT_API,
+  dataRoot: null,    // offline mode: folder with index.json
+  index: null,       // offline mode: parsed index.json
+  request: null,     // live mode: last {ra, dec, size} asked for
+  presets: [],
+  loadToken: 0,      // bumps on every new load; stale async results check it and bail out
+  abort: null,
+  jobStart: 0,
+  jobTimer: null,
+};
 
-function el(tag, props = {}, ...children) {
-  const node = document.createElement(tag);
-  for (const [k, v] of Object.entries(props)) {
-    if (v == null || v === false) continue;
-    if (k === "class") node.className = v;
-    else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
-    else node.setAttribute(k, v === true ? "" : v);
-  }
-  node.append(...children.flat().filter((c) => c != null && c !== false));
-  return node;
-}
-
-// ---------- loading ----------
-
-async function fetchJson(url) {
-  const res = await fetch(url, { cache: "no-cache" });
-  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
-  return res.json();
-}
-
-function withSlash(s) {
-  return s.endsWith("/") ? s : `${s}/`;
-}
-
-async function loadIndex() {
-  const param = new URLSearchParams(location.search).get("data");
-  const roots = param ? [withSlash(param)] : DATA_ROOTS;
-  const failures = [];
-  for (const root of roots) {
-    try {
-      const index = await fetchJson(`${root}index.json`);
-      if (!Array.isArray(index.targets)) throw new Error(`${root}index.json has no "targets" list`);
-      return { root, index };
-    } catch (err) {
-      failures.push(err.message);
-    }
-  }
-  throw new Error(
-    `No index.json found (${failures.join("; ")}). ` +
-      "Serve the repo root over HTTP (python3 -m http.server) and open /web/, " +
-      "or pass ?data=<folder with index.json>.",
-  );
-}
-
-// Light checks only; the full schema is docs/target.schema.json and is enforced upstream.
-function checkTarget(t, id) {
-  if (!t || !Array.isArray(t.frames) || t.frames.length === 0) {
-    throw new Error(`target "${id}" has no frames`);
-  }
-  const warnings = [];
-  if (!SCHEMA_VERSIONS.includes(t.schema_version)) {
-    warnings.push(`schema_version is ${JSON.stringify(t.schema_version)}, this viewer knows ${SCHEMA_VERSIONS.join(", ")}.`);
-  }
-  if (t.id !== id) warnings.push(`target.json id "${t.id}" differs from its folder "${id}".`);
-  if (typeof t.synthetic !== "boolean") warnings.push("target.json has no synthetic flag; treating it as synthetic.");
-  if (!t.image?.width || !t.image?.height) warnings.push("target.json has no image size; assuming square frames.");
-  return warnings;
-}
-
-const isSynthetic = (t) => t.synthetic !== false; // missing flag counts as synthetic
+const params = () => new URLSearchParams(location.search);
+const withSlash = (s) => (s.endsWith("/") ? s : `${s}/`);
+const clampSize = (n) => Math.min(SIZE_MAX, Math.max(SIZE_MIN, Math.round(n)));
 
 // ---------- messages ----------
 
@@ -99,297 +47,280 @@ function clearMessages() {
   $("#messages").replaceChildren();
 }
 
-// ---------- formatting ----------
-
-function fmtTime(iso) {
-  if (!iso) return "–";
-  return iso.replace("T", " ").replace(/\.\d+/, "").replace(/Z$/, " UTC");
+function showLoadError(err) {
+  if (!(err instanceof ApiError)) return showMessage(err.message);
+  if (err.kind === "unreachable") {
+    showMessage(`${err.message} Start it with "python -m server --fixture" (see web/README.md), or open this page with ?api=<url>.`);
+  } else if (err.kind === "bad_request") {
+    showMessage(`Can't use these coordinates: ${err.message}`);
+  } else if (err.kind === "no_data") {
+    showMessage(`No SPHEREx images here: ${err.message}`, "warn");
+  } else {
+    showMessage(`Building the field failed: ${err.message}`);
+  }
 }
 
-function fmtNum(v, digits) {
-  return typeof v === "number" && Number.isFinite(v) ? v.toFixed(digits) : "–";
+// ---------- loading (shared) ----------
+
+/** Start a new load: cancels the previous one. Returns its token + abort signal. */
+function beginLoad() {
+  app.abort?.abort();
+  app.abort = new AbortController();
+  clearMessages();
+  return { token: ++app.loadToken, signal: app.abort.signal };
 }
 
-function fmtDuration(days) {
-  const d = Math.abs(days);
-  const h = d * 24;
-  if (h < 1) return `${Math.round(h * 60)} min`;
-  if (h < 48) return `${h.toFixed(1)} h`;
-  return `${d.toFixed(1)} d`;
+async function fetchJson(url, signal) {
+  const res = await fetch(url, { signal, cache: "no-cache" });
+  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+  return res.json();
 }
 
-const frameById = (id) => state.frames.find((f) => f.id === id);
-const safeUrl = (u) => (typeof u === "string" && /^https?:\/\//i.test(u) ? u : null);
+async function openTarget(targetUrl, expectedId, token, signal) {
+  const target = await fetchJson(targetUrl, signal);
+  if (token !== app.loadToken) return;
+  const warnings = checkTarget(target, expectedId);
+  showTarget(target, targetUrl);
+  warnings.forEach((w) => showMessage(w, "warn"));
+}
 
-// ---------- target picker ----------
+// ---------- live mode ----------
 
-function renderPicker() {
+function readForm() {
+  const f = $("#field-form");
+  return { ra: f.ra.value.trim(), dec: f.dec.value.trim(), size: clampSize(Number(f.size.value) || SIZE_DEFAULT) };
+}
+
+function fillForm(req) {
+  const f = $("#field-form");
+  f.ra.value = req.ra;
+  f.dec.value = req.dec;
+  f.size.value = String(req.size);
+  const i = app.presets.findIndex((p) => String(p.ra_deg) === req.ra && String(p.dec_deg) === req.dec);
+  $("#preset").value = i >= 0 ? String(i) : "";
+}
+
+function setPageUrl(req, push) {
+  const url = new URL(location.href);
+  url.searchParams.set("ra", req.ra);
+  url.searchParams.set("dec", req.dec);
+  url.searchParams.set("size", String(req.size));
+  if (url.href === location.href) return;
+  if (push) history.pushState(null, "", url);
+  else history.replaceState(null, "", url);
+}
+
+/** Request what the page URL asks for (?ra=&dec=&size=). Returns false if it asks for nothing. */
+function loadFromUrl() {
+  const p = params();
+  const ra = p.get("ra")?.trim();
+  const dec = p.get("dec")?.trim();
+  if (!ra || !dec) return false;
+  const req = { ra, dec, size: clampSize(Number(p.get("size")) || SIZE_DEFAULT) };
+  fillForm(req);
+  loadField(req);
+  return true;
+}
+
+async function loadField(req) {
+  const { token, signal } = beginLoad();
+  stopBlink();
+  app.request = req;
+  try {
+    const onProgress = (progress, id) => { if (token === app.loadToken) showJob(req, progress, id); };
+    const { id, targetUrl } = await requestField(app.api, req, { onProgress, signal });
+    if (token !== app.loadToken) return;
+    await openTarget(targetUrl, id, token, signal);
+  } catch (err) {
+    if (err.name === "AbortError" || token !== app.loadToken) return;
+    showLoadError(err);
+  } finally {
+    if (token === app.loadToken) hideJob();
+  }
+}
+
+function showJob(req, progress = {}, id = null) {
+  const job = $("#job");
+  if (job.hidden) {
+    job.hidden = false;
+    app.jobStart = Date.now();
+    clearInterval(app.jobTimer);
+    app.jobTimer = setInterval(tickJob, 1000);
+    tickJob();
+  }
+  $("#job-title").textContent = `${STEP_LABELS[progress.step] ?? "Building field"}…`;
+  const bar = $("#job-progress");
+  const counted = Number.isFinite(progress.done) && Number.isFinite(progress.total) && progress.total > 0;
+  if (counted) {
+    bar.max = progress.total;
+    bar.value = progress.done;
+  } else {
+    bar.removeAttribute("value"); // indeterminate
+  }
+  $("#job-message").textContent = [
+    `RA ${req.ra}, Dec ${req.dec}, ${req.size}′`,
+    counted ? `${progress.done} / ${progress.total}` : null,
+    progress.message,
+    id,
+  ].filter(Boolean).join(" · ");
+}
+
+function tickJob() {
+  $("#job-elapsed").textContent = fmtElapsed(Date.now() - app.jobStart);
+}
+
+function hideJob() {
+  $("#job").hidden = true;
+  clearInterval(app.jobTimer);
+  app.jobTimer = null;
+}
+
+async function loadPresets() {
+  let fields = [];
+  try {
+    fields = (await fetchJson("presets.json")).fields ?? [];
+  } catch {
+    return; // quick picks are optional
+  }
+  app.presets = fields;
+  const select = $("#preset");
+  select.append(...fields.map((f, i) => el("option", { value: String(i), title: f.kind ?? "" }, f.name)));
+  select.hidden = fields.length === 0;
+}
+
+function onPresetPicked() {
+  const f = app.presets[Number($("#preset").value)];
+  if (!f) return;
+  const req = { ra: String(f.ra_deg), dec: String(f.dec_deg), size: clampSize(f.size_arcmin ?? SIZE_DEFAULT) };
+  fillForm(req);
+  setPageUrl(req, true);
+  loadField(req);
+}
+
+async function showApiStatus(fieldRequested) {
+  const h = await health(app.api);
+  const info = $("#source-info");
+  if (h) {
+    const mode = h.mode === "fixture" ? "fixture mode: every field is the synthetic demo" : "live SPHEREx data";
+    info.textContent = `Live API ${app.api} · ${mode}`;
+  } else {
+    info.textContent = `Live API ${app.api} · not reachable`;
+    if (!fieldRequested) {
+      showMessage(`The Live API at ${app.api} is not reachable. Start it with "python -m server --fixture" (see web/README.md), or open this page with ?api=<url>.`, "warn");
+    }
+  }
+}
+
+// ---------- offline mode ----------
+
+async function startOffline(root) {
+  app.dataRoot = new URL(withSlash(root), location.href).href;
+  $("#field-form").hidden = true;
+  $("#btn-rebuild").hidden = true;
+  $("#picker").hidden = false;
+  $("#source-info").textContent = `Offline mode · reading ${new URL(app.dataRoot).pathname}`;
+  try {
+    app.index = await fetchJson(`${app.dataRoot}index.json`);
+    if (!Array.isArray(app.index.targets) || app.index.targets.length === 0) {
+      throw new Error(`${app.dataRoot}index.json lists no targets.`);
+    }
+  } catch (err) {
+    showMessage(`${err.message} Check the ?data= folder.`);
+    return;
+  }
   const select = $("#target-select");
   select.replaceChildren(
-    ...state.index.targets.map((t) => {
+    ...app.index.targets.map((t) => {
       const name = t.name ?? t.id;
       const tag = t.synthetic !== false && !/synthetic/i.test(name) ? " (synthetic)" : "";
       return el("option", { value: t.id }, name + tag);
     }),
   );
-  select.disabled = state.index.targets.length < 2;
+  select.disabled = app.index.targets.length < 2;
+  await openOfflineFromUrl();
 }
 
-async function openTarget(id) {
-  const token = ++state.loadToken;
-  stopBlink();
-  clearMessages();
+async function openOfflineFromUrl() {
+  const wanted = params().get("target");
+  const t = app.index.targets.find((x) => x.id === wanted) ?? app.index.targets[0];
+  await openOffline(t.id);
+  if (wanted && t.id !== wanted) showMessage(`Target "${wanted}" not found, showing "${t.id}".`, "warn");
+}
+
+async function openOffline(id) {
+  const { token, signal } = beginLoad();
   $("#target-select").value = id;
-  $("#target-name").textContent = "Loading…";
-
-  const base = `${state.root}${encodeURIComponent(id)}/`;
-  const target = await fetchJson(`${base}target.json`);
-  if (token !== state.loadToken) return; // a newer target was picked meanwhile
-  const warnings = checkTarget(target, id);
-
-  state.target = target;
-  state.base = base;
-  state.frames = [...target.frames].sort((a, b) => a.mjd - b.mjd);
-  state.broken = new Set();
-  [state.aId, state.bId] = defaultPair(state.frames);
-
-  const url = new URL(location.href);
-  url.searchParams.set("target", id);
-  history.replaceState(null, "", url);
-
-  warnings.forEach((w) => showMessage(w, "warn"));
-  renderTargetHead();
-  renderStage();
-  renderFrameTable();
-  renderProvenance();
-  show(state.aId);
-}
-
-// A = first frame; B = first frame of a later epoch, else the last frame.
-function defaultPair(frames) {
-  const a = frames[0];
-  const b = frames.find((f) => f.epoch !== a.epoch) ?? frames[frames.length - 1];
-  return [a.id, b.id];
-}
-
-// ---------- rendering ----------
-
-function renderTargetHead() {
-  const t = state.target;
-  const synthetic = isSynthetic(t);
-  document.title = `${t.name ?? t.id} · SPHEREx Blink`;
-  $("#target-name").textContent = t.name ?? t.id;
-  const epochs = new Set(state.frames.map((f) => f.epoch)).size;
-  $("#target-meta").textContent = [
-    `RA ${fmtNum(t.center?.ra_deg, 4)}°, Dec ${fmtNum(t.center?.dec_deg, 4)}°`,
-    `${fmtNum(t.size_arcmin, 1)}′ field`,
-    `${state.frames.length} frames, ${epochs} epoch${epochs === 1 ? "" : "s"}`,
-  ].join(" · ");
-  $("#synthetic-badge").hidden = !synthetic;
-  $("#stage-watermark").hidden = !synthetic;
-  $("#frame-count").textContent = `(${state.frames.length})`;
-}
-
-function renderStage() {
-  const { width = 1, height = 1 } = state.target.image ?? {};
-  $("#stage").style.setProperty("--ar", `${width} / ${height}`);
-  // Pixel (0,0) is the centre of the top-left pixel (CONTRACTS), so the overlay viewBox starts at -0.5.
-  const overlay = $("#overlay");
-  overlay.setAttribute("viewBox", `-0.5 -0.5 ${width} ${height}`);
-  overlay.setAttribute("preserveAspectRatio", "none");
-  overlay.replaceChildren();
-
-  // All frames stacked and preloaded; blinking only toggles visibility, so there is no flicker.
-  state.imgs = new Map();
-  const imgs = state.frames.map((f) => {
-    const img = el("img", { src: `${state.base}${f.image}`, alt: `Frame ${f.id}`, draggable: "false" });
-    img.addEventListener("error", () => {
-      state.broken.add(f.id);
-      document.querySelector(`tr[data-frame="${CSS.escape(f.id)}"]`)?.classList.add("broken");
-      if (state.shownId === f.id) updateStageError();
-    });
-    state.imgs.set(f.id, img);
-    return img;
-  });
-  $("#frame-stack").replaceChildren(...imgs);
-}
-
-function renderFrameTable() {
-  const rows = state.frames.map((f) => {
-    const radio = (slot) =>
-      el("input", {
-        type: "radio",
-        name: `slot-${slot}`,
-        value: f.id,
-        "aria-label": `Use ${f.id} as ${slot.toUpperCase()}`,
-        checked: (slot === "a" ? state.aId : state.bId) === f.id,
-        onchange: () => setSlot(slot, f.id),
-      });
-    const row = el(
-      "tr",
-      { "data-frame": f.id, onclick: (e) => { if (e.target.tagName !== "INPUT") { stopBlink(); show(f.id); } } },
-      el("td", {}, radio("a")),
-      el("td", {}, radio("b")),
-      el("td", {}, f.id),
-      el("td", { title: fmtTime(f.time_utc) }, fmtTime(f.time_utc).slice(0, 16)),
-      el("td", {}, String(f.epoch ?? "–")),
-      el("td", {}, fmtNum(f.wavelength_um, 2)),
-      el("td", {}, f.detector == null ? "–" : `D${f.detector}`),
-    );
-    return row;
-  });
-  $("#frame-table tbody").replaceChildren(...rows);
-}
-
-function renderProvenance() {
-  const items = (state.target.provenance ?? []).map((p) =>
-    el("li", {}, el("strong", {}, p.service ?? "?"), ` · ${fmtTime(p.retrieved_utc)}`, el("br"), el("code", {}, p.query ?? "")),
-  );
-  $("#provenance-list").replaceChildren(...(items.length ? items : [el("li", { class: "muted" }, "none recorded")]));
-}
-
-function renderFrameInfo(f) {
-  const a = frameById(state.aId);
-  const b = frameById(state.bId);
-  const src = safeUrl(f.source_url);
-  const rows = [
-    ["Frame", f.id],
-    ["Time", fmtTime(f.time_utc)],
-    ["MJD", fmtNum(f.mjd, 5)],
-    ["Epoch", String(f.epoch ?? "–")],
-    ["Wavelength", `${fmtNum(f.wavelength_um, 3)} µm (at centre)`],
-    ["Detector", f.detector == null ? "–" : `D${f.detector}`],
-    ["Obs ID", f.obs_id ?? "–"],
-    ["Source", src ? el("a", { href: src, target: "_blank", rel: "noopener" }, "FITS") : "–"],
-    ["A ↔ B", a && b ? `${fmtDuration(b.mjd - a.mjd)} apart, Δλ ${fmtNum(Math.abs(b.wavelength_um - a.wavelength_um), 3)} µm` : "–"],
-  ];
-  $("#frame-info").replaceChildren(...rows.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)]));
-}
-
-function updateStageError() {
-  const box = $("#stage-error");
-  const broken = state.broken.has(state.shownId);
-  box.hidden = !broken;
-  if (broken) box.textContent = `Image for frame ${state.shownId} failed to load: ${frameById(state.shownId)?.image}`;
-}
-
-// ---------- state changes ----------
-
-function show(id) {
-  const f = frameById(id);
-  if (!f) return;
-  state.shownId = id;
-  for (const [fid, img] of state.imgs) img.classList.toggle("shown", fid === id);
-
-  const slot = id === state.aId ? "A" : id === state.bId ? "B" : null;
-  const label = $("#stage-label");
-  label.className = `stage-label${slot ? ` is-${slot.toLowerCase()}` : ""}`;
-  label.textContent = [slot, f.id, `epoch ${f.epoch}`, `${fmtNum(f.wavelength_um, 2)} µm`, fmtTime(f.time_utc)]
-    .filter(Boolean)
-    .join(" · ");
-
-  $("#btn-a").classList.toggle("active", slot === "A");
-  $("#btn-b").classList.toggle("active", slot === "B");
-  for (const tr of document.querySelectorAll("#frame-table tbody tr")) {
-    tr.classList.toggle("shown", tr.dataset.frame === id);
+  try {
+    await openTarget(new URL(`${encodeURIComponent(id)}/target.json`, app.dataRoot).href, id, token, signal);
+    const url = new URL(location.href);
+    url.searchParams.set("target", id);
+    history.replaceState(null, "", url);
+  } catch (err) {
+    if (err.name !== "AbortError" && token === app.loadToken) showMessage(err.message);
   }
-  document.querySelector(`tr[data-frame="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "nearest" });
-  renderFrameInfo(f);
-  updateStageError();
-}
-
-function setSlot(slot, id) {
-  if (slot === "a") state.aId = id;
-  else state.bId = id;
-  if (!state.playing) show(id);
-  else renderFrameInfo(frameById(state.shownId));
-}
-
-function flip() {
-  show(state.shownId === state.aId ? state.bId : state.aId);
-}
-
-function startBlink() {
-  if (state.playing || !state.target) return;
-  state.playing = true;
-  if (state.shownId !== state.aId && state.shownId !== state.bId) show(state.aId);
-  state.timer = setInterval(flip, state.intervalMs);
-  updatePlayButton();
-}
-
-function stopBlink() {
-  state.playing = false;
-  clearInterval(state.timer);
-  state.timer = null;
-  updatePlayButton();
-}
-
-function updatePlayButton() {
-  const btn = $("#btn-play");
-  btn.setAttribute("aria-pressed", String(state.playing));
-  btn.textContent = state.playing ? "❚❚ Pause" : "▶ Blink";
-}
-
-function step(delta) {
-  stopBlink();
-  const i = state.frames.findIndex((f) => f.id === state.shownId);
-  const next = Math.min(state.frames.length - 1, Math.max(0, i + delta));
-  show(state.frames[next].id);
 }
 
 // ---------- wiring ----------
 
-function bindControls() {
-  $("#btn-a").addEventListener("click", () => { stopBlink(); show(state.aId); });
-  $("#btn-b").addEventListener("click", () => { stopBlink(); show(state.bId); });
-  $("#btn-play").addEventListener("click", () => (state.playing ? stopBlink() : startBlink()));
+function bindPage() {
+  $("#field-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const req = readForm();
+    if (!req.ra || !req.dec) return;
+    fillForm(req);
+    setPageUrl(req, true);
+    loadField(req);
+  });
+  $("#preset").addEventListener("change", onPresetPicked);
+  $("#target-select").addEventListener("change", (e) => openOffline(e.target.value));
 
-  const speed = $("#speed");
-  const onSpeed = () => {
-    state.intervalMs = Number(speed.value);
-    $("#speed-out").textContent = `${state.intervalMs} ms`;
-    if (state.playing) {
-      clearInterval(state.timer);
-      state.timer = setInterval(flip, state.intervalMs);
-    }
-  };
-  speed.addEventListener("input", onSpeed);
-  onSpeed();
-
-  $("#target-select").addEventListener("change", (e) => {
-    openTarget(e.target.value).catch((err) => showMessage(err.message));
+  $("#job-cancel").addEventListener("click", () => {
+    app.abort?.abort();
+    hideJob();
+    showMessage("Stopped waiting. The server keeps building this field; ask again later and it comes from the cache.", "warn");
   });
 
-  document.addEventListener("keydown", (e) => {
-    if (!state.target || e.altKey || e.ctrlKey || e.metaKey) return;
-    if (e.target.closest?.("input, select, textarea, button")) {
-      // let form controls keep their own keys (arrows in the slider, Space on buttons)
-      if (e.key === " " || e.key.startsWith("Arrow")) return;
+  $("#btn-rebuild").addEventListener("click", () => {
+    if (!app.request) return;
+    if (!confirm("Rebuild this field from IRSA to pick up new SPHEREx data? This can take a few minutes.")) return;
+    loadField({ ...app.request, refresh: true });
+  });
+
+  $("#btn-copy").addEventListener("click", async () => {
+    const btn = $("#btn-copy");
+    try {
+      await navigator.clipboard.writeText(location.href);
+      btn.textContent = "Copied ✓";
+      setTimeout(() => { btn.textContent = "Copy link"; }, 1500);
+    } catch {
+      prompt("Copy this link:", location.href);
     }
-    if (e.key === " ") { e.preventDefault(); state.playing ? stopBlink() : startBlink(); }
-    else if (e.key === "x" || e.key === "X") { stopBlink(); flip(); }
-    else if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
-    else if (e.key === "ArrowRight") { e.preventDefault(); step(1); }
+  });
+
+  window.addEventListener("popstate", () => {
+    if (app.dataRoot) {
+      if (app.index) openOfflineFromUrl();
+    } else if (!loadFromUrl()) {
+      app.abort?.abort();
+      hideJob();
+      clearMessages();
+      clearTarget();
+    }
   });
 }
 
 async function main() {
-  bindControls();
-  try {
-    const { root, index } = await loadIndex();
-    state.root = root;
-    state.index = index;
-    $("#data-root").textContent = new URL(root, location.href).pathname;
-    if (index.targets.length === 0) throw new Error(`${root}index.json lists no targets.`);
-    renderPicker();
-    const wanted = new URLSearchParams(location.search).get("target");
-    const first = index.targets.find((t) => t.id === wanted) ?? index.targets[0];
-    await openTarget(first.id);
-    if (wanted && first.id !== wanted) showMessage(`Target "${wanted}" not found, showing "${first.id}".`, "warn");
-  } catch (err) {
-    $("#target-name").textContent = "Could not load data";
-    showMessage(err.message);
+  initViewer();
+  bindPage();
+  const p = params();
+  if (p.get("api")) app.api = p.get("api");
+  if (p.get("data")) {
+    await startOffline(p.get("data"));
+    return;
   }
+  await loadPresets();
+  const requested = loadFromUrl();
+  await showApiStatus(requested);
 }
 
 main();
