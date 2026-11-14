@@ -152,7 +152,8 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
 
         if s3.s3_url(url) is None or not url.endswith(".fits") or ".." in url:
             raise HTTPException(400, "url must be an IRSA SPHEREx level-2 image")
-        if not (0 < size <= 2.0) or not (-90 <= dec <= 90) or not (0 <= ra < 360):
+        # size: the cutout side the build asks for, field x 1.5 for rotation (5.26 deg at the API's 210')
+        if not (0 < size <= 6.0) or not (-90 <= dec <= 90) or not (0 <= ra < 360):
             raise HTTPException(400, "bad ra/dec/size")
         key = hashlib.sha1(f"{url}|{ra:.7f}|{dec:.7f}|{size:.4f}".encode()).hexdigest()
         gz = cut_root / key[:2] / f"{key}.fits.gz"

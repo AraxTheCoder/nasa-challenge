@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import re
 
-SIZE_MIN, SIZE_MAX, SIZE_DEFAULT = 5, 60, 15
+# SIZE_MAX: one SPHEREx detector image is 2040 px x 6.15" = 3.49 deg (209'); a larger field never fits
+# into a single exposure. (Was 60' with no stated reason, from when cutouts came from IRSA's slow
+# cutout service; changed 2026-11-14, see TEAM.md Decisions.) Larger fields still build slower.
+SIZE_MIN, SIZE_MAX, SIZE_DEFAULT = 5, 210, 15
 
 _SEP = re.compile(r"[hdms:°'\"′″\s]+", re.IGNORECASE)
 

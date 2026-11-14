@@ -291,7 +291,8 @@ GET /api/target?ra=<ra>&dec=<dec>&size=<arcmin>[&refresh=1]
 
 - `ra`, `dec`: decimal degrees (`133.795`, `-7.245`) or sexagesimal (`08h55m10.831s`,
   `-7d14m42.53s`, `08:55:10.831`, `-07:14:42.53`). ICRS.
-- `size`: side of the square field in arcmin, default `15`, allowed `5`–`60`. Larger = slower.
+- `size`: side of the square field in arcmin, default `15`, allowed `5`–`210` (210′ ≈ one SPHEREx
+  detector image, 2040 px × 6.15″; was `5`–`60` until 2026-11-14, see TEAM.md Decisions). Larger = slower.
 - `refresh=1`: ignore the cache and rebuild (to pick up a new data release).
 
 Responses:

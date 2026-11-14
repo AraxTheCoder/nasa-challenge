@@ -30,8 +30,12 @@ def test_parse_dec_and_size_limits():
     with pytest.raises(CoordError):
         parse_dec("91")
     assert parse_size(None) == 15
+    assert parse_size("120") == 120             # up to one SPHEREx detector (3.49 deg) since 2026-11-14
+    assert parse_size("210") == 210
     with pytest.raises(CoordError):
-        parse_size("120")
+        parse_size("211")
+    with pytest.raises(CoordError):
+        parse_size("4")
 
 
 def test_target_id():

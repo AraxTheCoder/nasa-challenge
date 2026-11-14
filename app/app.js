@@ -17,7 +17,7 @@ import { parseDec, parseRa } from "./coords.js";
 import { initCursorPin, isPicking, pinAt, setPicking } from "./cursorpin.js";   // T55: 📍 marker + pick mode
 
 const SIZE_MIN = 5;
-const SIZE_MAX = 60;
+const SIZE_MAX = 210;   // API limit = one SPHEREx detector (3.49 deg), server/coords.py
 const SIZE_DEFAULT = 15;
 const STEP_LABELS = {
   query: "Searching IRSA for SPHEREx images",
@@ -389,7 +389,7 @@ async function showEpochLayers(target) {
 }
 
 /** How much the map shows, and the field Blink would build from it (the mouse position is in the 📍 pill). */
-/** Side of the square field Blink builds: covers the whole view (its longer side), within the API's 5–60′. */
+/** Side of the square field Blink builds: covers the whole view (its longer side), within the API's 5–210′. */
 const blinkSize = (v) => clampSize(Math.ceil(Math.max(v.fovArcmin, v.heightArcmin)));
 
 /** How much the map shows, and the field Blink would build from it (the mouse position is in the 📍 pill). */
@@ -419,7 +419,7 @@ function setupBand(layer) {
 }
 
 async function startExplore() {
-  // T55: Blink builds what is on screen (a square over the whole view, up to the API's 60′) and the
+  // T55: Blink builds what is on screen (a square over the whole view, up to the API's 210′) and the
   // red outline marks exactly that part of the view, so after moving around during the build you find it again
   $("#explore-blink").addEventListener("click", () => {
     const v = explore.view();

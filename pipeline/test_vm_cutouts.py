@@ -97,7 +97,7 @@ def test_cutout_route_rejects_other_urls(tmp_path):
     c = TestClient(create_app(tmp_path, prefetch=False))
     for url in ("https://example.org/a.fits", URL.replace(".fits", ".txt"), URL.replace("/1/", "/../")):
         assert c.get("/cutout", params={"url": url, "ra": 1, "dec": 2, "size": 0.4}).status_code == 400
-    assert c.get("/cutout", params={"url": URL, "ra": 1, "dec": 2, "size": 5}).status_code == 400
+    assert c.get("/cutout", params={"url": URL, "ra": 1, "dec": 2, "size": 7}).status_code == 400
 
 
 def test_gzip_answer_is_the_fits_file(vm):

@@ -228,6 +228,10 @@ Dated, one line each, with why.
   `?frames=1` (also offline `?data=` and `?explore=0`, which the CI browser test uses). Why: two images of the
   same sky confused; the map has the field's epochs, traces, names and click-for-spectrum. Jonathan moves
   this to `/app/` later.
+- 2026-11-14 Jonathan: Field size limit of the Live API raised from 60′ to 210′ (CONTRACTS `size`).
+  Why: the 60′ had no stated reason (set in T18 when cutouts came from IRSA's slow cutout service);
+  210′ is the real bound, one SPHEREx detector image (2040 px × 6.15″ = 3.49°). Larger fields build
+  slower. The team VM's /cutout accepts up to 6° cutouts. `web/` keeps its own 60′ form limit.
 
 ## Ideas
 
@@ -656,3 +660,5 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   `/api/sky/spherex-live-p<n>`). [to Jonathan] tilegen/skycache/sky.js/explore.js touched (pass_ parameter,
   pass layers, addOverlays, overlays follow the band); the VM needs a redeploy before it can render pass tiles,
   until then the Live API renders them locally. `/app/`: same events (`viewer:frame`, `viewer:diff`) if you port it.
+- 2026-11-14 Jonathan (Claude): API field size limit 60′ → 210′ (one SPHEREx detector), CONTRACTS + Decision;
+  VM /cutout up to 6°; `app/` Blink can build the whole visible view up to 210′. `web/` unchanged (form max 60).
