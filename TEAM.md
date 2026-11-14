@@ -242,6 +242,22 @@ Ideas are numbered (I1, I2, …) to refer to them; numbers stay fixed, a new ide
   (b) PSF-matched difference images (ZOGY, Fourier-based optimal subtraction) instead of the plain A − B, so
   fewer star residuals and false detections. For T06 / the survey (T73–T77) and the difference view (T43).
   (from the Fourier-analysis discussion, 2026-11-14) — status: new
+- I23 [Mati] **Expected vs. measured spectrum, one-field pilot** (Mati's outlier method, see T75 notes): for every
+  catalogue star in one field (RW Aur or Eps Ind B), predict its 0.75–5 µm spectrum from Gaia + 2MASS + WISE,
+  measure it (T49), score how far peaks, dips and the overall level deviate (rules: calibrated boundaries,
+  consistent outliers only), colour each star by its score in the viewer, list the top outliers. RW Aur should
+  come out red (disk excess), nearly everything else blue. Proves the method before the survey (T75/T76) uses it
+  per tile. C + a bit of A, ~2 h.
+  (from the outlier-heatmap discussion, 2026-11-14) — status: new
+- I24 [Mati] **Dimming: is the whole curve lower than expected?** A star fainter at all wavelengths in one visit
+  than in its other visits can mean something passed in front of it: a planet (transit), a companion star
+  (eclipse) or a dust cloud. Compare with the star's *own* other visits, not the catalogue (calibration ~10 %).
+  The colour of the dip tells the cause: a planet dims all wavelengths about equally, dust dims short
+  wavelengths more. Realistic: deep eclipses (binaries, giant planets around small stars, a few %+); Earth-like
+  transits (0.01 %) are far too shallow. Validation: known transiting planets / eclipsing binaries with
+  ephemerides (NASA Exoplanet Archive, VSX): predict which SPHEREx exposures fall in transit (a hot Jupiter is
+  in transit ~3–4 % of the time, so ~5 of the ~170 exposure times per spot) and check the dip is there.
+  (from the outlier-heatmap discussion, 2026-11-14) — status: new
 
 ## Questions / Blockers
 
@@ -611,3 +627,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Jonathan (Claude): T55 step 8 (`app/` only): pin held at its head, RA/Dec in two lines beside it;
   Go centres + zooms to order 7; epochs merged into the band panel. `web/` unchanged.
 - 2026-11-14 Mati (Claude): Mati's outlier method (expected spectral profile per source → measured vs expected → heatmap of outliers) written into T75 (Notes from others) with two rules: boundaries calibrated per tile from the data, and only consistent outliers count. Pointer in T76. Joerg: please read before the scoring step.
+- 2026-11-14 Mati (Claude): ideas I23 (one-field pilot of the expected-vs-measured spectrum method) and I24 (dimming: transits, eclipses, dust; validate on known transiting planets) added on Mati's request.
