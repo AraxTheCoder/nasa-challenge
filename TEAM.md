@@ -95,7 +95,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T55 | C: UI redesign under `/app/` (copy of `web/`); `web/` and `/web/` stay as they are for all other work | Jonathan | doing | `main` | [tasks/T55](tasks/T55-app-ui.md). UI work only; everyone else keeps working in `web/` |
 | T57 | A: Faster "Show": the US VM (tilegen, `us-east4`) reads + cuts the SPHEREx images next to the bucket and sends only the small cutout FITS (gzip); build/photometry/caches stay local; fallback S3, then IRSA | Jonathan | done | `jonathan/T57-vm-cutouts` | [tasks/T57](tasks/T57-vm-cutouts.md). Fresh 15' field: 52.8 s → 19.9 s. Default on; `--cutouts-remote none` turns it off |
 | T58 | All: Limits before a public deploy: rate limit per IP, cap on concurrent builds, `refresh=1` only with a token, cache size cap with eviction (idea I1) | | open | | [tasks/T58](tasks/T58-public-limits.md). Server side, ~1 h. Suggested owner: Jonathan (server). |
-| T59 | A/C: Per-detector co-adds per epoch: mean/median of the aligned frames per detector and epoch as extra frames, for faint red sources (idea I3) | | open | | [tasks/T59](tasks/T59-coadds.md). A ~2 h + C ~0.5 h. Works best together with T66 (more frames per field). |
+| T59 | A/C: Per-detector co-adds per epoch: mean/median of the aligned frames per detector and epoch as extra frames, for faint red sources (idea I3) | Mati | doing | `mati/T59-stacks` | [tasks/T59](tasks/T59-coadds.md). A ~2 h + C ~0.5 h. Works best together with T66 (more frames per field). |
 | T60 | A/C: Contamination flags in the viewer: per-frame FLAGS bits exported with the frame, overlay toggle, flag names at the inspected pixel (idea I5) | | open | | [tasks/T60](tasks/T60-contamination-flags.md). A ~1.5 h + C ~1 h. |
 | T61 | B: Appear / disappear / brightness change between epochs, not only motion: sources present in one epoch and not another, or much brighter / fainter (idea I6a) | | open | | [tasks/T61](tasks/T61-appear-vanish-brighten.md). Needs T06 source extraction. |
 | T62 | B/C: Candidate ranking + a dedicated candidate list in the viewer: motion significance, consistency across frames, catalogue match, artifact probability from FLAGS (idea I6c) | | open | | [tasks/T62](tasks/T62-candidate-list.md). Partly done: score + reason per detection (T08), unknown first in the objects panel (T13). |
@@ -116,6 +116,9 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T77 | B: (merged into T74/T75, the same survey; measured scope + per-band plan moved to tasks/T74 Notes) | Joerg | done | | [tasks/T77](tasks/T77-sky-survey-hpc.md) |
 | T78 | C: Type an exact wavelength: a µm input next to the sky map's band slider (snaps to the nearest of the 102 channels, shows its exact centre) and "frames at λ" in the blink viewer (A/B = the frames nearest that wavelength in two epochs) | Mati | done | `mati/T78-wavelength-input` | [tasks/T78](tasks/T78-wavelength-input.md). Mati's request; needs porting to `app/` (T55) |
 | T79 | C: Click to measure: a plain click on the frame image measures that star (no "Measure a star" mode needed); a click anywhere on the explore map gives the spectrum + light curve of that sky point from all exposures, field or not (`GET /api/photometry?ra=&dec=`) | Joerg | done | `joerg/T79-click-spectrum` | [tasks/T79](tasks/T79-click-spectrum.md). Joerg: "nothing happens if I click on a pixel". `/app/` (T55): note for Jonathan |
+| T80 | C: Map only in `/web/`: the explore map is the one view of the sky; frame image, blink controls, wavelength filter, timeline and frame panels hidden (still in the code: `?frames=1`, offline `?data=`, `?explore=0`); spectra via map clicks (T79) | Joerg | done | `joerg/T80-map-only` | Joerg: "why are there two maps, let's only have the navigator". `/app/` migration later (Jonathan, T55) |
+| T81 | C: Frame viewer features in the map: single frames and A − B as field layers (`/api/hips/<id>/f<frame>`, `/d<a>-<b>`), the viewer's A/B, blink, play, λ filter and timeline drive the map | Joerg | doing | `joerg/T81-map-frames` | [tasks/T81](tasks/T81-map-frames.md). Touches server/hips.py + web/explore.js (Jonathan's map) |
+| T82 | A/C: Blink survey passes anywhere on the map: live tiles per 6-month pass (`spherex-live-p<n>`), "Blink passes" when zoomed in, not only inside a built field | Joerg | doing | `joerg/T81-map-frames` | [tasks/T82](tasks/T82-blink-passes.md). Touches tilegen + skycache (Jonathan); the US VM needs a redeploy for pass tiles, local until then |
 
 ## Decisions
 
@@ -221,6 +224,11 @@ Dated, one line each, with why.
   for `python -m server` / `web/dev.py`. Why: a new field took ~45-53 s, ~35 s of it pulling whole
   detector rows over the Atlantic; via the VM 19.9 s. Supersedes "only tiles run on the VM" (T47).
 
+- 2026-11-14 [Joerg] `/web/` shows only the explore map by default (T80); the frame viewer stays behind
+  `?frames=1` (also offline `?data=` and `?explore=0`, which the CI browser test uses). Why: two images of the
+  same sky confused; the map has the field's epochs, traces, names and click-for-spectrum. Jonathan moves
+  this to `/app/` later.
+
 ## Ideas
 
 Format: `[name] idea — status: new`. Agents don't act on an idea until a human moves it to the Board.
@@ -242,6 +250,27 @@ Ideas are numbered (I1, I2, …) to refer to them; numbers stay fixed, a new ide
   (b) PSF-matched difference images (ZOGY, Fourier-based optimal subtraction) instead of the plain A − B, so
   fewer star residuals and false detections. For T06 / the survey (T73–T77) and the difference view (T43).
   (from the Fourier-analysis discussion, 2026-11-14) — status: new
+- I23 [Mati] **Expected vs. measured spectrum, one-field pilot** (Mati's outlier method, see T75 notes): for every
+  catalogue star in one field (RW Aur or Eps Ind B), predict its 0.75–5 µm spectrum from Gaia + 2MASS + WISE,
+  measure it (T49), score how far peaks, dips and the overall level deviate (rules: calibrated boundaries,
+  consistent outliers only), colour each star by its score in the viewer, list the top outliers. RW Aur should
+  come out red (disk excess), nearly everything else blue. Proves the method before the survey (T75/T76) uses it
+  per tile. C + a bit of A, ~2 h.
+  (from the outlier-heatmap discussion, 2026-11-14) — status: new
+- I24 [Mati] **Dimming: is the whole curve lower than expected?** A star fainter at all wavelengths in one visit
+  than in its other visits can mean something passed in front of it: a planet (transit), a companion star
+  (eclipse) or a dust cloud. Compare with the star's *own* other visits, not the catalogue (calibration ~10 %).
+  The colour of the dip tells the cause: a planet dims all wavelengths about equally, dust dims short
+  wavelengths more. Realistic: deep eclipses (binaries, giant planets around small stars, a few %+); Earth-like
+  transits (0.01 %) are far too shallow. Validation: known transiting planets / eclipsing binaries with
+  ephemerides (NASA Exoplanet Archive, VSX): predict which SPHEREx exposures fall in transit (a hot Jupiter is
+  in transit ~3–4 % of the time, so ~5 of the ~170 exposure times per spot) and check the dip is there.
+  **Note (Mati): best first step is validation, not discovery.** Take known transiting planets and eclipsing
+  binaries whose transit times are published (NASA Exoplanet Archive, VSX), predict which SPHEREx exposures fell
+  during a transit, and check that the dip is there and has the right depth. If it works, that's a strong demo
+  ("we see a known planet passing in front of its star in SPHEREx data"), and it sets the depth limit for any
+  real search later.
+  (from the outlier-heatmap discussion, 2026-11-14) — status: new
 
 ## Questions / Blockers
 
@@ -613,3 +642,5 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Mati (Claude): Mati's outlier method (expected spectral profile per source → measured vs expected → heatmap of outliers) written into T75 (Notes from others) with two rules: boundaries calibrated per tile from the data, and only consistent outliers count. Pointer in T76. Joerg: please read before the scoring step.
 - 2026-11-14 Jonathan (Claude): T55 step 9 (`app/` only): 📍 after Go stays on the position and fades after 5 s;
   📍 button picks a spot on the map (sets form + URL). `web/` unchanged.
+- 2026-11-14 Mati (Claude): ideas I23 (one-field pilot of the expected-vs-measured spectrum method) and I24 (dimming: transits, eclipses, dust; validate on known transiting planets) added on Mati's request.
+- 2026-11-14 Mati (Claude): note added to idea I24: validation on known transiting planets / eclipsing binaries comes first (demo + depth limit), discovery later.
