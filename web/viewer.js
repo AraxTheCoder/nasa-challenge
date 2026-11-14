@@ -8,6 +8,7 @@
 
 import { $, el, fmtDuration, fmtNum, fmtTime, isTyping, safeUrl } from "./util.js";
 import { markTimeline, renderTimeline } from "./timeline.js";
+import "./paths.js"; // T22: movement paths, listens to the viewer:* events below
 
 const SCHEMA_VERSIONS = ["0.1", "0.2"]; // target.json versions this viewer understands
 const MATCH_FALLBACK_UM = 0.05;          // "same wavelength" when frames carry no bandwidth_um
@@ -67,6 +68,7 @@ export function showTarget(target, targetUrl) {
   $("#viewer-body").hidden = false;
   $("#side").hidden = false;
   drawTimeline(); // after un-hiding, so it can measure its width
+  document.dispatchEvent(new CustomEvent("viewer:target", { detail: { target } })); // T22 paths
   show(state.aId);
 }
 
@@ -85,6 +87,7 @@ export function clearTarget() {
   $("#viewer-body").hidden = true;
   $("#side").hidden = true;
   document.title = "SPHEREx Blink";
+  document.dispatchEvent(new CustomEvent("viewer:target", { detail: { target: null } }));
 }
 
 const frameById = (id) => state.frames.find((f) => f.id === id);
@@ -336,6 +339,7 @@ function show(id) {
   keepRowVisible(rowFor(id));
   renderFrameInfo(f);
   updateStageError();
+  document.dispatchEvent(new CustomEvent("viewer:frame", { detail: { frameId: id } }));
 }
 
 // Scroll only the frame table's own box so the row is visible. Not scrollIntoView(): that also

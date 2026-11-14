@@ -1,0 +1,40 @@
+/* Movement paths (T22). Line widths stay constant on screen whatever the frame's pixel scale. */
+.path-seg { stroke-width: 2; stroke-linecap: round; vector-effect: non-scaling-stroke; opacity: 0.95; }
+.path-tick { stroke: rgba(5, 7, 11, 0.8); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.path-mark { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.path-mark.is-names { stroke: #ffd27a; }
+.path-mark.is-movers { stroke: #ff7ab8; }
+.path-mark.is-catalogue { stroke: rgba(108, 180, 255, 0.75); stroke-width: 1.2; }
+.path-arrow { stroke: #ffd27a; stroke-width: 1.6; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+.path-arrowhead { fill: #ffd27a; }
+.path-name, .path-note {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  paint-order: stroke; stroke: rgba(5, 7, 11, 0.85); stroke-width: 3px; stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.path-name.is-names { fill: #ffe2a8; }
+.path-name.is-movers { fill: #ffc0dc; }
+.path-note { fill: #ffd27a; font-style: italic; }
+
+.paths-controls { display: grid; gap: 6px; margin-top: 8px; }
+.paths-row { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.paths-check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; cursor: pointer; }
+.paths-check:has(input:disabled) { opacity: 0.45; cursor: default; }
+.paths-legend { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.paths-ramp {
+  width: 120px; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg, hsl(205 90% 62%), hsl(115 90% 72%), hsl(25 90% 62%));
+}
+
+/* Hover / click info (T22). The overlay ignores the pointer; only these hit circles take it. */
+.path-hit { fill: transparent; stroke: none; pointer-events: all; cursor: pointer; }
+.paths-tip {
+  position: absolute; z-index: 5; max-width: 300px; padding: 8px 10px; border-radius: 6px;
+  background: rgba(14, 17, 24, 0.94); border: 1px solid var(--border); color: var(--text);
+  font-size: 12px; line-height: 1.4; pointer-events: auto; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.paths-tip strong { display: block; font-size: 13px; margin-bottom: 4px; color: #ffe2a8; }
+.paths-tip dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; }
+.paths-tip dt { color: var(--muted); }
+.paths-tip dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.paths-tip-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 11px; }
