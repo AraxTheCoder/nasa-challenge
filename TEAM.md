@@ -230,6 +230,17 @@ Ideas are numbered (I1, I2, …) to refer to them; numbers stay fixed, a new ide
   (stage + blink only, for iframes), and export the current frame / difference / series as PNG or GIF.
   C ~1.5 h.
   (gap scan vs. the official text, 2026-11-14) — status: new
+- I21 [Mati] **Periods of variable stars (Lomb–Scargle periodogram)**, for later: on light curves at matched
+  wavelength (T49 photometry, T12 pairs; brightness corrected for wavelength first, since SPHEREx's LVF puts
+  every exposure at a different λ), find periods of hours to days from the ~150–190 exposure times per spot
+  (Joerg's numbers, T77). Watch for false periods from the 98-minute orbit and the burst cadence (aliasing).
+  Fits the challenge's variable-star test targets (RW Aur, R Dra) and the survey's variability score.
+  (from the Fourier-analysis discussion, 2026-11-14) — status: new
+- I22 [Mati → Joerg, Jonathan] **Fourier-based image comparison**, for later: (a) sub-pixel shifts by phase
+  correlation between epochs, for slow movers (brown dwarfs move only 0.1–0.6 px over SPHEREx's ~1 year, T65);
+  (b) PSF-matched difference images (ZOGY, Fourier-based optimal subtraction) instead of the plain A − B, so
+  fewer star residuals and false detections. For T06 / the survey (T73–T77) and the difference view (T43).
+  (from the Fourier-analysis discussion, 2026-11-14) — status: new
 
 ## Questions / Blockers
 
@@ -590,3 +601,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Mati (Claude): T65 done: 20 more quick picks in the field dropdown (web/discover.json, from SIMBAD + the local SPHEREx index): 10 fastest-moving stars (Kapteyn's star, Groombridge 1830, Lacaille 9352, …) and 10 brown dwarfs bright enough for a spectrum; "Surprise me" button; a reason line under the header. Finding: SPHEREx covers each position for only ~1 year (DR1), so even Kapteyn's star moves just 1.5 px and brown dwarfs 0.1–0.6 px: brown dwarfs are framed as "look at the spectrum". Asteroid fields and unknown movers wait for T06/the survey. Jonathan: port to `app/` (tasks/T65).
 - 2026-11-14 Jonathan (Claude): T55 step 5 (`app/` only): fewer captions (no title, ? help, map/epochs captions),
   button "Blink"; defaults Debug on, Traces + Labels off. `web/` unchanged.
+- 2026-11-14 Mati (Claude): ideas I21 (periodograms for variable stars) and I22 (Fourier-based image comparison: sub-pixel shifts, ZOGY difference images) added for later, on Mati's request. Fourier analysis of the spectra themselves was ruled out (R ≈ 35–130, few uneven points, time mixed into wavelength).
