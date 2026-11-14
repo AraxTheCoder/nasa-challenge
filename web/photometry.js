@@ -175,7 +175,8 @@ function render() {
   const good = frames.filter((f) => !f.masked && Number.isFinite(f.flux_ujy));
   const changes = matchedChanges(frames);
   const where = st.pos ? `at the clicked star (RA ${fmtNum(d.ra_deg, 4)}°, Dec ${fmtNum(d.dec_deg, 4)}°)` : `at the field centre (RA ${fmtNum(d.ra_deg, 4)}°, Dec ${fmtNum(d.dec_deg, 4)}°)`;
-  const parts = [el("p", { class: "ph-where small" }, `${good.length} of ${frames.length} frames measured ${where}.`)];
+  const what = d.all_exposures ? `exposures (all SPHEREx images of this spot)` : "frames";
+  const parts = [el("p", { class: "ph-where small" }, `${good.length} of ${frames.length} ${what} measured ${where}.`)];
   if (frames.length && !good.length) {
     parts.push(el("p", { class: "msg msg-warn" }, "Every frame is flagged at this position: the star is saturated " +
       "(too bright for SPHEREx) or sits on bad pixels, so aperture photometry can't measure it."));
@@ -297,8 +298,37 @@ async function load() {
     st.data = body;
     $("#ph-status").textContent = "";
     render();
+    loadAll(url, token);
   } catch {
     if (token === st.token) { $("#photometry").hidden = true; }
+  }
+}
+
+/**
+ * T66: the field keeps ~40 frames for blinking, but ~300 SPHEREx exposures cover each position. Once the
+ * quick answer is shown, ask for all of them (the server measures tiny cutouts in the background, ~15-30 s
+ * the first time, then cached) and redraw the spectrum and light curve with every point.
+ */
+async function loadAll(url, token) {
+  const all = new URL(url);
+  all.searchParams.set("all", "1");
+  try {
+    for (let i = 0; i < 300; i++) {
+      const res = await fetch(all, { cache: "no-cache" });
+      const body = await res.json().catch(() => null);
+      if (token !== st.token) return;
+      if (body?.status === "ready") {
+        st.data = body;
+        $("#ph-status").textContent = `all ${body.frames?.length ?? 0} exposures`;
+        render();
+        return;
+      }
+      if (body?.status !== "building") throw new Error(body?.message ?? `HTTP ${res.status}`);
+      $("#ph-status").textContent = body.total ? `adding all exposures… ${body.done}/${body.total}` : "adding all exposures…";
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  } catch (err) {
+    if (token === st.token) $("#ph-status").textContent = `field frames only (all exposures failed: ${err.message})`;
   }
 }
 
