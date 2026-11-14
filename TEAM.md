@@ -61,6 +61,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T22 | C: Movement paths in the viewer: line + tick per frame, early→late colour, current position + name, labelled exaggerated arrow for slow movers | Joerg | doing | `joerg/T22-movement-paths` | [task file](tasks/T22-movement-paths.md). From the "Draw paths" idea |
 | T23 | A: Labelling over time: labels that follow moving objects, motion summary + motion class per object, trail image, shift-and-stack | Joerg | doing | `joerg/T23-labels-over-time` | [task file](tasks/T23-labels-over-time.md). Umbrella for T19 (done) + T22; from 4 Ideas |
 | T24 | All: Pin exact dependency versions so everyone runs the same | Joerg | done | `joerg/T24-pin-deps` | Lock files at root; README "Dependencies". Python 3.12+ |
+| T25 | C: Default field in the form (Barnard's Star) + hint that RA/Dec/field of view can be changed | Mati | doing | `mati/T25-form-defaults` | [tasks/T25](tasks/T25-form-defaults.md) |
 
 ## Decisions
 
