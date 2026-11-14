@@ -681,6 +681,10 @@ async function main() {
   initLamPick();
   bindPage();
   const p = params();
+  // Map only (Joerg, 2026-11-14): the explore map is the one view of the sky; the frame viewer (image,
+  // blink controls, timeline, frame panels) stays in the code for ?frames=1, offline ?data= and
+  // ?explore=0 (CI browser test). Spectra come from clicks on the map (T79).
+  if (!(p.get("frames") === "1" || p.get("explore") === "0" || p.get("data"))) document.body.classList.add("map-only");
   if (p.get("api")) app.api = p.get("api");
   if (p.get("data")) {
     $("#explore").hidden = true; // offline mode has no tile server; an empty map box only confuses

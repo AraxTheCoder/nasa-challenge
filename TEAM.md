@@ -116,6 +116,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T77 | B: (merged into T74/T75, the same survey; measured scope + per-band plan moved to tasks/T74 Notes) | Joerg | done | | [tasks/T77](tasks/T77-sky-survey-hpc.md) |
 | T78 | C: Type an exact wavelength: a µm input next to the sky map's band slider (snaps to the nearest of the 102 channels, shows its exact centre) and "frames at λ" in the blink viewer (A/B = the frames nearest that wavelength in two epochs) | Mati | done | `mati/T78-wavelength-input` | [tasks/T78](tasks/T78-wavelength-input.md). Mati's request; needs porting to `app/` (T55) |
 | T79 | C: Click to measure: a plain click on the frame image measures that star (no "Measure a star" mode needed); a click anywhere on the explore map gives the spectrum + light curve of that sky point from all exposures, field or not (`GET /api/photometry?ra=&dec=`) | Joerg | done | `joerg/T79-click-spectrum` | [tasks/T79](tasks/T79-click-spectrum.md). Joerg: "nothing happens if I click on a pixel". `/app/` (T55): note for Jonathan |
+| T80 | C: Map only in `/web/`: the explore map is the one view of the sky; frame image, blink controls, wavelength filter, timeline and frame panels hidden (still in the code: `?frames=1`, offline `?data=`, `?explore=0`); spectra via map clicks (T79) | Joerg | done | `joerg/T80-map-only` | Joerg: "why are there two maps, let's only have the navigator". `/app/` migration later (Jonathan, T55) |
 
 ## Decisions
 
@@ -220,6 +221,11 @@ Dated, one line each, with why.
   `GET /cutout`), not only map tiles; build, detection, photometry and all caches stay local. Default on
   for `python -m server` / `web/dev.py`. Why: a new field took ~45-53 s, ~35 s of it pulling whole
   detector rows over the Atlantic; via the VM 19.9 s. Supersedes "only tiles run on the VM" (T47).
+
+- 2026-11-14 [Joerg] `/web/` shows only the explore map by default (T80); the frame viewer stays behind
+  `?frames=1` (also offline `?data=` and `?explore=0`, which the CI browser test uses). Why: two images of the
+  same sky confused; the map has the field's epochs, traces, names and click-for-spectrum. Jonathan moves
+  this to `/app/` later.
 
 ## Ideas
 
