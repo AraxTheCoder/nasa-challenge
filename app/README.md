@@ -46,3 +46,5 @@ viewer and the default URL.
   like Go; Esc cancels.
 - Step 10: a standing 📍 (after Go / a pick) has its needle tip on the point and RA/Dec centred under it;
   while it follows the mouse it stays left of the cursor with RA/Dec to the right.
+- Step 11: one look for the 📍 everywhere (also while it follows the mouse in pick mode): needle tip on
+  the point, RA/Dec centred under it.
