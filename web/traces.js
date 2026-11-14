@@ -1,5 +1,5 @@
 // T35 Tracing over the stitched sky: draw the shown field's important objects onto the explore map
-// (Aladin Lite, T30/T32): a line through their per-frame positions, one dot per epoch (mean
+// (own sky map since T36, was Aladin Lite in T30/T32): a line through their per-frame positions, one dot per epoch (mean
 // position), the shown epoch's dot highlighted while the map blinks, and the name with a popup.
 // Slow movers get a dashed arrow along their motion, labelled as exaggerated: at map scale
 // Barnard's Star's 10"/yr is invisible otherwise.
@@ -8,7 +8,7 @@
 //   viewer:target {target}  (viewer.js)     explore:epoch {epoch}  (explore.js, T32 epoch buttons)
 
 import { $, el } from "./util.js";
-import { getAladin } from "./explore.js";
+import { getSky } from "./explore.js";
 
 const st = { target: null, epoch: null, on: true, layers: null, objs: [] };
 const EPOCH_COLOURS = ["#6cb4ff", "#9be38a", "#ffd27a", "#ff9a6c", "#e88bff", "#7fe3e0"];
@@ -60,14 +60,15 @@ function pickObjects(t) {
   return out;
 }
 
-function clear() {
-  const m = getAladin();
-  if (st.layers && m) {
-    try { m.aladin.removeLayer?.(st.layers.lines); } catch {}
-    try { m.aladin.removeLayer?.(st.layers.cat); } catch {}
-    try { st.layers.lines.removeAll?.(); st.layers.cat.removeAll?.(); } catch {}
-  }
-  st.layers = null;
+// T36 (Jonathan): drawn with a canvas hook of our own sky map (sky.js) instead of Aladin overlays.
+// pickObjects() above is unchanged.
+let hooked = false;
+
+function ensureHook() {
+  const sky = getSky();
+  if (!sky || hooked) return;
+  sky.addDrawHook(paint);
+  hooked = true;
 }
 
 function colourFor(epoch) {
@@ -76,48 +77,61 @@ function colourFor(epoch) {
 }
 
 function draw() {
-  const m = getAladin();
-  clear();
   updateNote();
-  if (!m || !st.target || !st.on) return;
-  const { A, aladin } = m;
-  const lines = A.graphicOverlay({ name: "Traces (T35)", color: "#ffd27a", lineWidth: 2 });
-  const cat = A.catalog({ name: "Traced objects (T35)", color: "#ffd27a", sourceSize: 14, shape: "circle",
-    displayLabel: true, labelColumn: "name", labelColor: "#ffe2a8", labelFont: "12px sans-serif", onClick: "showPopup" });
-  aladin.addOverlay(lines);
-  aladin.addCatalog(cat);
-  st.layers = { lines, cat };
-  const sources = [];
+  ensureHook();
+  getSky()?.redraw();
+}
+
+function paint(ctx, proj) {
+  if (!st.target || !st.on) return;
+  const P = (ra, dec) => { const s = proj.toScreen(ra, dec); return s.front ? s : null; };
+  const epochOfFrame = new Map(st.target.frames.map((f) => [f.id, f.epoch]));
+  ctx.save();
+  ctx.font = "12px sans-serif";
+  ctx.lineCap = "round";
   for (const o of st.objs) {
     // the trace itself, segment by segment in epoch colours
+    ctx.lineWidth = 2;
     for (let i = 1; i < o.pts.length; i++) {
-      const a = o.pts[i - 1], b = o.pts[i];
-      lines.add(A.polyline([[a.ra_deg, a.dec_deg], [b.ra_deg, b.dec_deg]], { color: colourFor(st.target.frames.find((f) => f.id === b.frame_id)?.epoch), lineWidth: 2 }));
+      const a = P(o.pts[i - 1].ra_deg, o.pts[i - 1].dec_deg), b = P(o.pts[i].ra_deg, o.pts[i].dec_deg);
+      if (!a || !b) continue;
+      ctx.strokeStyle = colourFor(epochOfFrame.get(o.pts[i].frame_id));
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
     // one dot per epoch (mean position); the shown epoch is bigger
     for (const e of o.means) {
-      const r = (e.epoch === st.epoch ? 9 : 4) / 3600;
-      lines.add(A.circle(e.ra_deg, e.dec_deg, r, { color: colourFor(e.epoch), lineWidth: e.epoch === st.epoch ? 3 : 1.5 }));
+      const s = P(e.ra_deg, e.dec_deg);
+      if (!s) continue;
+      const big = e.epoch === st.epoch;
+      ctx.strokeStyle = colourFor(e.epoch);
+      ctx.lineWidth = big ? 3 : 1.5;
+      ctx.beginPath(); ctx.arc(s.x, s.y, big ? 9 : 4, 0, 2 * Math.PI); ctx.stroke();
     }
+    const here = o.means.find((e) => e.epoch === st.epoch) ?? o.means[o.means.length - 1];
+    const hs = P(here.ra_deg, here.dec_deg);
+    if (!hs) continue;
     // slow movers: exaggerated, labelled direction arrow from the shown epoch's position
     const first = o.means[0], last = o.means[o.means.length - 1];
     if (o.means.length > 1 && o.reach > 0.3 && o.reach < SLOW_ARCSEC) {
-      const here = o.means.find((e) => e.epoch === st.epoch) ?? last;
       const cd = Math.cos((here.dec_deg * Math.PI) / 180) || 1e-6;
       const dx = (last.ra_deg - first.ra_deg) * cd, dy = last.dec_deg - first.dec_deg, n = Math.hypot(dx, dy) || 1;
-      const L = ARROW_ARCMIN / 60, tip = [here.ra_deg + ((dx / n) * L) / cd, here.dec_deg + (dy / n) * L];
-      lines.add(A.polyline([[here.ra_deg, here.dec_deg], tip], { color: "#ffd27a", lineWidth: 1.5, lineDash: [6, 4] }));
-      const k = Math.round((ARROW_ARCMIN * 60) / o.reach);
-      sources.push(A.source(tip[0], tip[1], { name: `motion ×${k}, not to scale` }));
+      const L = ARROW_ARCMIN / 60;
+      const tip = P(here.ra_deg + ((dx / n) * L) / cd, here.dec_deg + (dy / n) * L);
+      if (tip) {
+        ctx.strokeStyle = "#ffd27a"; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.moveTo(hs.x, hs.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#ffd27a";
+        ctx.fillText(`motion ×${Math.round((ARROW_ARCMIN * 60) / o.reach)}, not to scale`, tip.x + 6, tip.y - 4);
+      }
     }
-    const here = o.means.find((e) => e.epoch === st.epoch) ?? o.means[o.means.length - 1];
-    const rate = o.motion?.rate_arcsec_per_yr != null && o.motion.class !== "still" ? `${o.motion.rate_arcsec_per_yr.toFixed(2)}″/yr ${o.motion.direction ?? ""}` : "";
-    sources.push(A.source(here.ra_deg, here.dec_deg, {
-      name: o.name + (o.synthetic ? " · synthetic" : ""),
-      popupTitle: o.name, popupDesc: [o.kind, rate, `${o.means.length} epoch(s), moves ${o.reach.toFixed(1)}″ in this series`].filter(Boolean).join(" · "),
-    }));
+    ctx.fillStyle = "#ffe2a8";
+    ctx.strokeStyle = "rgba(0,0,0,0.7)"; ctx.lineWidth = 3;
+    const name = o.name + (o.synthetic ? " · synthetic" : "");
+    ctx.strokeText(name, hs.x + 12, hs.y + 4);
+    ctx.fillText(name, hs.x + 12, hs.y + 4);
   }
-  cat.addSources(sources);
+  ctx.restore();
 }
 
 function updateNote() {

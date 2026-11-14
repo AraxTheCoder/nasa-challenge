@@ -148,6 +148,11 @@ Dated, one line each, with why.
   + the field's object always, then notable types, classic names, other names, catalogue numbers,
   nearest the centre first) and the 400 brightest Gaia stars (G < 16). Why: deep fields returned
   ~30,000 objects; labelling took 23-30 s and wrote 50+ MB of labels. Now 1-7 s, mostly network.
+- 2026-11-14 [Jonathan] CONTRACTS v0.8: catalogue labels only on request (Labels switch → `GET
+  /api/targets/<id>/labels`, `labels_requested` in target.json); builds write `labels: []`. Why: Jonathan
+  wants the work to happen only when labels are switched on; SIMBAD labels took 30 s in deep fields.
+  Also T36: the sky map is our own WebGL HiPS renderer (`web/sky.js`, `web/healpix.js`), Aladin Lite is
+  gone. Joerg: `web/traces.js` now paints via a sky.js draw hook (only `draw()` changed, selection kept).
 
 ## Ideas
 

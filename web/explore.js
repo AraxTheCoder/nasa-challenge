@@ -1,130 +1,115 @@
-// T30 Explore mode: Google-Earth-style pan/zoom over the whole sky with Aladin Lite v3 and the
-// SPHEREx HiPS maps that CDS publishes (one per detector, all epochs combined), plus Gaia/WISE/
-// SIMBAD for context. "Blink this spot" hands the view centre to the per-epoch blink viewer.
-//
-// HiPS layers per epoch (T32) are added by addEpochLayers() when the Live API offers them.
+// T30/T36 Sky map: Google-Earth-style pan/zoom over the whole sky with our own HiPS renderer
+// (sky.js, no dependencies). Base maps: SPHEREx all-sky (IRSA DR1 cube, 102 bands; CDS per-detector
+// maps) and comparison surveys. Overlays: the shown field's SPHEREx epochs (T32), blinkable.
+// Draw hooks let other modules (field outline, traces.js) paint on top.
 
-// CDS hosts it too, but aladin.cds.unistra.fr answered 404 on 2026-11-14; jsDelivr mirrors npm.
-const ALADIN_JS = "https://cdn.jsdelivr.net/npm/aladin-lite@3.8.2/dist/aladin.js";
+import { createSky } from "./sky.js";
 
 export const SURVEYS = [
-  { id: "CDS/P/SPHEREx/QR2/D1", label: "SPHEREx D1 · 0.75–1.1 µm" },
-  { id: "CDS/P/SPHEREx/QR2/D2", label: "SPHEREx D2 · 1.1–1.6 µm" },
-  { id: "CDS/P/SPHEREx/QR2/D3", label: "SPHEREx D3 · 1.6–2.4 µm" },
-  { id: "CDS/P/SPHEREx/QR2/D4", label: "SPHEREx D4 · 2.4–3.8 µm" },
-  { id: "CDS/P/SPHEREx/QR2/D5", label: "SPHEREx D5 · 3.8–4.4 µm" },
-  { id: "CDS/P/SPHEREx/QR2/D6", label: "SPHEREx D6 · 4.4–5.0 µm" },
-  // IRSA's own SPHEREx DR1 cube (13"/px, one slice per band); hosted at IRSA, so it still works
-  // when the CDS tile servers are down.
-  { id: "https://irsa.ipac.caltech.edu/data/hips/SPHEREx/spherex_allsky_cube", label: "SPHEREx DR1 cube (IRSA, 13″/px)" },
-  { id: "https://irsa.ipac.caltech.edu/data/hips/CDS/AllWISE/RGB-W4-W2-W1", label: "Compare: AllWISE colour (IRSA)" },
-  { id: "https://irsa.ipac.caltech.edu/data/hips/CDS/2MASS/Color", label: "Compare: 2MASS colour (IRSA)" },
-  { id: "CDS/P/unWISE/color-W2-W1W2-W1", label: "Compare: unWISE (W1+W2)" },
-  { id: "CDS/P/DSS2/color", label: "Compare: DSS2 optical" },
+  { id: "spherex-cube", label: "SPHEREx all-sky · 102 bands (IRSA DR1)",
+    urls: ["https://irsa.ipac.caltech.edu/data/hips/SPHEREx/spherex_allsky_cube"] },
+  ...[1, 2, 3, 4, 5, 6].map((d) => ({
+    id: `spherex-d${d}`,
+    label: `SPHEREx D${d} · ${["0.75–1.1", "1.1–1.6", "1.6–2.4", "2.4–3.8", "3.8–4.4", "4.4–5.0"][d - 1]} µm (CDS QR2)`,
+    urls: [`https://alasky.cds.unistra.fr/SPHEREx/D${d}`, `https://alaskybis.cds.unistra.fr/SPHEREx/D${d}`],
+  })),
+  { id: "2mass", label: "Compare: 2MASS colour (IRSA)", urls: ["https://irsa.ipac.caltech.edu/data/hips/CDS/2MASS/Color"] },
+  { id: "allwise", label: "Compare: AllWISE colour (IRSA)", urls: ["https://irsa.ipac.caltech.edu/data/hips/CDS/AllWISE/RGB-W4-W2-W1"] },
 ];
+export const DEFAULT_SURVEY = "spherex-cube";
 
-const CATALOGS = {
-  gaia: { url: "https://axel.u-strasbg.fr/HiPSCatService/I/355/gaiadr3", name: "Gaia DR3", color: "#4fc3f7" },
-  simbad: { url: "https://axel.u-strasbg.fr/HiPSCatService/Simbad", name: "SIMBAD", color: "#ffb74d" },
-};
+let sky = null;
+let field = null;          // {ra, dec, size} of the blink field, drawn as an outline
+let epochLayers = [];
 
-let A = null;          // Aladin Lite namespace
-let aladin = null;     // the instance
-const catalogs = {};   // name -> catalog layer
-let epochLayers = [];  // T32: [{epoch, layer}]
+export const getSky = () => sky;
 
-// IRSA-hosted, so the map works even while the CDS tile servers are down (as on 2026-11-14).
-export const DEFAULT_SURVEY = "https://irsa.ipac.caltech.edu/data/hips/SPHEREx/spherex_allsky_cube";
-
-/** Create the sky view. opts: {ra, dec, fovDeg, onBlink(ra, dec, fovArcmin)} */
-export async function initExplore(container, opts) {
-  // The npm build is an ES module (default export), it does not set window.A.
-  A = (await import(ALADIN_JS)).default;
-  await A.init;
-  aladin = A.aladin(container, {
-    survey: DEFAULT_SURVEY,
-    target: `${opts.ra ?? 269.4463} ${opts.dec ?? 4.7682}`,
-    fov: opts.fovDeg ?? 2,
-    cooFrame: "ICRSd",
-    showReticle: true,
-    showCooGrid: false,
-    showLayersControl: false,
-    showGotoControl: true,
-    showFullscreenControl: true,
-    showFrame: true,
-  });
-  return aladin;
+/** Create the map. opts: {ra, dec, fovDeg} */
+export async function initExplore(container, opts = {}) {
+  sky = createSky(container, { ra: opts.ra ?? 269.4463, dec: opts.dec ?? 4.7682, fov: opts.fovDeg ?? 2 });
+  sky.addDrawHook(drawField);
+  await setSurvey(DEFAULT_SURVEY);
+  return sky;
 }
 
-/** T35 (traces.js): the Aladin namespace and instance, for extra overlays. Null until initExplore. */
-export const getAladin = () => (aladin ? { A, aladin } : null);
-
-export function setSurvey(id) {
-  aladin?.setBaseImageLayer(id);
-}
-
-export function toggleCatalog(key, on) {
-  if (!aladin) return;
-  const c = CATALOGS[key];
-  if (on && !catalogs[key]) {
-    catalogs[key] = A.catalogHiPS(c.url, { name: c.name, color: c.color, sourceSize: 8, onClick: "showPopup" });
-    aladin.addCatalog(catalogs[key]);
-  } else if (catalogs[key]) {
-    on ? catalogs[key].show() : catalogs[key].hide();
+/** Switch the base map; tries each mirror in turn. Returns the layer (.depth > 1 for cubes). */
+export async function setSurvey(id) {
+  const s = SURVEYS.find((x) => x.id === id);
+  if (!s || !sky) return null;
+  let last;
+  for (const url of s.urls) {
+    try {
+      const layer = await sky.setBase(url, { label: s.label });
+      document.dispatchEvent(new CustomEvent("explore:survey", { detail: { id, layer } }));
+      return layer;
+    } catch (e) { last = e; }
   }
+  throw new Error(`${s.label}: map server not reachable (${last?.message ?? "?"})`);
 }
 
-export function goTo(ra, dec, fovDeg) {
-  if (!aladin) return;
-  aladin.gotoRaDec(Number(ra), Number(dec));
-  if (fovDeg) aladin.setFoV(fovDeg);
+/** Wavelengths (µm) of a cube map's slices, or []. */
+export function bandWavelengths() {
+  return (sky?.base?.props.data_cube_crval3_arr ?? "").split(/\s+/).filter(Boolean).map(Number);
 }
+
+/** Cube maps: choose the band (0-based slice). */
+export function setBand(i) { sky?.setSlice(i); }
+
+export function goTo(ra, dec, fovDeg) { sky?.goTo(ra, dec, fovDeg); }
 
 /** Current view centre (deg) and field of view (arcmin, horizontal). */
 export function view() {
-  if (!aladin) return null;
-  const [ra, dec] = aladin.getRaDec();
-  const [fovX] = aladin.getFov();
-  return { ra, dec, fovArcmin: fovX * 60 };
+  if (!sky) return null;
+  const v = sky.view();
+  return { ra: v.ra, dec: v.dec, fovArcmin: v.fov * 60 };
 }
 
-/** Draw the outline of the field the blink viewer shows. */
-let fieldOverlay = null;
+export function on(ev, fn) { sky?.on(ev, fn); }
+export function addDrawHook(fn) { sky?.addDrawHook(fn); }
+export function redraw() { sky?.redraw(); }
+
 export function markField(ra, dec, sizeArcmin) {
-  if (!aladin) return;
-  if (!fieldOverlay) {
-    fieldOverlay = A.graphicOverlay({ color: "#ff5252", lineWidth: 2, name: "Blink field" });
-    aladin.addOverlay(fieldOverlay);
-  }
-  fieldOverlay.removeAll();
-  const h = sizeArcmin / 120;               // half side in deg
-  const c = Math.cos((dec * Math.PI) / 180) || 1e-6;
-  const pts = [[-h, -h], [h, -h], [h, h], [-h, h], [-h, -h]].map(([dx, dy]) => [ra + dx / c, dec + dy]);
-  fieldOverlay.add(A.polyline(pts));
+  field = { ra, dec, size: sizeArcmin };
+  sky?.redraw();
 }
 
-/** T32: per-epoch HiPS from our Live API. layers: [{epoch, label, url (absolute)}].
- * All epochs are added as overlay layers at once and switched by opacity, so blinking is instant
- * once their tiles are loaded (requirement R2). */
-export function setEpochLayers(layers) {
-  hideEpochs();
-  const make = A.HiPS || A.imageHiPS;
-  epochLayers = layers.map((l, i) => {
-    const layer = make(l.url, { name: l.label, imgFormat: "png" });
-    aladin.setOverlayImageLayer(layer, `epoch${i}`);
-    aladin.getOverlayImageLayer(`epoch${i}`)?.setOpacity(i === 0 ? 1 : 0);
-    return { ...l, name: `epoch${i}` };
-  });
+function drawField(ctx, proj) {
+  if (!field) return;
+  const h = field.size / 120, c = Math.cos((field.dec * Math.PI) / 180) || 1e-6;
+  const corners = [[-h, -h], [h, -h], [h, h], [-h, h], [-h, -h]];
+  ctx.save();
+  ctx.strokeStyle = "#ff5252";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  let started = false;
+  for (let i = 0; i < 4; i++) {
+    const [ax, ay] = corners[i], [bx, by] = corners[i + 1];
+    for (let t = 0; t <= 8; t++) {           // densified, so the outline follows the projection
+      const x = ax + ((bx - ax) * t) / 8, y = ay + ((by - ay) * t) / 8;
+      const s = proj.toScreen(field.ra + x / c, field.dec + y);
+      if (!s.front) { started = false; continue; }
+      if (!started) { ctx.moveTo(s.x, s.y); started = true; } else ctx.lineTo(s.x, s.y);
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** T32: per-epoch HiPS from our Live API. layers: [{epoch, label, url (absolute)}]. All are
+ * prefetched; one is drawn at a time, so blinking is instant once loaded (requirement R2). */
+export async function setEpochLayers(layers) {
+  if (!sky) return [];
+  epochLayers = await sky.setOverlays(layers);
   return epochLayers;
 }
 
 export function showEpoch(i) {
-  epochLayers.forEach((l, j) => aladin?.getOverlayImageLayer(l.name)?.setOpacity(j === i ? 1 : 0));
+  sky?.showOverlay(i);
   // T35: traces.js highlights each object's position in the shown epoch
   document.dispatchEvent(new CustomEvent("explore:epoch", { detail: { epoch: epochLayers[i]?.epoch ?? null } }));
 }
 
 export function hideEpochs() {
-  epochLayers.forEach((l) => aladin?.removeImageLayer?.(l.name));
   epochLayers = [];
+  sky?.setOverlays([]);
 }
