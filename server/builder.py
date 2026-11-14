@@ -1,7 +1,8 @@
 """Background builds of target folders, one job per target id (CONTRACTS v0.3 "Live API").
 
-Real mode calls track A (`pipeline.query`, `pipeline.build.build_target`) and, if present, track B
-(`detect.run.detect`). Fixture mode copies `fixtures/targets/demo-synthetic`, which stays labelled
+Real mode calls track A (`pipeline.query`, `pipeline.build.build_target`); once the field is ready,
+track B (`detect.run.detect_target`: JPL known objects, detections) runs in the background (T51,
+`GET /api/targets/<id>/objects`). Fixture mode copies `fixtures/targets/demo-synthetic`, which stays labelled
 `"synthetic": true`.
 """
 from __future__ import annotations
@@ -58,7 +59,9 @@ class Builder:
         self.fixture = fixture
         self._jobs: dict[str, Job] = {}
         self._label_jobs: dict[str, dict] = {}
+        self._object_jobs: dict[str, dict] = {}
         self._lock = threading.Lock()
+        self._write_lock = threading.Lock()   # T51: label + objects jobs both rewrite target.json
 
     # -- cache ---------------------------------------------------------------------------------
 
@@ -109,6 +112,8 @@ class Builder:
             else:
                 self._build_live(job)
             job.status = "ready"
+            if not self.fixture:
+                self.objects(job.id)   # T51: known objects from JPL in the background, field shows now
         except NoData as e:
             job.status, job.message = "no_data", str(e)
         except Exception as e:  # noqa: BLE001 - reported to the client, full trace to the log
@@ -146,10 +151,7 @@ class Builder:
             else:
                 from pipeline.labels import add_labels   # track A (T19), unchanged
                 add_labels(t)
-            t["labels_requested"] = True
-            tmp = tj.with_suffix(".labels.part")
-            tmp.write_text(json.dumps(t, indent=1), encoding="utf-8")
-            tmp.replace(tj)
+            self._merge(tid, t, ("labels",), "labels_requested")
             job.update(status="ready", n=len(t["labels"]))
             job.pop("message", None)
         except Exception as e:  # noqa: BLE001
@@ -158,6 +160,58 @@ class Builder:
         finally:
             with self._lock:      # done: later requests read labels_requested from target.json
                 self._label_jobs.pop(tid, None)
+
+    def _merge(self, tid: str, t: dict, fields: tuple[str, ...], flag: str) -> None:
+        """Write `fields` of t, its new provenance entries and `flag: true` into the target.json on
+        disk, re-read under a lock, so the labels and objects jobs never overwrite each other."""
+        tj = self.target_dir(tid) / "target.json"
+        with self._write_lock:
+            cur = json.loads(tj.read_text(encoding="utf-8"))
+            for f in fields:
+                cur[f] = t.get(f, [])
+            seen = {json.dumps(p, sort_keys=True) for p in cur.get("provenance", [])}
+            cur.setdefault("provenance", []).extend(
+                p for p in t.get("provenance", []) if json.dumps(p, sort_keys=True) not in seen)
+            cur[flag] = True
+            tmp = tj.with_suffix(f".{flag}.part")
+            tmp.write_text(json.dumps(cur, indent=1), encoding="utf-8")
+            tmp.replace(tj)
+
+    # -- T51: known objects (JPL) + detections, in the background after a build ---------------
+
+    def objects(self, tid: str) -> dict:
+        """Start (once) or report the detect job for a built target: {status, n, message}."""
+        tj = self.target_dir(tid) / "target.json"
+        if not tj.is_file():
+            return {"status": "error", "message": "target not built"}
+        with self._lock:
+            job = self._object_jobs.get(tid)
+            if job is None:
+                t = json.loads(tj.read_text(encoding="utf-8"))
+                if t.get("objects_requested") or t.get("synthetic"):
+                    return {"status": "ready", "n": len(t.get("known_objects", [])) + len(t.get("detections", []))}
+                job = {"status": "building", "n": None,
+                       "message": "asking JPL for known asteroids and comets (can take a few minutes)"}
+                self._object_jobs[tid] = job
+                threading.Thread(target=self._run_objects, args=(tid, job), daemon=True,
+                                 name=f"objects-{tid}").start()
+        return dict(job)
+
+    def _run_objects(self, tid: str, job: dict) -> None:
+        tj = self.target_dir(tid) / "target.json"
+        try:
+            from detect.run import detect_target
+            t = json.loads(tj.read_text(encoding="utf-8"))
+            detect_target(t)
+            self._merge(tid, t, ("known_objects", "detections"), "objects_requested")
+            job.update(status="ready", n=len(t["known_objects"]) + len(t["detections"]))
+            job.pop("message", None)
+        except Exception as e:  # noqa: BLE001
+            traceback.print_exc()
+            job.update(status="error", message=f"{type(e).__name__}: {e}")
+        finally:
+            with self._lock:
+                self._object_jobs.pop(tid, None)
 
     # -- fixture mode --------------------------------------------------------------------------
 
@@ -207,13 +261,7 @@ class Builder:
         except LookupError as e:  # pipeline.build: no usable SPHEREx images here
             raise NoData(str(e)) from None
 
-        try:
-            from detect.run import detect
-        except ImportError:
-            detect = None
-        if detect is not None:
-            self._set(job, "detect", "looking for moving sources")
-            detect(built)
+        # T51: detect (JPL, rate-limited: minutes per field) runs after this, see objects().
 
         out = self.target_dir(job.id)
         shutil.rmtree(out, ignore_errors=True)

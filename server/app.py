@@ -74,6 +74,15 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
         code = {"ready": 200, "building": 202}.get(body["status"], 404 if "not built" in str(body.get("message")) else 500)
         return JSONResponse(body, status_code=code)
 
+    @app.get("/api/targets/{tid}/objects")
+    def target_objects(tid: str):
+        """T51: known asteroids/comets (JPL) + detections. 202 while running, 200 when target.json has them."""
+        if not _ID.match(tid):
+            raise HTTPException(404)
+        body = builder.objects(tid)
+        code = {"ready": 200, "building": 202}.get(body["status"], 404 if "not built" in str(body.get("message")) else 500)
+        return JSONResponse(body, status_code=code)
+
     @app.get("/api/targets/{tid}/frames/{name}")
     def frame(tid: str, name: str):
         if not (_ID.match(tid) and _FRAME.match(name)):

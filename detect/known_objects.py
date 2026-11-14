@@ -21,10 +21,13 @@ its query and UTC time, so the result can be reproduced.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
+import threading
 import time
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,6 +43,27 @@ SEARCH_MARGIN_DEG = 0.1    # widen the candidate search: first-pass error + moti
 DEFAULT_VMAG = 20.0        # SPHEREx single exposures reach roughly V ~ 19-20 for asteroids
 TIMEOUT = 180
 RETRIES = (3, 10, 30)    # seconds to wait after a 503 / timeout before trying again
+# T51: sb_ident allows 20 requests per 5 minutes per client (429 + Retry-After: 300 beyond that).
+# One field needs one request per visit (~18), so: one at a time, at most SB_IDENT_PER_WINDOW per
+# window across all builds in this process, and answers cached on disk (a rebuild costs nothing).
+SB_IDENT_PER_WINDOW = 18
+SB_IDENT_WINDOW_S = 300
+MAX_429_WAITS = 3
+CACHE_DIR = Path("data/jpl_cache")
+_sb_lock = threading.Lock()
+_sb_sent: deque[float] = deque()
+
+
+def _sb_ident_slot() -> None:
+    """Block until another sb_ident request fits in the rate window (call with _sb_lock held)."""
+    while True:
+        now = time.monotonic()
+        while _sb_sent and now - _sb_sent[0] > SB_IDENT_WINDOW_S:
+            _sb_sent.popleft()
+        if len(_sb_sent) < SB_IDENT_PER_WINDOW:
+            _sb_sent.append(now)
+            return
+        time.sleep(SB_IDENT_WINDOW_S - (now - _sb_sent[0]) + 1)
 
 
 def _now() -> str:
@@ -120,15 +144,48 @@ class Jpl:
         self.log: list[dict] = []
 
     def _get(self, url: str, params: dict, service: str) -> dict:
-        for wait in (*RETRIES, None):
+        if url != SB_IDENT:
+            return self._fetch(url, params, service)
+        key = hashlib.sha256(json.dumps(params, sort_keys=True).encode()).hexdigest()[:32]
+        cached = CACHE_DIR / f"sb_ident-{key}.json"
+        if cached.is_file():
+            entry = json.loads(cached.read_text(encoding="utf-8"))
+            self.log.append(entry["log"])
+            return entry["body"]
+        with _sb_lock:
+            body = self._fetch(url, params, service, rate_limited=True)
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = cached.with_suffix(".part")
+        tmp.write_text(json.dumps({"log": self.log[-1], "body": body}), encoding="utf-8")
+        tmp.replace(cached)
+        return body
+
+    def _fetch(self, url: str, params: dict, service: str, rate_limited: bool = False) -> dict:
+        waits_429 = 0
+        retries = iter((*RETRIES, None))
+        while True:
+            if rate_limited:
+                _sb_ident_slot()
             try:
                 r = self.s.get(url, params=params, timeout=TIMEOUT)
+                if r.status_code == 429 and waits_429 < MAX_429_WAITS:
+                    # Retrying sooner only extends the block: wait as long as JPL says.
+                    waits_429 += 1
+                    try:
+                        after = float(r.headers.get("Retry-After", SB_IDENT_WINDOW_S))
+                    except ValueError:
+                        after = SB_IDENT_WINDOW_S
+                    print(f"known_objects: JPL rate limit, waiting {after:.0f} s", file=sys.stderr)
+                    time.sleep(min(after, SB_IDENT_WINDOW_S) + 1)
+                    continue
                 if r.status_code not in (429, 502, 503, 504):
                     break
             except (requests.ConnectionError, requests.Timeout):
-                if wait is None:
+                if (wait := next(retries)) is None:
                     raise
-            if wait is None:
+                time.sleep(wait)
+                continue
+            if (wait := next(retries)) is None:
                 break
             time.sleep(wait)  # JPL asks for one request at a time and answers 503 when busy
         r.raise_for_status()
@@ -204,7 +261,7 @@ def find_known_objects(target: dict, jpl: Jpl | None = None, vmag_lim: float = D
 
     half = grid.radius_deg + SEARCH_MARGIN_DEG
     ra0, dec0 = target["center"]["ra_deg"], target["center"]["dec_deg"]
-    with ThreadPoolExecutor(max_workers=2) as pool:  # sb_ident takes ~20 s per call; two at a time
+    with ThreadPoolExecutor(max_workers=1) as pool:  # T51: JPL rate limit, one sb_ident at a time
         found = list(pool.map(lambda jd: jpl.candidates(jd, states[jd], ra0, dec0, half, vmag_lim), mid_jds))
 
     # candidate name -> frames of the visits it was found in

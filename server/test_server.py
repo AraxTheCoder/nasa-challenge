@@ -179,3 +179,63 @@ def test_live_layer_routes_low_orders_to_cube(tmp_path, monkeypatch):
     assert c.get("spherex-live", "Norder3/Allsky_20.png") == b"\x89PNG"
     assert c.get("spherex-live", "Norder7/Dir0/Npix123_20.png") == b"\x89PNGlive"
     assert ("live", 20, 7, 123) in seen and ("spherex-cube", "Norder5/Dir0/Npix12_20.png") in seen
+
+
+def _poll(client, url):
+    r = client.get(url)
+    for _ in range(200):
+        if r.json()["status"] != "building":
+            return r
+        time.sleep(0.02)
+        r = client.get(url)
+    raise AssertionError(f"{url} did not finish")
+
+
+def test_objects_on_request_fixture(client):
+    body = _wait_ready(client, client.get("/api/target", params={"ra": "150", "dec": "2.2", "size": "7"}).json())
+    r = _poll(client, f"/api/targets/{body['id']}/objects")
+    assert r.status_code == 200 and r.json()["status"] == "ready"   # synthetic: nothing asked of JPL
+    assert client.get("/api/targets/c9999999-p000000-s5/objects").status_code == 404
+
+
+def test_objects_and_labels_jobs_do_not_overwrite_each_other(tmp_path, monkeypatch):
+    """T51: real (non-synthetic) target; slow fake JPL while the labels job writes."""
+    import json
+    import threading
+
+    import detect.run
+    import pipeline.labels
+
+    app = create_app(tmp_path)
+    client = TestClient(app)
+    tid = "c1800000-p000000-s15"
+    (tmp_path / tid).mkdir()
+    (tmp_path / tid / "target.json").write_text(json.dumps({
+        "id": tid, "synthetic": False, "center": {"ra_deg": 180, "dec_deg": 0}, "frames": [],
+        "labels": [], "known_objects": [], "detections": [], "provenance": [{"service": "build"}]}))
+
+    jpl_started, labels_done = threading.Event(), threading.Event()
+
+    def fake_detect(t):
+        jpl_started.set()
+        labels_done.wait(5)
+        t["known_objects"] = [{"name": "433 Eros", "source": "jpl-sbident", "synthetic": False, "positions": []}]
+        t["provenance"].append({"service": "JPL SB Identification (sb_ident, first pass)"})
+        return t
+
+    def fake_labels(t):
+        t["labels"] = [{"name": "HD 1"}]
+        t["provenance"].append({"service": "SIMBAD"})
+        return t
+
+    monkeypatch.setattr(detect.run, "detect_target", fake_detect)
+    monkeypatch.setattr(pipeline.labels, "add_labels", fake_labels)
+    assert client.get(f"/api/targets/{tid}/objects").status_code == 202
+    assert jpl_started.wait(5)
+    assert _poll(client, f"/api/targets/{tid}/labels").status_code == 200
+    labels_done.set()
+    assert _poll(client, f"/api/targets/{tid}/objects").json() == {"status": "ready", "n": 1}
+    t = client.get(f"/api/targets/{tid}/target.json").json()
+    assert t["labels"] == [{"name": "HD 1"}] and t["labels_requested"] is True
+    assert t["known_objects"][0]["name"] == "433 Eros" and t["objects_requested"] is True
+    assert [p["service"] for p in t["provenance"]] == ["build", "SIMBAD", "JPL SB Identification (sb_ident, first pass)"]
