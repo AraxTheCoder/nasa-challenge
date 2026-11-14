@@ -25,6 +25,8 @@ import numpy as np
 LIVE_ORDERS = (6, 7)
 IMAGES_PER_TILE = 1           # S3 was down to ~0.1 MB/s per connection on 2026-11-14 afternoon
 SHARE_ORDER = 5               # tiles inside one order-5 cell use the same images (shared row chunks)
+MAX_FILL = 3                  # more images, only while the tile still has holes (image edge, bad pixels)
+FILL_UNTIL = 0.995            # stop once this fraction of the tile has data
 FOOTPRINT_DEG = 1.6            # image centre within this of the tile centre (detector half-width 1.74)
 TILE = 512
 LO_SIGMA, HI_SIGMA, SOFT = -1.0, 150.0, 1.5
@@ -151,10 +153,29 @@ def render(slice_: int, order: int, npix: int) -> bytes | None:
         (np.int64(npix) * TILE * TILE + _xy_table()).ravel())
     lon, lat = lon.to_value(u.deg), lat.to_value(u.deg)
     stack = [s for s in _images.map(lambda url: _sample(url, lon, lat), urls) if s is not None]
-    if not stack:
+    # Fill holes: where the chosen image ends inside the tile or has masked pixels, sample further
+    # images (best placed for this tile first) only at the still empty pixels.
+    v = None
+    if stack:
+        with np.errstate(all="ignore"):
+            v = np.nanmean(np.stack(stack), axis=0)
+    if v is None or np.isfinite(v).mean() < FILL_UNTIL:
+        extra = [x for x in pick_images(lon_c.to_value(u.deg), lat_c.to_value(u.deg), detector, k=len(urls) + MAX_FILL)
+                 if x not in urls][:MAX_FILL]
+        for url in extra:
+            hole = ~np.isfinite(v) if v is not None else np.ones(lon.shape, bool)
+            if not hole.any():
+                break
+            s = _sample(url, lon[hole], lat[hole])
+            if s is None:
+                continue
+            if v is None:
+                v = np.full(lon.shape, np.nan, np.float32)
+            v[hole] = s
+            if np.isfinite(v).mean() >= FILL_UNTIL:
+                break
+    if v is None:
         return None
-    with np.errstate(all="ignore"):
-        v = np.nanmean(np.stack(stack), axis=0)
     ok = np.isfinite(v)
     lo, hi = math.asinh(LO_SIGMA / SOFT), math.asinh(HI_SIGMA / SOFT)
     g = (np.arcsinh(np.where(ok, v, 0) / SOFT) - lo) / (hi - lo)
