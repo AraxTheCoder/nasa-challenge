@@ -44,3 +44,5 @@ viewer and the default URL.
   with the map, not with the mouse) and fades after 5 s. The 📍 button next to Go is pick mode: the marker
   follows the mouse, a left click (not a drag) takes the spot into the form + URL (?ra=&dec=) and fades
   like Go; Esc cancels.
+- Step 10: a standing 📍 (after Go / a pick) has its needle tip on the point and RA/Dec centred under it;
+  while it follows the mouse it stays left of the cursor with RA/Dec to the right.

@@ -32,6 +32,9 @@ function setMode(mode) {
 
 function show(clientX, clientY, ra, dec) {
   st.node.hidden = false;
+  // standing still (after Go / a pick): needle tip on the point, RA/Dec centred below the pin;
+  // following the mouse: pin left of the cursor, RA/Dec to its right
+  st.node.classList.toggle("cursor-pin-standing", st.mode === "pinned");
   st.node.style.transform = `translate(${clientX}px, ${clientY}px)`;
   st.ra.textContent = `RA ${ra.toFixed(4)}°`;
   st.dec.textContent = `Dec ${sign(dec)}${Math.abs(dec).toFixed(4)}°`;

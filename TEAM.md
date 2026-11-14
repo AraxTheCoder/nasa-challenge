@@ -644,3 +644,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   📍 button picks a spot on the map (sets form + URL). `web/` unchanged.
 - 2026-11-14 Mati (Claude): ideas I23 (one-field pilot of the expected-vs-measured spectrum method) and I24 (dimming: transits, eclipses, dust; validate on known transiting planets) added on Mati's request.
 - 2026-11-14 Mati (Claude): note added to idea I24: validation on known transiting planets / eclipsing binaries comes first (demo + depth limit), discovery later.
+- 2026-11-14 Jonathan (Claude): T55 step 10 (`app/` only): standing 📍 = tip on the point, RA/Dec centred below. `web/` unchanged.
