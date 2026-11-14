@@ -182,6 +182,36 @@ Dated, one line each, with why.
 ## Ideas
 
 Format: `[name] idea — status: new`. Agents don't act on an idea until a human moves it to the Board.
+- [Mati] **Ranked overview of the open ideas, most important first** (2026-11-14, Claude). Ranked by value for
+  the submission and demo (official Objectives / Considerations, the five test targets) against effort and
+  risk. The full entries below stay where they are (TEAM.md is append-only); this is the reading order.
+  Done or on the Board already: paths (T22), motion classes (T23, detections T08), trail view +
+  shift-and-stack (T23), sky-map traces (T35), cloud hosting (T47), play as video (T45), light curves +
+  spectra (T49), CI (T46). Biggest open item overall is a Board task, not an idea: mover detection (T06).
+  1. **Limits before the public deploy** (gap scan #11). The site is public now (T47): unlimited builds and
+     `refresh=1` = cost and abuse risk today. Server, ~1 h.
+  2. **Docs out of date** (gap scan #10). Judges read the README/repo first: stale status line, CONTRACTS
+     still describing pre-baked targets, schema-0.1 fixture. ~1 h.
+  3. **Per-detector co-adds per epoch** (gap scan #4). An explicit Consideration; makes the faint brown-dwarf
+     test targets (WISE 0855, Eps Ind B) visible. A ~2 h + C ~0.5 h.
+  4. **VSX + CatWISE2020 labels** (proposal (b) = gap scan #7). An explicit Consideration (WISE); periods for
+     the variable test stars, motions for the brown dwarfs. A, ~1.5 h.
+  5. **Contamination flags in the viewer** (gap scan #5). An explicit Consideration; explains masked pixels
+     (saturation on 3 of 5 test targets). A ~1.5 h + C ~1 h.
+  6. **"Uncatalogued?" flag + candidate list** (Joerg's feature list). The heart of the pitch ("unlabelled
+     movers stand out"), but blocked until T06 delivers detections. B/C ~1.5 h.
+  7. **Embed + share, PNG/GIF export** (gap scan #8). An explicit Consideration; GIFs also help the demo
+     video (T16). C ~1.5 h.
+  8. **Spectral feature markers** (proposal (a)). Cheap, on-message (SPHEREx ices), educational. C ~1 h.
+  9. **Data release in the UI** (gap scan #6). Consideration "easy to update"; partly covered by Rebuild.
+     A/C ~1 h.
+  10. **Auto target selection / "surprise me"** (Joerg). Nice for exploring and the demo, not required.
+  11. **Fuller spectra from all exposures** (proposal (c)). Better spectra; T49 already works. A ~2 h.
+  12. **Appear / disappear / brightness change** (Joerg's feature list). New detection mode; needs T06 first.
+  13. **Detector-fixed artifact rule** (proposal (d)). Only useful once T06 has real detections. B ~1 h.
+  14. **Split `web/viewer.js` / `app.js`** (Mati). Maintainability only; risky right before the deadline,
+     better after submission. ~1 h.
+  — status: new
 - [Joerg] Draw paths, not just positions: for every label, known object and detection, a line
   through its per-frame positions with a tick per frame and colour from early to late (data is
   already in the JSON). — status: new
