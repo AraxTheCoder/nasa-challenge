@@ -50,12 +50,13 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T11 | C: Static viewer skeleton: load `index.json` + `target.json` from the fixture, show frames, blink between two | Mati | done | `mati/T11-viewer-skeleton` | [tasks/T11](tasks/T11-viewer-skeleton.md). Vanilla JS, no build. Reads static target folders; not yet wired to the Live API (v0.3). Run: see `web/README.md` |
 | T12 | C: Epoch timeline and band/wavelength filter | | open | | Needs T11 |
 | T13 | C: Overlay detections and known objects, with a clear "synthetic" badge where it applies | | open | | Needs T11 |
-| T14 | C: Deploy to GitHub Pages with pre-baked targets, target picker, no live API calls | | open | | Needs T11; real targets arrive with T05 |
+| T14 | C: Deploy: static viewer (e.g. GitHub Pages) + Live API on a host that runs Python, viewer pointed at it (contracts v0.3) | | open | | Needs T11, T18, T20. Reworded 2026-11-14 for live data (was: pre-baked targets, no live API calls) |
 | T15 | C: Submission text, data credits and AI-use disclosure | | open | | Needs official text in `docs/CHALLENGE.md` |
 | T16 | C: Demo video and slides | | open | | After feature freeze |
 | T17 | A: Compute wavelength-matched `pairs` across epochs (+ `bandwidth_um`) in `target.json` (contracts v0.2) | Joerg | open | | Part of T03/T04 output. Rule in CONTRACTS "Pair" |
 | T18 | C: Live API service: `GET /api/target?ra=&dec=&size=` builds (pipeline + detect) or serves from cache, progress while building, CORS (contracts v0.3) | Jonathan | done | `jonathan/T18-live-api` | `python -m server [--fixture]`, see `server/README.md`. Live mode works once `pipeline.build` (T02–T04) exists; until then `--fixture` |
 | T19 | A: Labels on the images: catalogue names/positions (SIMBAD, Gaia DR3 with proper motion, CatWISE) into `target.json` | Joerg | doing | `joerg/T19-labels` | [task file](tasks/T19-labels.md) |
+| T20 | C: Viewer ↔ Live API: RA/Dec/size input, `?ra=&dec=&size=` in the page URL, request + poll with progress, load from `target_url`, quick picks for the official test fields (contracts v0.3) | Mati | doing | `mati/T20-live-api-client` | [tasks/T20](tasks/T20-live-api-client.md) |
 
 ## Decisions
 
