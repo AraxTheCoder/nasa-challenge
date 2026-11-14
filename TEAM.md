@@ -120,7 +120,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T81 | C: Frame viewer features in the map: single frames and A − B as field layers (`/api/hips/<id>/f<frame>`, `/d<a>-<b>`), the viewer's A/B, blink, play, λ filter and timeline drive the map | Joerg | done | `joerg/T81-map-frames` | [tasks/T81](tasks/T81-map-frames.md). Touches server/hips.py + web/explore.js (Jonathan's map) |
 | T82 | A/C: Blink survey passes anywhere on the map: live tiles per 6-month pass (`spherex-live-p<n>`), "Blink passes" when zoomed in, not only inside a built field | Joerg | done | `joerg/T81-map-frames` | [tasks/T82](tasks/T82-blink-passes.md). Touches tilegen + skycache (Jonathan); the US VM needs a redeploy for pass tiles, local until then |
 | T83 | A: Faster spectra (T66): 7 dependent S3 range requests per image (~2 s, all latency from Europe), CPU under the GIL: 16 worker processes x 8 threads, S3 directly (VM answered 502), bucket listing instead of IRSA cutouts for moved images | Joerg | done | `joerg/T83-fast-spectra` | [tasks/T83](tasks/T83-fast-spectra.md). Fresh point 20-65 s -> 5.5-6 s (10 s right after a server start) |
-| T84 | B: Spectral anomalies: a point that jumps out of its epoch's smooth spectrum (passing asteroid? artefact?), a jump at the same wavelength between epochs, a change of shape; checked against known asteroids at that time; highlighted in the spectrum with a plain-words reason | Joerg | doing | `joerg/T84-spectral-anomalies` | [tasks/T84](tasks/T84-spectral-anomalies.md). Same code later on the HPC (T75) |
+| T84 | B: Spectral anomalies: a point that jumps out of its epoch's smooth spectrum (passing asteroid? artefact?), a jump at the same wavelength between epochs, a change of shape; checked against known asteroids at that time; highlighted in the spectrum with a plain-words reason | Joerg | done | `joerg/T84-spectral-anomalies` | [tasks/T84](tasks/T84-spectral-anomalies.md). Same code later on the HPC (T75) |
 
 ## Decisions
 
@@ -665,3 +665,9 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Jonathan (Claude): API field size limit 60′ → 210′ (one SPHEREx detector), CONTRACTS + Decision;
   VM /cutout up to 6°; `app/` Blink can build the whole visible view up to 210′. `web/` unchanged (form max 60).
 - 2026-11-14 Mati (Claude): T69 done: two more Stack options in the viewer: "along the selected object" (click an object; every frame shifted so it stays put: it adds up sharp, stars smear) and "along a guessed motion" (rate ″/h + direction, over the shown epoch: shift-and-stack for movers too faint for one frame). Built fields have frames days to weeks apart within an epoch, so guessed motions only work for slow movers (< ~0.5″/h, distant bodies); default 0.25″/h. Jonathan: viewer side for T10 Planet X mode.
+
+- 2026-11-14 [Joerg + Claude] T83 + T84 done. Spectra of a clicked point from all exposures in ~6 s (was
+  20-65 s; the cutout VM answered 502s, so spectra read S3 directly). T84: each spectrum is checked for
+  non-continuous changes: spikes/dips per burst (named when a known asteroid passed: 244 Sita and 262 Valda
+  recovered), level and shape changes between epochs; saturated sources say "can't judge". [to whoever owns
+  T09] known asteroids are recovered at their predicted positions (T84 findings). [to Mati] see T84 handoff.

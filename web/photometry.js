@@ -179,7 +179,11 @@ function render() {
   const w = Math.max(300, Math.round(body.clientWidth || 600));
   const frames = d.frames ?? [];
   const good = frames.filter((f) => !f.masked && Number.isFinite(f.flux_ujy));
-  const changes = matchedChanges(frames);
+  // T84: exposures of a spike/dip event (e.g. an asteroid passing) stay in the spectrum chart (ringed)
+  // but not in the baseline hints or the light curve, which would otherwise read them as the source.
+  const odd = new Set((d.anomalies?.items ?? []).flatMap((a) => a.frames ?? (a.frame_id ? [a.frame_id] : [])));
+  const steady = odd.size ? frames.filter((f) => !odd.has(f.frame_id)) : frames;
+  const changes = matchedChanges(steady);
   const at = `(RA ${fmtNum(d.ra_deg, 4)}°, Dec ${fmtNum(d.dec_deg, 4)}°)`;
   const where = st.sky ? `at the point clicked on the map ${at}` : st.pos ? `at the clicked star ${at}` : `at the field centre ${at}`;
   const what = d.all_exposures ? `exposures (all SPHEREx images of this spot)` : "frames";
@@ -189,7 +193,7 @@ function render() {
       "(too bright for SPHEREx) or sits on bad pixels, so aperture photometry can't measure it."));
   }
   if (good.length) {
-    const ana = analyse(frames);
+    const ana = analyse(steady);
     parts.push(el("h4", {}, "Spectrum (brightness vs. wavelength)"), spectrumToggles(), spectrumChart(frames, w, ana),
       el("p", { class: "muted small" }, "One panel per epoch; grey dots are the other epochs, × marks flagged frames." +
         (st.context ? " Line: what a plain star would give (dashed where extrapolated); ringed points leave it." : "")));
