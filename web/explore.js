@@ -72,6 +72,7 @@ export function view() {
 
 export function on(ev, fn) { sky?.on(ev, fn); }
 export function setDebug(on) { sky?.setDebug(on); }
+export function northUp() { sky?.northUp(); }
 export function addDrawHook(fn) { sky?.addDrawHook(fn); }
 export function redraw() { sky?.redraw(); }
 

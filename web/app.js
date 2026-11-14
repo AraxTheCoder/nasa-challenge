@@ -476,6 +476,11 @@ function updateExplorePos(_view, cursor) {
   const f = (x) => `${x >= 0 ? "+" : ""}${x.toFixed(4)}°`;
   const where = cursor ? `cursor RA ${cursor[0].toFixed(4)}° Dec ${f(cursor[1])}` : `RA ${v.ra.toFixed(4)}° Dec ${f(v.dec)}`;
   $("#explore-pos").textContent = `${where} · view ${v.fovArcmin >= 120 ? (v.fovArcmin / 60).toFixed(1) + "°" : Math.round(v.fovArcmin) + "′"}`;
+  const sv = explore.getSky()?.view();
+  const tilted = sv && Math.abs(sv.roll) > 1;
+  const nb = $("#sky-north");
+  nb.textContent = tilted ? `N↑ (${Math.round(sv.roll)}°)` : "N↑";
+  nb.classList.toggle("muted", !tilted);
 }
 
 function setupBand(layer) {
@@ -603,6 +608,7 @@ async function main() {
   // flip it with a "labels:set" event and follow it via "labels:changed".
   $("#labels-toggle").checked = app.labelsOn;
   $("#labels-toggle").addEventListener("change", (e) => setLabels(e.target.checked));
+  $("#sky-north").addEventListener("click", () => { explore.northUp(); updateExplorePos(); });
   document.addEventListener("labels:set", (e) => setLabels(Boolean(e.detail?.on)));
   queueMicrotask(() => document.dispatchEvent(new CustomEvent("labels:changed", { detail: { on: app.labelsOn } })));
   initViewer();
