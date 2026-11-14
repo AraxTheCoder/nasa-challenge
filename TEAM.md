@@ -43,6 +43,7 @@ Mati). When you finish a task, move its row to Done in the same commit.
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
 | T94 | C: Missing tiles on the map: failed tiles never asked again (holes until reload), false-colour field epochs 422, holes near the poles when zooming in | Jonathan | doing | `main` | [tasks/T94](tasks/T94-missing-tiles.md) |
+| T95 | C: T90 follow-ups not covered by T94: browser test red since T90 (coordinate form moved: `input[name=ra]`), the viewer's field object without its labels | Joerg | doing | `joerg/T95-t90-followups` | [tasks/T95](tasks/T95-t90-followups.md). Asked by Joerg; Jonathan informed |
 | T89 | C/A: Band switching that works on the map (passes per detector, instant within a detector; field epochs per band, builds only the shown detector) + a false-colour layer of all bands (passes and field epochs) | Jonathan | done | `main` | [tasks/T89](tasks/T89-bands-false-colour.md). Reopened: faster false colour (LRGB). `app/` + tilegen/server; per-detector builds touch the build filter |
 | T06 | B: Mover detection v0 on the fixture: source extraction per frame, match across frames, keep what moves | Jonathan | doing | `jonathan/T06-mover-detection` | Start on `fixtures/`, switch to real data after T04 |
 | T10 | B: "Planet X mode": pick a slow distant body (dwarf planet), check it's detectable across epochs, propose the demo target list | Jonathan | doing | `jonathan/T10-test-targets` | Reworded 2026-11-14 for the official text: check SPHEREx multi-epoch coverage of the five official test fields (Barnard, Eps Indi B, WISE 0855, RW Aur, R Dra) + maybe one dwarf planet; feeds T05 warm-up |
@@ -811,3 +812,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   file: what was only in app/ were older versions of the same lines). CLAUDE.md + web/dev.py updated, T55 done.
   Old `/app/` links now 404: use `/web/`. Answers my Question about the `app/` rule.
 - 2026-11-14 [Joerg] T92 done: "▶ Tour" on the map (or `?tour=1`): intro, the five official targets, "Your turn"; each stop opens its field and says what to watch; Barnard / eps Ind B measure their motion with SPHEREx from the card. T91 follow-up: motion cached per star (the map's automatic tile fields share it), star-centred cutouts in big fields.
+- 2026-11-14 [Joerg] Claimed T95: the two T90 problems not in Jonathan's T94 (browser test red; viewer field without labels). [to Jonathan] touches web/ files of T90; I keep changes small and leave the tile / 422 work (T94) to you.
