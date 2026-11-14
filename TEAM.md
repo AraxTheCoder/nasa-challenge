@@ -125,6 +125,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T87 | B: What it is, from the bands: temperature, IR excess, ices (3.0 / 4.27 / 4.67 µm), CH4 3.3 and H2O 1.4 / 1.9 µm (brown dwarfs), CO 2.3 µm, PAH 3.3, Pa-α / Br-α, galaxy 1.6 µm bump; per source a class or hint | Joerg | open | | [tasks/T87](tasks/T87-band-features.md). Needs T85; after T86 |
 | T88 | C: Unusual spectra on the map: "Unusual spectra" toggle in the map bar (measures the field if needed), rings + rank on the outliers, click → card with the reason, spectrum and charts; linked to the T86 panel | Joerg | done | `joerg/T88-outliers-map` | [tasks/T88](tasks/T88-outliers-map.md). Uses explore.js's public draw hook only, no change to the map code |
 | T89 | C/A: Band switching that works on the map (passes per detector, instant within a detector; field epochs per band, builds only the shown detector) + a false-colour layer of all bands (passes and field epochs) | Jonathan | done | `main` | [tasks/T89](tasks/T89-bands-false-colour.md). `app/` + tilegen/server; per-detector builds touch the build filter |
+| T90 | C: Merge `/app/` (T55 redesign) back into `/web/`: first screen = the app/ map (automatic blink, floating panels), scroll down for every web/ widget (frame viewer, analysis, spectra, candidates, outliers…); nothing dropped from either | Jonathan | doing | `jonathan/T90-merge-app-web` | [tasks/T90](tasks/T90-merge-app-into-web.md). Touches all of web/ |
 
 ## Decisions
 
