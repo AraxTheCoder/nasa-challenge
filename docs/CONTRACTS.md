@@ -1,8 +1,13 @@
-# Contracts (v0.25)
+# Contracts (v0.26)
 
-v0.25 (T93): chemistry maps: `GET /api/targets/<id>/chemistry?feature=<f>[&start=1]`, the map as PNG and as the
+v0.26 (T93): chemistry maps: `GET /api/targets/<id>/chemistry?feature=<f>[&start=1]`, the map as PNG and as the
 map layer `x-<feature>`, the feature list at `GET /api/chemistry/features` (see "Chemistry maps"). New endpoints
 only; target.json unchanged.
+
+v0.25 (T89): false colour at the live orders is LRGB: detail (luminance) from the grey tile of the requested
+band, colour from the all-band cube (`spherex-live-rgb` at order 5). So `spherex-live-p<n>-rgb` and
+`spherex-live-rgb` keep the 102 band slices (the slice picks the detail band), and `e<n>c` works on a
+one-detector field. One render per colour tile instead of six. URLs unchanged.
 
 v0.24 (T91): `GET /api/targets/<id>/motion?name=<label>[&start=0]`: a catalogued star's proper motion (and,
 with 3+ consistent epochs, its parallax / distance) measured from SPHEREx alone, next to the catalogue value.
@@ -551,8 +556,10 @@ GET /api/hips/<id>/e<n>/properties         → HiPS properties (order 7, 512 px 
 GET /api/hips/<id>/e<n>/Norder<k>/Dir<d>/Npix<p>.png
 ```
 
-v0.20 (T89): `e<n>d<det>` = only that detector's frames of the epoch; `e<n>c` = false colour, RGBA tiles,
-R = mean of detectors 5+6, G = 3+4, B = 1+2 (each frame's own grey stretch); `detectors` lists the epoch's.
+v0.20 (T89): `e<n>d<det>` = only that detector's frames of the epoch; `e<n>c` = false colour, RGBA tiles;
+`detectors` lists the epoch's. v0.25: `e<n>c` = the epoch's image (detail) times the colour of the all-band cube
+there (LRGB, R = D5+D6, G = D3+D4, B = D1+D2), so it works on a one-detector field; in fixture mode (no cube) it
+falls back to the field's own detectors (R = mean of 5+6, G = 3+4, B = 1+2).
 
 `url` is relative to the API base. Tile pixel (row from top, col) ↔ HEALPix NESTED index at
 nside 2^(k+9): `p * 512² + interleave(row → even bits, col → odd bits)` (checked against IRSA's
@@ -572,9 +579,11 @@ GET /api/sky/<survey>/Norder3/Allsky[_<slice>].png|jpg
 (CDS, one per detector), `spherex-live` (the cube up to order 5, then order 6-7 tiles we render from the
 level-2 images in the AWS bucket, `tilegen/`), `spherex-live-p<n>` (T82: the same live tiles from survey
 pass n's images only, orders 6-7; pass n = images from 2025-05-01 + (n-1) x 182.625 d), `spherex-live-p<n>-rgb`
-(v0.20: the same in false colour, RGBA, R = D5+D6, G = D3+D4, B = D1+D2, composed from the 6 grey tiles), `2mass`, `allwise`.
+(v0.20: the same in false colour, RGBA; v0.25: LRGB = the grey tile of the requested band x the colour of
+`spherex-live-rgb` at order 5, R = D5+D6, G = D3+D4, B = D1+D2), `2mass`, `allwise`.
 At the live orders a requested slice is rounded down to its detector's first, `(d-1)*17` (v0.20).
-`spherex-live-rgb` (v0.21): the whole map in false colour, no bands; IRSA's blank cube slices 50/51 are
+`spherex-live-rgb` (v0.21): the whole map in false colour (to order 5 one cube slice per detector; v0.25: at
+orders 6-7 LRGB like the passes, and the band slices are kept for that); IRSA's blank cube slices 50/51 are
 served from slices 49/52 (v0.21).
 404 = upstream has no such tile; 503 + `Retry-After` = the local image index is still being built;
 502 = upstream or tile generator down. `spherex-live/properties` lists the passes the image index has
@@ -637,7 +646,7 @@ Answer (200):
 - Rebuild = `GET /api/target?…&refresh=1`. Synthetic targets: `{"status": "no_data"}`. Unknown target: 404.
   Image search failed (IRSA down): 502 with a message.
 
-### Chemistry maps (v0.25, T93)
+### Chemistry maps (v0.26, T93)
 
 ```
 GET /api/chemistry/features                          {"features": [{id, name, um, half_width_um, kind, what}]}

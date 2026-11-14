@@ -1,6 +1,6 @@
 # T89: Band switching that works on the map + a false-colour layer
 
-- **Owner:** Jonathan  ·  **Status:** doing
+- **Owner:** Jonathan  ·  **Status:** done
 - **Branch:** `main` (like T55: `app/` + tilegen/server pieces)
 - **Depends on / feeds:** T55 (`/app/`), T82 (pass layers), T32 (field epoch layers), T57 (cutouts)
 
@@ -31,6 +31,12 @@ while blinking. Field epoch builds get faster by fetching only what the shown ba
 
 - 2026-11-14: IRSA cube slices 50/51 are blank (404 for every tile; 2.399 µm left the zoomed-out map black):
   served from 49/52. False colour also for the base map (`spherex-live-rgb`): Allsky 4.2 s first time, tiles ~1.8 s.
+
+- 2026-11-14 faster false colour, LRGB: detail = the grey tile of the chosen band (one render, usually cached
+  from the grey passes), colour = the all-band cube at order 5 (one tile covers 16 order-7 tiles, shared by all
+  passes). 12 pass tiles (4 positions x 3 passes, 4 at once): colour after grey 25.5 s -> 2.6 s; colour cold
+  18.1 s vs grey 18.5 s (was 2.7x grey). Field epochs in colour from the one-detector build (31 s) instead of the
+  all-detector build (~100 s). Colour is coarser (13″) and from all passes together; detail stays per pass.
 
 ## Questions / needs from others
 

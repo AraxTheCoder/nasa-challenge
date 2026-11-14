@@ -16,7 +16,7 @@ interpolated from just below and above, so ordinary stars and smooth spectra can
       wavelength (WCS-WAVE, linear variable filters): on-band = exposures whose wavelength at that pixel lies in
       the feature, continuum = exposures just below and above; per pixel (on − continuum) / continuum, per epoch
       and all epochs; PNG with a symmetric stretch (dark = absorption, bright = emission) + no-data alpha
-- [x] API route (new APIRouter, CONTRACTS v0.25 + Decisions line); cached per field + feature
+- [x] API route (new APIRouter, CONTRACTS v0.26 + Decisions line); cached per field + feature
 - [x] Viewer (map only; the frame viewer is hidden by default since T80/T90): a "Chemistry" control (feature list from `web/spectrum.js` FEATURES + water 1.4 / 1.9 µm) that shows
       the map as a field layer on the sky map (like A − B, T81) and in the frame viewer; legend and a plain-words
       note (what the feature is, what dark / bright means, limits)

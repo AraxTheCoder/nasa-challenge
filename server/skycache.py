@@ -42,6 +42,7 @@ TIMEOUT_S = 30
 # T89: IRSA cube slices 50 and 51 (the dichroic channels, band 3 ch 17 / band 4 ch 1) are blank: the
 # neighbouring channel stands in. One middle channel per detector for the false-colour map.
 BLANK_CUBE = {50: 49, 51: 52}
+CHROMA_ORDER = 5          # T89 LRGB: the colour of live-order false-colour tiles comes from this cube order
 CUBE_COLOUR_SLICES = (8, 25, 42, 59, 76, 93)
 
 
@@ -154,10 +155,10 @@ class SkyCache:
             if path == "properties":            # the live map's (102-band cube depth etc.), relabelled
                 def props():
                     live = (self._live_route("properties")() or b"").decode("utf-8", "replace").splitlines()
-                    drop = ("obs_title", "creator_did", "hips_order_min") + (("hips_cube", "data_cube", "dataproduct_type", "custom_tile_format") if rgb else ())
+                    drop = ("obs_title", "creator_did", "hips_order_min")
                     keep = [l for l in live if not l.startswith(drop)]
-                    if rgb:                     # T89: one colour image, no band slices
-                        keep += [f"obs_title            = SPHEREx survey pass {n}, false colour (R = D5+D6, G = D3+D4, B = D1+D2)",
+                    if rgb:                     # T89 LRGB: detail from the slice's band, colour from all bands
+                        keep += [f"obs_title            = SPHEREx survey pass {n}, false colour: detail from this pass in the chosen band, colour from all bands (R = D5+D6, G = D3+D4, B = D1+D2)",
                                  f"creator_did          = ivo://spherex-blink/live-p{n}-rgb",
                                  f"hips_order_min       = {min(LIVE_ORDERS)}"]
                         return ("\n".join(keep) + "\n").encode()
@@ -197,14 +198,16 @@ class SkyCache:
         if path == "properties":
             def props():
                 live = (self._live_route("properties")() or b"").decode("utf-8", "replace").splitlines()
-                drop = ("obs_title", "creator_did", "hips_cube", "data_cube", "dataproduct_type", "custom_tile_format")
+                drop = ("obs_title", "creator_did")
                 keep = [l for l in live if not l.startswith(drop)]
-                keep += ["obs_title            = SPHEREx false colour (R = D5+D6, G = D3+D4, B = D1+D2): IRSA cube to order 5, live tiles above",
+                keep += ["obs_title            = SPHEREx false colour (R = D5+D6, G = D3+D4, B = D1+D2): IRSA cube to order 5; "
+                         "live tiles above: detail from the chosen band, colour from the cube",
                          "creator_did          = ivo://spherex-blink/live-rgb"]
                 return ("\n".join(keep) + "\n").encode()
             return props
         m = TILE_RE.match(path)
         if ALLSKY_RE.match(path) or (m and int(m.group(1)) not in LIVE_ORDERS):
+            path = with_slice(path, 0)                 # the same colour image for every band slice
             def cube():
                 f = self.root / "spherex-live-rgb" / path
                 if f.exists():
@@ -218,8 +221,8 @@ class SkyCache:
         return None
 
     def _fetch(self, survey: str, path: str) -> bytes | None:
-        if survey.endswith("-rgb"):                   # T89: false colour from the 6 per-detector tiles
-            return self._compose_rgb(survey[:-4], path)
+        if survey.endswith("-rgb"):                   # T89: false colour, LRGB (see _compose_lrgb)
+            return self._compose_lrgb(survey[:-4], path)
         if survey.startswith("spherex-live"):         # live order: tile generator (local or remote)
             m = TILE_RE.match(path)
             slice_ = int(m.group(4)[1:]) if m.group(4) else 0
@@ -286,11 +289,52 @@ class SkyCache:
             if not (self.root / survey / sub).exists():
                 self._prefetch.submit(self._quiet_get, survey, sub)
 
-    def _compose_rgb(self, grey_survey: str, path: str) -> bytes | None:
-        """RGBA PNG of the 6 per-detector grey live tiles (see _compose)."""
+    def chroma(self, order: int, npix: int):
+        """T89: colour of HEALPix tile (order, npix) as (512, 512, 3) float RGB / its mean (1 = grey), from the
+        false-colour cube map at order <= 5 (one IRSA cube slice per detector, see _live_rgb_route): a deeper
+        tile takes its part of the order-5 tile and stretches it. None where the cube has no colour."""
+        import io
+
+        import numpy as np
+        from PIL import Image
+
+        k = min(order, CHROMA_ORDER)
+        parent = npix >> (2 * (order - k))
+        data = self.get("spherex-live-rgb", f"Norder{k}/Dir{(parent // 10000) * 10000}/Npix{parent}.png")
+        if not data:
+            return None
+        im = Image.open(io.BytesIO(data)).convert("RGB")
+        d = order - k
+        if d:
+            sub = 512 >> d
+            c = npix & ((1 << (2 * d)) - 1)              # the child's place in its parent: row in even bits, col in odd
+            row = sum(((c >> (2 * b)) & 1) << b for b in range(d))
+            col = sum(((c >> (2 * b + 1)) & 1) << b for b in range(d))
+            im = im.crop((col * sub, row * sub, (col + 1) * sub, (row + 1) * sub)).resize((512, 512), Image.BILINEAR)
+        rgb = np.asarray(im, np.float32)
+        luma = rgb.mean(axis=2, keepdims=True)
+        return np.clip(rgb / np.maximum(luma, 4.0), 0, 3)
+
+    def _compose_lrgb(self, grey_survey: str, path: str) -> bytes | None:
+        """T89 false colour at the live orders, LRGB: the detail (luminance) is the grey live tile of the band in
+        the path (one render, shared with the grey map / passes), the colour comes from the all-band cube (one
+        order-5 tile covers 16 order-7 tiles, shared by every pass). 6x fewer renders than one per detector."""
+        import io
+
+        import numpy as np
+        from PIL import Image
+
+        grey = self.get(grey_survey, live_path(path))
+        if grey is None:
+            return None
+        a = np.asarray(Image.open(io.BytesIO(grey)).convert("LA"), np.float32)
         m = TILE_RE.match(path)
-        base = f"Norder{m.group(1)}/Dir{m.group(2)}/Npix{m.group(3)}"
-        return self._compose([(grey_survey, f"{base}{f'_{(d - 1) * 17}' if d > 1 else ''}.png") for d in range(1, 7)])
+        ch = self.chroma(int(m.group(1)), int(m.group(3)))
+        lum = a[..., 0:1]
+        rgb = np.repeat(lum, 3, axis=2) if ch is None else np.clip(lum * ch, 0, 255)
+        buf = io.BytesIO()
+        Image.fromarray(np.dstack([rgb.astype(np.uint8), a[..., 1].astype(np.uint8)]), "RGBA").save(buf, "PNG", compress_level=3)
+        return buf.getvalue()
 
     def _compose(self, sources: list[tuple[str, str]]) -> bytes | None:
         """T89: RGBA PNG from 6 grey images, one per detector (D1 ... D6): R = mean(D5, D6), G = mean(D3, D4),
