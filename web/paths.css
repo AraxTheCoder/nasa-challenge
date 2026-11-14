@@ -53,3 +53,8 @@
 .insp-table tr { cursor: pointer; }
 .insp-bright .bar { display: inline-block; min-width: 2.4em; padding-left: 4px; font-variant-numeric: tabular-nums;
   background: linear-gradient(90deg, rgba(255, 210, 122, 0.45) calc(var(--v) * 100%), transparent 0); }
+
+/* T34 label priority */
+.path-mark.is-field { stroke: #ffd27a; stroke-width: 2.6; }
+.path-mark.is-minor { stroke: rgba(255, 210, 122, 0.55); stroke-width: 1.2; }
+.path-hit:focus-visible { outline: none; stroke: #6cb4ff; stroke-width: 2; vector-effect: non-scaling-stroke; }

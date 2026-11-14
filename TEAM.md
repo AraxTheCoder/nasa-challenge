@@ -69,8 +69,12 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T30 | C: Explore mode (R1): Aladin Lite v3 in the viewer with the CDS SPHEREx HiPS (`CDS/P/SPHEREx/QR2/D1`..`D6`, all-sky, combined epochs) + Gaia/WISE overlays; click a spot → per-epoch blink via the Live API | Jonathan | done | `jonathan/T30-explore` | Instant pan/zoom today; HiPS is not split by epoch |
 | T31 | A: Local mirror of the SPHEREx image index (1.6 M ObsCore rows: footprint, time, detector, wavelength, FITS URL) in SQLite with a HEALPix index, refreshed per data release (R4) | Jonathan | done | `jonathan/T31-index-mirror` | TAP: 9-19 s per search today, 136 s for a COUNT(*) |
 | T32 | A: Per-epoch HiPS tiles (R2/R3): build HEALPix tiles per epoch x detector from full images for chosen regions (warm the 5 official fields first), served by `server/` as extra Aladin layers, epoch switch = blink | Jonathan | done | `jonathan/T32-epoch-hips` | Full images cover ~12 deg2 each, far less waste than 36 cutouts per 15' |
-| T33 | A: Read SPHEREx images from the AWS Open Data bucket (`nasa-irsa-spherex`, same paths as IRSA) with HTTP Range: only headers + the rows around the field of IMAGE/FLAGS + WCS-WAVE, no EPSF; IRSA cutouts as fallback | Jonathan | doing | `jonathan/T33-s3-range` | Measured S3 5-7 MB/s, 0 errors vs IRSA 0.31 MB/s, >50% 503 |
-| T34 | C: Label priority: always show only the most important names (field's object, movers, known asteroids, notable motion), the rest on hover; cap + "show all" toggle | Joerg | doing | `joerg/T34-label-priority` | [tasks/T34](tasks/T34-label-priority.md). Mati: labels too crowded on real fields. Builds on T23 `paths.js` |
+| T33 | A: Read SPHEREx images from the AWS Open Data bucket (`nasa-irsa-spherex`, same paths as IRSA) with HTTP Range: only headers + the rows around the field of IMAGE/FLAGS + WCS-WAVE, no EPSF; IRSA cutouts as fallback | Jonathan | done | `jonathan/T33-s3-range` | Measured S3 5-7 MB/s, 0 errors vs IRSA 0.31 MB/s, >50% 503 |
+| T34 | C: Label priority: always show only the most important names (field's object, movers, known asteroids, notable motion), the rest on hover; cap + "show all" toggle | Joerg | done | `joerg/T34-label-priority` | [tasks/T34](tasks/T34-label-priority.md). Mati: labels too crowded on real fields. Builds on T23 `paths.js` |
+| T35 | C: Tracing over the stitched sky: paths, per-epoch markers and names of moving / important objects drawn on the explore map (T30/T32), following the epoch blink | Joerg | review | `joerg/T35-sky-traces` | [task file](tasks/T35-sky-traces.md). From Joerg's idea |
+| T36 | C: Own sky map as the main view (no Aladin, no dependency): WebGL HiPS renderer (HEALPix tiles, SIN projection), drag/zoom/pinch like Google Earth, SPHEREx epochs as layers, blink in the map; frame viewer stays below as detail | Jonathan | doing | `jonathan/T36-sky-map` | Replaces the T30 Aladin panel |
+| T37 | A/C: Catalogue labels only on request: builds skip labels; `GET /api/targets/<id>/labels` computes them in the background; viewer has a Labels switch | Jonathan | doing | `jonathan/T36-sky-map` | SIMBAD labels cost 30 s in deep fields (labels.py untouched) |
+| T38 | A: Fast labels: vectorised tracks (all objects x frames at once), ranked cap of 400 SIMBAD + 400 Gaia per field, grid-based duplicate merge, SIMBAD + Gaia in parallel, 15 s per mirror | Joerg | done | (merged as e715788) | Deep field (COSMOS, 30,785 SIMBAD objects): 23 s -> 5.5 s, labels 50+ MB -> 1.2 MB. Official fields: same important labels |
 
 ## Decisions
 
@@ -137,6 +141,13 @@ Dated, one line each, with why.
 - 2026-11-14 [Jonathan] CONTRACTS v0.6: Live API serves per-epoch HiPS tiles (`/api/hips/...`, T32) so
   Aladin Lite can blink epochs in the map. Why: requirement R2 (epoch switch <= 0.1 s) in the
   explore view; additive, nothing existing changes.
+- 2026-11-14 [Joerg] CONTRACTS v0.7: labels carry `importance` (0 field object … 4 Gaia-only) and
+  `aliases` (duplicates within 3" merged). Why: real fields had 40-270 labels; the official target
+  WISE 0855 was hidden because its SIMBAD name looks like a catalogue number (T34).
+- 2026-11-14 [Joerg] T38: `pipeline/labels.py` keeps at most 400 SIMBAD objects (ranked: notable motion
+  + the field's object always, then notable types, classic names, other names, catalogue numbers,
+  nearest the centre first) and the 400 brightest Gaia stars (G < 16). Why: deep fields returned
+  ~30,000 objects; labelling took 23-30 s and wrote 50+ MB of labels. Now 1-7 s, mostly network.
 
 ## Ideas
 
@@ -165,6 +176,14 @@ Format: `[name] idea — status: new`. Agents don't act on an idea until a human
   - Candidate ranking (motion significance, consistency across frames, catalogue match, artifact
     probability from the FLAGS bits) and a dedicated candidate list in the viewer.
   - Photutils for source extraction (not in requirements.lock yet: add with a pin + lock update).
+- [Joerg] (on the Board as T35) Tracing over the stitched sky: draw labels, paths and motion tracks (and detections) on the
+  explore map (T30/T32 per-epoch HiPS), not only on a single field, so a mover can be followed across
+  epochs while panning. The data is there: `labels[].positions`, `known_objects`, `detections` carry
+  RA/Dec per frame; Aladin overlays (catalogue + polyline) can draw them. — status: new
+- [Joerg] Auto target selection: instead of only typed coordinates, propose interesting fields
+  automatically, e.g. high-proper-motion stars and brown dwarfs (Gaia/SIMBAD/CatWISE), known asteroids
+  passing through SPHEREx frames (JPL, T07), fields where our detection (T06) finds unknown movers,
+  or a "surprise me" pick ranked by how much moves there. Shown as a list / quick picks. — status: new
 
 ## Questions / Blockers
 
@@ -343,3 +362,19 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
   8 stays. Gotchas: alasky.cds.unistra.fr down today (CDS SPHEREx HiPS may not load; IRSA-hosted
   layers still work); mirror uses a 1.74 deg circle around image centres (corners skipped, ~17%
   fewer images than TAP); ~1% of images are `l2b_retry` paths, fixed by a TAP lookup on 404.
+- 2026-11-14 [Joerg → Jonathan] T35 adds two things to `web/explore.js`: `export const getAladin()`
+  and an `explore:epoch` event at the end of `showEpoch(i)`. `web/traces.js` uses them to draw traces,
+  per-epoch markers and names on the explore map. Shout in tasks/T35-sky-traces.md if that clashes.
+- 2026-11-14 [Jonathan + Claude] Done: T33. `pipeline/s3.py` reads level-2 images from the AWS Open
+  Data bucket `nasa-irsa-spherex` (dr1/qr2/qr3, same paths as IRSA) with HTTP Range: headers, rows
+  of IMAGE + RICE tiles of FLAGS around the field, WCS-WAVE; ~0.5 MB per image instead of 4.6 MB.
+  Checked against an IRSA cutout of the same image: same wavelength, same mask, correlation 1.0
+  (ZODI is not read; the per-frame stretch absorbs it). Cold 15' builds now 32-63 s (was 434 s);
+  FOV change 7.8 s. IRSA cutouts remain the fallback. Labels get a 5 s budget and are finished in
+  the background. Found: `labels.simbad_labels` takes 30 s in deep fields (COSMOS: 29,328 SIMBAD
+  rows x 30 frames = 1.4 M scalar WCS calls in `_track`), the TAP calls themselves take < 1 s.
+- 2026-11-14 [Joerg → Jonathan] Your T37 finding (30 s labels in deep fields) was my `_track`: one WCS
+  call per object per frame. T38 (commit e715788) vectorises it, caps labels at ~800 per field and runs
+  SIMBAD + Gaia in parallel: COSMOS-like field 23 s -> 5.5 s, official fields 1-7 s (network-bound),
+  same important labels. Your 5 s budget + late labels still make sense for slow catalogue servers;
+  whether T37 still needs labels-on-request is your call.

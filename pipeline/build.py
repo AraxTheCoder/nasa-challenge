@@ -30,7 +30,8 @@ RAW_ROOT = Path("data/raw")
 # Hardware/bad-pixel bits (TEAM.md Log, T01). SOURCE (21) and OUTLIER (19) are deliberately kept.
 HW_MASK = sum(1 << b for b in (0, 1, 2, 6, 9, 10, 11, 14, 17, 25, 26, 27, 28))
 PER_GROUP = 2        # images per (epoch, detector); 3 epochs x 6 detectors x 2 = 36 cutouts
-THREADS = 8
+THREADS = 8          # IRSA cutout service: more parallel requests only get more 503s
+S3_THREADS = 24      # AWS bucket (T33): not throttled, 7 MB/s at 32 parallel from Europe
 TIMEOUT_S = 180
 
 Progress = Callable[..., None]
@@ -128,6 +129,14 @@ def fetch(fits_url: str, ra: float, dec: float, size_deg: float, raw_root: Path 
     d = _cutout_dir(fits_url, ra, dec, raw_root)
     d.mkdir(parents=True, exist_ok=True)
     path = d / f"{size:.4f}.fits"
+    # T33: AWS Open Data bucket first (HTTP Range, only the rows we need), IRSA cutouts as fallback.
+    try:
+        from . import s3
+        return s3.fetch_cutout(fits_url, ra, dec, size, path)
+    except LookupError:
+        raise
+    except Exception as e:  # noqa: BLE001 - e.g. a file not (yet) in the bucket
+        print(f"S3 read failed, using IRSA cutout: {fits_url.rsplit('/', 1)[-1]}: {e}")
     content = _get_with_retry(cutout_url(fits_url, ra, dec, size))
     tmp = path.with_suffix(f".{threading.get_ident()}.part")
     tmp.write_bytes(content)
@@ -158,6 +167,17 @@ def cached_exposures(ra: float, dec: float, refresh: bool = False, raw_root: Pat
                    encoding="utf-8")
     tmp.replace(path)
     return exposures, prov
+
+
+def source_of(path: Path, fits_url: str, ra: float, dec: float) -> str:
+    """The URL the cached cutout was read from: S3 (with the detector rows kept) or an IRSA cutout."""
+    from astropy.io import fits
+
+    h = fits.getheader(path, 0)
+    if "S3SRC" in h:
+        from .s3 import s3_url
+        return f"{s3_url(fits_url)}#rows={h.get('S3CUT', '').replace(' ', '')}"
+    return cutout_url(fits_url, ra, dec, float(path.stem))
 
 
 # -- T03: align + wavelength -------------------------------------------------------------------------
@@ -239,9 +259,66 @@ def render_png(img: np.ndarray, path: Path) -> None:
     Image.fromarray(np.dstack([grey, alpha]), "LA").save(path, optimize=True)
 
 
+LABEL_BUDGET_S = 5.0
+
+
+def _labels_with_budget(target: dict, final_json: Path) -> None:
+    """Add catalogue labels (T19), but don't let slow catalogue servers hold up the field.
+
+    SIMBAD/Gaia took ~40 s on 2026-11-14 (CDS partly down). If they need more than LABEL_BUDGET_S,
+    the target is written without labels and a background thread adds them to `final_json` (the
+    folder the target ends up in; the Live API builds in a temp folder and moves it) when done."""
+    import copy
+
+    result: dict = {}
+
+    def work():
+        try:
+            from .labels import add_labels
+            t = copy.deepcopy(target)
+            add_labels(t)
+            result["labels"] = t.get("labels", [])
+            result["prov"] = t["provenance"][len(target["provenance"]):]
+        except Exception as ex:  # noqa: BLE001 - labels are nice to have, frames are the product
+            result["error"] = str(ex)
+
+    th = threading.Thread(target=work, daemon=True, name="labels")
+    th.start()
+    th.join(LABEL_BUDGET_S)
+    if not th.is_alive():
+        target["labels"] = result.get("labels", [])
+        target["provenance"] += result.get("prov", [])
+        if "error" in result:
+            print(f"labels skipped: {result['error']}")
+        return
+    target["labels"] = []
+
+    def finish_later():
+        th.join()
+        if "labels" not in result:
+            print(f"late labels skipped: {result.get('error')}")
+            return
+        for _ in range(120):                      # wait until the build has been moved into place
+            if final_json.exists():
+                break
+            time.sleep(1)
+        try:
+            t = json.loads(final_json.read_text(encoding="utf-8"))
+            t["labels"] = result["labels"]
+            t["provenance"] += result["prov"]
+            tmp = final_json.with_suffix(".labels.part")
+            tmp.write_text(json.dumps(t, indent=1), encoding="utf-8")
+            tmp.replace(final_json)
+        except Exception as ex:  # noqa: BLE001
+            print(f"late labels not written: {ex}")
+
+    threading.Thread(target=finish_later, daemon=True, name="labels-late").start()
+
+
 def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: float,
                  out_root: Path = Path("data/targets"), progress: Progress | None = None,
-                 per_group: int = PER_GROUP, name: str | None = None, refresh: bool = False) -> Path:
+                 per_group: int = PER_GROUP, name: str | None = None, refresh: bool = False,
+                 final_root: Path | None = None) -> Path:
     """Query, download, align, render. Returns the target folder with a valid target.json."""
     def report(step, done=None, total=None, message=""):
         if progress:
@@ -261,7 +338,7 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
     errors = []
     report("download", 0, len(chosen), f"{len(chosen)} of {len(exposures)} SPHEREx images, "
                                        f"{n_cached} already cached")
-    with ThreadPoolExecutor(THREADS) as pool:
+    with ThreadPoolExecutor(S3_THREADS) as pool:
         futs = {pool.submit(fetch, e.fits_url, ra_deg, dec_deg, cut_deg): i for i, e in enumerate(chosen)}
         for n, f in enumerate(as_completed(futs), 1):
             try:
@@ -306,7 +383,7 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
             continue
         if np.isfinite(img).mean() < 0.2:
             continue                      # target barely on this image
-        u = cutout_url(e.fits_url, ra_deg, dec_deg, float(p.stem))   # the cutout actually used
+        u = source_of(p, e.fits_url, ra_deg, dec_deg)                 # where the pixels came from
         fid = f"f{len(frames):03d}"
         render_png(img, out / "frames" / f"{fid}.png")
         frames.append({
@@ -326,7 +403,7 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
         "size_arcmin": size_arcmin,
         "image": {"width": npix, "height": npix, "pixel_scale_arcsec": PIXEL_SCALE_ARCSEC},
         "provenance": [prov_query, {
-            "service": "IRSA SPHEREx cutouts",
+            "service": "SPHEREx level-2 images: AWS Open Data s3://nasa-irsa-spherex (HTTP Range) or IRSA cutouts",
             "query": f"{len(chosen)} cutouts (per frame: source_url; {n_cached} from cache), "
                      f"needed size {cut_deg:.4f} deg, "
                      f"{per_group} per epoch+detector of {len(exposures)} images; "
@@ -335,12 +412,7 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
         "frames": frames, "known_objects": [], "detections": [],
     }
     report("render", len(frames), len(frames), "adding catalogue labels")
-    try:
-        from .labels import add_labels
-        add_labels(target)
-    except Exception as ex:  # noqa: BLE001 - labels are nice to have, frames are the product
-        target["labels"] = []
-        print(f"labels skipped: {ex}")
+    _labels_with_budget(target, Path(final_root or out_root) / target_id / "target.json")
     from .pairs import add_pairs  # T17: wavelength-matched pairs for the viewer's pairs blink
     add_pairs(target)
     (out / "target.json").write_text(json.dumps(target, indent=1), encoding="utf-8")
