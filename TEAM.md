@@ -79,7 +79,7 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T40 | C: Labels on by default + switch everywhere: default ON (remembered per browser), works in live/offline/`?explore=0`, second Labels switch next to the path controls | Joerg | done | `joerg/T40-labels-on` | Without labels the paths, names, inspector and sky-map traces had nothing to draw |
 | T41 | C: Faster map images: server-side HiPS tile cache + prefetch (neighbours, children, Allsky), browser skips stale tiles and loads the centre first, epoch tiles cached and pre-rendered | Jonathan | done | `jonathan/T41-fast-tiles` | IRSA tiles 0.7 s first byte, Allsky 4.3 s, HTTP/1.1 (6 per browser) |
 | T42 | A/C: Live deep zoom everywhere: order 6-7 SPHEREx tiles computed on demand from AWS level-2 images (band's detector, 3 images, cached row chunks, noise-normalised stretch); IRSA cube up to order 5; S3 404 -> resolve real path, not IRSA cutouts | Jonathan | doing | `jonathan/T42-live-zoom` | Red box = orientation only |
-| T43 | C: Difference view A − B in the viewer (challenge: "subtract images taken at different times"): stars cancel for matched pairs, movers show as white/black pairs | Mati | doing | `mati/T43-difference` | [tasks/T43](tasks/T43-difference-view.md) |
+| T43 | C: Difference view A − B in the viewer (challenge: "subtract images taken at different times"): stars cancel for matched pairs, movers show as white/black pairs | Mati | done | `mati/T43-difference` | [tasks/T43](tasks/T43-difference-view.md). Button "A − B" / key `D`; best with a matched pair |
 
 ## Decisions
 
@@ -435,3 +435,7 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 [Joerg → Mati] Thanks for the motion threshold catch: `pipeline.motion.summarize` now counts
   frame pairs >= 36 s apart if the shift is >= 3" (noise floor), plus first-to-last per epoch, so a fast
   mover seen in one ~2 min burst is a `fast mover`. 2 new tests (10" in 2 min -> fast; 1" jitter -> still).
+- 2026-11-14 [Mati + Claude] Done: T43 difference view ("A − B" / `D`): grey = unchanged, white/black =
+  brighter in A/B, blue = no data; B fitted to A first; exclusive with the trail view. On the real
+  Barnard's Star matched pair (371 d) stars cancel and Barnard's proper motion shows as a white/dark pair.
+  Also: offline mode hides the empty sky-map box. Covers the challenge's "subtract images" consideration.
