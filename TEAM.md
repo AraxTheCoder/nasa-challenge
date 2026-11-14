@@ -66,6 +66,9 @@ track is the suggested order; T01, T06 and T11 can start in parallel right now a
 | T27 | A: Cache the IRSA exposure list per position (disk, TTL) and drop the server's duplicate query, so FOV changes skip TAP | Jonathan | done | `jonathan/T26-T28-speed` | TAP took 19 s for a trivial query today |
 | T28 | A: Reuse cached cutouts across FOV changes (a larger cached cutout serves a smaller FOV; minimum size bucket) | Jonathan | done | `jonathan/T26-T28-speed` | 82% of each 4.6 MB cutout is the EPSF table, independent of FOV |
 | T29 | C: RA/Dec help as a popup bubble under the form (built, switched off for now; on for the demo) | Mati | done | `mati/T29-form-tip` | [tasks/T29](tasks/T29-form-tip.md). Off: `FORM_TIP_ENABLED` in `web/app.js`; preview `?tip=1`; switch on for T16 |
+| T30 | C: Explore mode (R1): Aladin Lite v3 in the viewer with the CDS SPHEREx HiPS (`CDS/P/SPHEREx/QR2/D1`..`D6`, all-sky, combined epochs) + Gaia/WISE overlays; click a spot → per-epoch blink via the Live API | | open | | Instant pan/zoom today; HiPS is not split by epoch |
+| T31 | A: Local mirror of the SPHEREx image index (1.6 M ObsCore rows: footprint, time, detector, wavelength, FITS URL) in SQLite with a HEALPix index, refreshed per data release (R4) | | open | | TAP: 9-19 s per search today, 136 s for a COUNT(*) |
+| T32 | A: Per-epoch HiPS tiles (R2/R3): build HEALPix tiles per epoch x detector from full images for chosen regions (warm the 5 official fields first), served by `server/` as extra Aladin layers, epoch switch = blink | | open | | Full images cover ~12 deg2 each, far less waste than 36 cutouts per 15' |
 
 ## Decisions
 
@@ -116,6 +119,15 @@ Dated, one line each, with why.
   plain pip, `pytest server` 11 passed, `web/dev.py` serves API + viewer. Updating: README "Dependencies".
 - 2026-11-14 [Joerg] Ideas "Draw paths", "Motion classification", "Trail image" and
   "Shift-and-stack" are on the Board now: T22 (paths) and T23 (the rest).
+- 2026-11-14 [Jonathan] **REQUIREMENT: Google-Earth-style exploring.** Users pan/zoom freely over the
+  sky and blink epochs anywhere. Targets: (R1) after a pan/zoom, visible tiles in <= 0.5 s anywhere on
+  the sky; (R2) switching epoch <= 0.1 s (preloaded); (R3) per-epoch SPHEREx detail at a new spot:
+  first frames <= 10 s, complete <= 60 s, FOV change <= 2 s; (R4) image search <= 0.2 s.
+  Why/maths: a 1600x1000 px view at native 6.15"/px is 2.7 x 1.7 deg = 4.7 deg2, i.e. ~75x a 15'
+  field. Cutouts today: 166 MB per 15' field, 434 s cold (IRSA throttles to ~0.4 MB/s), so one
+  full view live would take hours: ~10^4x too slow. Pan/zoom must come from pre-tiled HiPS
+  (12-30 tiles of 512 px, ~150 KB each per view, ~5 MB/s while panning); live cutouts only for
+  the per-epoch detail. Plan: T29-T31.
 
 ## Ideas
 
