@@ -98,6 +98,13 @@ Things waiting on a human.
   as hatched "no data"; black would look like empty sky.
 - 2026-11-14 [Joerg → Mati] Yes: T04 writes no-data pixels with alpha 0 (now in CONTRACTS v0.2,
   PROPOSED). Masked bad pixels inside the frame get alpha 0 too.
+- 2026-11-14 [Jonathan] Official text is now in `docs/CHALLENGE.md`. It differs from our plan:
+  (1) users *enter RA/Dec* and get a video of that patch, but CONTRACTS says pre-baked targets,
+  no live API calls (live IRSA cutouts from the browser, or a small backend?);
+  (2) the named test targets are Barnard's Star, Epsilon Indi B, WISE 0855, RW Aur, R Dra:
+  proper-motion stars, brown dwarfs and variables, not asteroids. Bake these as demo targets?
+  (3) nice-to-haves: coordinates in the URL, add/subtract epochs, choosable FOV, Gaia/WISE
+  overlay, spectra, flag display. Resources tab and judging criteria still missing.
 
 ## Log
 
