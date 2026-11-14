@@ -1,0 +1,4 @@
+astropy>=7
+pyvo>=1.6
+numpy>=2
+requests>=2.31
