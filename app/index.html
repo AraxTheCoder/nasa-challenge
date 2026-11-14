@@ -28,6 +28,8 @@
         <label title="Declination: decimal degrees (-7.245) or -7d14m42.5s, -07:14:42.5">Dec
           <input name="dec" type="text" required placeholder="-7d14m42.5s or -7.245" spellcheck="false"></label>
         <button type="submit" class="primary" title="Centre the map on this position, zoomed in fully, and stand the 📍 on it">Go</button>
+        <button type="button" id="pin-btn" aria-pressed="false"
+                title="Pick a position on the map: the 📍 follows the mouse, a left click takes the spot (Esc cancels)">📍</button>
         <select id="preset" aria-label="Test fields" title="The five test fields named in the challenge" hidden>
           <option value="">Test fields…</option>
         </select>

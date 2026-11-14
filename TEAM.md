@@ -611,3 +611,5 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-14 Jonathan (Claude): T55 step 8 (`app/` only): pin held at its head, RA/Dec in two lines beside it;
   Go centres + zooms to order 7; epochs merged into the band panel. `web/` unchanged.
 - 2026-11-14 Mati (Claude): Mati's outlier method (expected spectral profile per source → measured vs expected → heatmap of outliers) written into T75 (Notes from others) with two rules: boundaries calibrated per tile from the data, and only consistent outliers count. Pointer in T76. Joerg: please read before the scoring step.
+- 2026-11-14 Jonathan (Claude): T55 step 9 (`app/` only): 📍 after Go stays on the position and fades after 5 s;
+  📍 button picks a spot on the map (sets form + URL). `web/` unchanged.

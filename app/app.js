@@ -14,7 +14,7 @@ import "./traces.js";      // T35: paths + per-epoch positions of the field's ob
 import "./skylabels.js";   // T72: catalogue names anywhere on the map
 import { initHud } from "./hud.js";   // T55: drag the floating panels anywhere
 import { parseDec, parseRa } from "./coords.js";
-import { initCursorPin, showPinAt } from "./cursorpin.js";   // T55: 📍 + RA/Dec at the mouse
+import { initCursorPin, isPicking, pinAt, setPicking } from "./cursorpin.js";   // T55: 📍 marker + pick mode
 
 const SIZE_MIN = 5;
 const SIZE_MAX = 60;
@@ -187,7 +187,7 @@ const GO_ORDER = 7;            // deepest live HiPS order (3.2″ texels): Go zo
 
 /**
  * Go to req (as typed): centred and zoomed in to order 7 (opts.fovDeg overrides the zoom). The
- * 📍 with its RA/Dec stands on the centre until the mouse moves (a page can't move the mouse).
+ * 📍 with its RA/Dec stands on the position (it moves with the map) and fades out after 5 s.
  */
 function goTo(req, opts = {}) {
   let ra, dec;
@@ -210,8 +210,14 @@ function showGoal() {
   const g = app.goal;
   if (!g) return;
   explore.goTo(g.ra, g.dec, g.fovDeg ?? explore.fovForOrder(GO_ORDER) ?? undefined);
-  const r = $("#sky").getBoundingClientRect();
-  showPinAt(r.left + r.width / 2, r.top + r.height / 2);   // 📍 + RA/Dec on the centre until the mouse moves
+  pinAt(g.ra, g.dec);                                     // 📍 + RA/Dec on the position, fades after 5 s
+}
+
+/** 📍 button: pick a position on the map. The picked spot goes into the form and the URL (like Go). */
+function onPicked(ra, dec) {
+  const req = { ra: ra.toFixed(4), dec: dec.toFixed(4) };
+  fillForm(req);
+  setPageUrl(req, true);
 }
 
 async function loadField(req) {
@@ -532,7 +538,12 @@ async function main() {
   queueMicrotask(() => document.dispatchEvent(new CustomEvent("labels:changed", { detail: { on: app.labelsOn } })));
   bindPage();
   initHud();
-  initCursorPin();
+  const pinBtn = $("#pin-btn");
+  initCursorPin({
+    onPick: onPicked,
+    onModeChange: (mode) => pinBtn.setAttribute("aria-pressed", String(mode === "pick")),
+  });
+  pinBtn.addEventListener("click", () => setPicking(!isPicking()));
   const p = params();
   if (p.get("api")) app.api = p.get("api");
   await loadPresets();

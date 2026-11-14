@@ -65,6 +65,12 @@ export function fovForOrder(k) { return sky ? sky.fovForOrder(k) : null; }
 /** [ra, dec] in degrees under screen point (x, y) of the map, or null (off the sky / no map yet). */
 export function skyAt(x, y) { return sky?.proj.fromScreen(x, y) ?? null; }
 
+/** Screen point [x, y] of the map (px from its top left) where (ra, dec) is drawn, or null (behind / no map). */
+export function screenAt(ra, dec) {
+  const s = sky?.proj.toScreen(ra, dec);
+  return s && s.front ? [s.x, s.y] : null;
+}
+
 /** Current view centre (deg) and field of view (arcmin, horizontal). */
 export function view() {
   if (!sky) return null;

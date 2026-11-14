@@ -40,3 +40,7 @@ viewer and the default URL.
 - Step 8: the mouse holds the 📍 by its head (needle below), RA and Dec in two lines to its right.
   Go centres the position and zooms to HiPS order 7 (3.22″/px, `sky.fovForOrder(7)`); the 📍 stands on the
   centre until the mouse moves (a page can't move the mouse). Epochs are line 3 of the band panel; one dock.
+- Step 9: the 📍 sits just left of the point, RA/Dec right of it. After Go it stands on the position (moves
+  with the map, not with the mouse) and fades after 5 s. The 📍 button next to Go is pick mode: the marker
+  follows the mouse, a left click (not a drag) takes the spot into the form + URL (?ra=&dec=) and fades
+  like Go; Esc cancels.
