@@ -9,6 +9,9 @@ Order of the rules (first that applies wins):
 1. known      the track follows a known asteroid/comet: median distance over shared frames <= MATCH_PX
 2. known      the track follows a *moving* catalogued star (e.g. Barnard's Star) the same way
 3. artifact   sits on a catalogued star that does not move (a star, not a mover)
+3a. artifact  follows the detector, not the sky (T67): afterglow of a brighter source on the same detector pixel
+              in an earlier image, or that pixel lit in other images while the other detector shows nothing
+3b. unknown   T06: one moment, both detectors, absent at other times
 4. artifact   seen in one frame only (nothing to confirm motion with)
 5. artifact   does not move (< STILL_PX over the track)
 6. artifact   positions inside one visit don't lie on a straight line (RMS > LINE_RMS_PX)
@@ -29,7 +32,7 @@ from pathlib import Path
 
 from pipeline.motion import summarize
 
-RULES_VERSION = "2"
+RULES_VERSION = "3"
 MATCH_PX = 2.0                   # ~12": JPL positions (~1") + SPHEREx PSF/centroid + trailing
 STILL_PX = 0.5                   # less than this over the whole track = not a mover
 LOOKUP_SERVICES = ("SB Identification", "SkyBoT", "MPC orbit catalogue")  # known-object lookup (T07, T51)
@@ -151,8 +154,18 @@ def classify_one(det: dict, target: dict) -> dict:
             return result("known", f"follows the catalogued star {lname} ({lclass}) within {lmed:.1f} px", 0.95 - 0.3 * lmed / MATCH_PX, lname)
         return result("artifact", f"sits on the catalogued star {lname}, which does not move", 0.1)
 
-    # 3b. T06: there at one moment in both simultaneous detectors, gone at other times. No motion to judge yet.
+    # 3a. T67: follows the detector, not the sky (afterglow of a bright source, hot pixel)
     ev = det.get("evidence") or {}
+    px = ev.get("same_pixel") or {}
+    if px.get("persist", 0) >= 1:
+        return result("artifact", "afterglow (persistence): an earlier image of the same detector had a much brighter "
+                      "source on the same detector pixel", 0.1)
+    if px.get("lit", 0) >= 1 and 2 * px["lit"] >= px.get("looked", 0):
+        return result("artifact", f"follows the detector, not the sky: the same detector pixel is lit in {px['lit']} of "
+                      f"{px['looked']} other image(s) pointing elsewhere, and the other detector shows nothing there "
+                      "(hot pixel)", 0.1)
+
+    # 3b. T06: there at one moment in both simultaneous detectors, gone at other times. No motion to judge yet.
     if ev.get("moments") == 1 and ev.get("images", 0) >= 2 and ev.get("absent_in", 0) >= 2:
         sn = float(ev.get("sn") or 0.0)
         return result("unknown", f"in both detectors' images of one moment (S/N {sn:.0f}) and not there in "
