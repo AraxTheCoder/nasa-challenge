@@ -1,6 +1,6 @@
 # T108: C/A: Chemistry: no limit of 3 features in one picture
 
-- **Owner:** Mati  ·  **Status:** review (not yet seen in a browser)
+- **Owner:** Mati  ·  **Status:** done (checked in a browser by Joerg, 2026-11-15)
 - **Branch:** `mati/T108-chemistry-no-limit`
 - **Depends on / feeds:** T96 (combined maps), T107 (presets)
 
