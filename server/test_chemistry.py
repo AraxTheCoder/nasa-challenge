@@ -90,7 +90,9 @@ def test_features_say_direction_and_colours(setup):
     body = c.get("/api/chemistry/features").json()
     shows = {f["id"]: f["shows"] for f in body["features"]}
     assert shows["br_alpha"] == "emission" and shows["h2o_ice"] == "absorption"
-    assert body["combine"] == {"max": 3, "colours": {"2": ["#00ffff", "#ff0000"], "3": ["#0000ff", "#00ff00", "#ff0000"]}}
+    cols = body["combine"]["colours"]                                   # T108: any number, 2 and 3 as in T96
+    assert body["combine"]["max"] == len(shows) and cols["2"] == ["#00ffff", "#ff0000"]
+    assert cols["3"] == ["#0000ff", "#00ff00", "#ff0000"] and len(cols[str(len(shows))]) == len(shows)
     known = set(shows)                                                  # T107: presets use only listed features
     assert body["presets"] and all(set(p["features"]) <= known and p["try"]["name"] for p in body["presets"])
 
@@ -123,4 +125,18 @@ def test_combined_errors(setup):
     _grey(d, "h2o_ice", 0)
     assert c.get("/api/targets/c1-p1-s5/chemistry/br_alpha-gold.png").status_code == 404
     assert c.get("/api/hips/c1-p1-s5/x-br_alpha-h2o_ice/properties").status_code == 404      # not in wavelength order
-    assert c.get("/api/hips/c1-p1-s5/x-pa_beta-br_gamma-pah-br_alpha/properties").status_code == 404   # max 3
+    assert c.get("/api/hips/c1-p1-s5/x-pa_beta-br_gamma-pah-pah/properties").status_code == 404   # twice the same
+
+
+def test_more_than_three_features(setup):
+    """T108: four maps in one picture; each feature its own hue, blue (shortest) to red (longest)."""
+    import io
+    from PIL import Image
+    c, d = setup
+    for f in ("pa_beta", "br_gamma", "pah", "br_alpha"):          # all four emit strongly everywhere
+        _grey(d, f, 255)
+    r = c.get("/api/targets/c1-p1-s5/chemistry/pa_beta-br_gamma-pah-br_alpha.png")
+    assert r.status_code == 200
+    rgba = np.asarray(Image.open(io.BytesIO(r.content)).convert("RGBA"))
+    assert (rgba[rgba[..., 3] > 0][:, :3] == 255).all()           # all of them: white
+    assert c.get("/api/hips/c1-p1-s5/x-pa_beta-br_gamma-pah-br_alpha/properties").status_code == 200

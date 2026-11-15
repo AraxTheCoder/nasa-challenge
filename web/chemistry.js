@@ -2,9 +2,9 @@
 // makes the map (pipeline/chemistry.py: the image at the feature's wavelength minus the continuum from just below
 // and above, from the field's own SPHEREx exposures) and serves it as the map layer x-<feature>. Visualization
 // only: the note says what dark / bright / a colour means and what can fool it; the user judges.
-// T96: tick up to three features. One = the grey map (dark = absorption, bright = emission); two or three = one
-// colour picture (layer x-<a>-<b>[-<c>], features in wavelength order): each feature in its colour (shortest
-// blue, longest red; two: cyan + red), as bright as it emits (lines, PAH) or absorbs (ices, water) beyond one
+// T96: tick several features. One = the grey map (dark = absorption, bright = emission); two or more = one
+// colour picture (layer x-<a>-<b>[-<c>...], features in wavelength order): each feature in its colour (shortest
+// blue, longest red; two: cyan + red; T108: no limit, from four on hues by wavelength and mixes are ambiguous), as bright as it emits (lines, PAH) or absorbs (ices, water) beyond one
 // noise level. The maps are made one after another (memory), each once per field. The picture stays when the
 // field's layers are rebuilt (false colour on / off); another view of the map (A/B, A − B, a pass) ends it.
 // T107: presets at the top of the list (from /api/chemistry/features `presets`): tested combinations for kinds of
@@ -46,7 +46,7 @@ function syncControls() {
     box.checked = st.sel.includes(id);
     box.disabled = full && !box.checked;
     const row = box.closest("label");
-    row.title = box.disabled ? `At most ${st.combine.max} at once (blue, green, red)` : byId(id).what;
+    row.title = box.disabled ? `At most ${st.combine.max} at once` : byId(id).what;
     const sw = row.querySelector(".chem-swatch");
     sw.hidden = !cs.has(id);
     sw.style.background = cs.get(id) ?? "";
@@ -162,7 +162,9 @@ async function apply() {
       ` ${label(b)}: ${byId(b.feature ?? b.id).shows === "emission" ? "where it emits" : "where it absorbs (depth)"} · `,
       `${b.what} · ${b.exposures_used} exposures`)),
     "Brighter = stronger (from one noise level; full colour at five). Where colours mix, several are strong at the same spot ",
-    "(e.g. red + green = yellow, all three = white); black = none of them stands out. Shown where all the maps have data. ",
+    ids.length <= 3 ? "(e.g. red + green = yellow, all three = white); " :
+      el("em", {}, `with ${ids.length} colours a mix can look like another feature's own colour (e.g. green + red = yellow): check a spot with its single maps; `),
+    "black = none of them stands out. Shown where all the maps have data. ",
     "Coloured pairs at stars are sharpness differences, not chemistry. ",
     ...tail,
   ]);
@@ -221,7 +223,7 @@ export async function initChemistry(api) {
     return el("label", { class: "chem-row", title: f.what }, cb, el("span", { class: "chem-key chem-swatch", hidden: true }),
       ` ${f.name} · ${fmtNum(f.um, 2)} µm `, el("span", { class: "muted small" }, f.shows === "emission" ? "emits" : "absorbs"));
   }));
-  $("#chem-hint").textContent = `Pick a preset, or tick up to ${st.combine.max}: one = a grey map, more = one colour picture.`;
+  $("#chem-hint").textContent = "Pick a preset, or tick features: one = a grey map, more = one colour picture (clearest with up to three).";
   syncControls();
   visible();
 }
