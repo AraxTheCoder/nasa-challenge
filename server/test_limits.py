@@ -35,7 +35,8 @@ def test_off_by_default_changes_nothing(tmp_path):
 
 
 def test_per_ip_request_rate(tmp_path):
-    limits.configure(True, api_per_min=60, token="t")      # burst max(20, 15) = 20
+    # burst max(20, 0.25) = 20; refill 1 per 10 min, so a slow machine can't earn a 21st request mid-test
+    limits.configure(True, api_per_min=0.1, token="t")
     client = TestClient(create_app(tmp_path, fixture=True))
     codes = [client.get("/api/targets").status_code for _ in range(21)]
     assert codes[:20] == [200] * 20 and codes[20] == 429
