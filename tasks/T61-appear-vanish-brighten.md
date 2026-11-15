@@ -1,6 +1,6 @@
 # T61: B: Appear / disappear / brightness change between epochs, not only motion: sources present in one epoch and not another, or much brighter / fainter
 
-- **Owner:** Mati  ·  **Status:** review (panel not yet seen in a browser)
+- **Owner:** Mati  ·  **Status:** done (checked in a browser by Joerg, 2026-11-15)
 - **Branch:** `mati/T61-variables`
 - **Depends on / feeds:** T06, T49
 

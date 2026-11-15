@@ -1,4 +1,7 @@
-# Contracts (v0.33)
+# Contracts (v0.34)
+
+v0.34 (T107): `GET /api/chemistry/features` adds `presets`: tested feature combinations for kinds of places
+(`pipeline.chemistry.PRESETS`). New field only. See "Chemistry maps".
 
 v0.33 (T61): the spectral-outliers answer gains `variability`: sources whose brightness changes between
 exposures at the same wavelength (`detect.variability`). New field only. See "Spectral outliers".
@@ -711,6 +714,9 @@ Answer (200):
 
 ```
 GET /api/chemistry/features                          {"features": [{id, name, um, half_width_um, kind, what}]}
+                                                     v0.34 (T107) + "presets": [{id, name, features (2-3, wavelength
+                                                     order), looks_for, read, caveats, try: {name, ra, dec, size},
+                                                     tested}]: one click ticks `features`; visualization only
 GET /api/targets/<id>/chemistry?feature=<f>          cached result, else {"status": "not_started"}
 GET /api/targets/<id>/chemistry?feature=<f>&start=1  202 {"status": "building", "done", "total"} while it runs,
                                                      then 200 as below

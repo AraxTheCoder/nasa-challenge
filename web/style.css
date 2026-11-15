@@ -531,6 +531,11 @@ body.map-only #ph-measure { display: none !important; }
 .chem-list .chem-row:has(input:disabled) { opacity: 0.5; }
 .chem-list p { order: -1; margin: 0 0 4px; white-space: normal; }
 .chem-line { display: block; margin: 2px 0; }
+/* T107: presets at the top of the Chemistry list */
+.chem-presets { display: flex; flex-direction: column; gap: 3px; padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+.chem-preset { text-align: left; white-space: nowrap; padding: 3px 8px; border: 1px solid var(--border); border-radius: 4px; background: transparent; color: var(--text); cursor: pointer; }
+.chem-preset:hover { border-color: var(--accent); }
+.chem-preset[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
 /* T103: the open list must lie over the legend below it (#chem-note is a later glass card: its backdrop
    filter makes a stacking context of its own, so the list's z-index alone did not help) */
 .hud-panel:has(.chem-pick[open]) { position: relative; z-index: 30; }
