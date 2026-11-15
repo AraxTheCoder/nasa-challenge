@@ -60,3 +60,7 @@ describe what is already visible are gone.
   `.hud-folded` on the group, which hides everything but a `.hud-tab` panel, `.messages` and `.job`); `place()` doesn't
   freeze the width of a folded group. style.css: the T137 block after `.hud-dragging`, and `.hud-fold` added to the
   "nothing to show yet" row rule. Drag, dock and saved positions are unchanged. Details: tasks/T137.
+- 2026-11-15 [Mati] T137 addition: `place()` now keeps all of a moved group inside the window (`MARGIN` 8 px, below
+  `.app-header`'s height, `max-width` = window − 16 px; `KEEP` is only the narrowest width now), and `initHud()`
+  re-places moved groups on resize and via a ResizeObserver when a group grows (not during a drag). `reset()` also
+  clears `max-width`.

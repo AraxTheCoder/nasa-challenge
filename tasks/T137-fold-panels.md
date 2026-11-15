@@ -14,6 +14,8 @@
 - [x] chemistry.js: cap the open list to the window (on open and on resize); style.css: overflow-y auto.
 - [x] hud.js: fold button by the grip, folded tab (grip + name), remembered in localStorage; style.css rules.
 - [x] Light checks only (node syntax, no browser runs); Mati looks at it.
+- [x] hud.js place(): all of a moved panel inside the window, 8 px margin, below the fixed page header; never wider
+      than the window; again on window resize and when the panel itself grows (ResizeObserver).
 
 ## Findings
 - The Chemistry list never had a height cap on wide screens; only the phone layout (T117) had `max-height: 55vh`.
@@ -34,3 +36,11 @@
   the folded state stays.
 
 ## Notes from others
+- **On screen (added after Mati's "not flow outside the screen", answer: when dragged or resized):** `place()` keeps all
+  of a moved group inside the window (8 px margin) and below the fixed page header (54 px); a group larger than the
+  window keeps its top-left corner (grip) in view. `max-width` = window − 16 px. Re-placed on window resize and when
+  the group itself changes size (ResizeObserver: chemistry note, Spots list, longer chips), not while dragging. The
+  saved position stays what was dragged; it is clamped again on load. Docked (never moved) groups are unchanged.
+  **To look at:** drag a panel against each edge: it stops 8 px inside, not under the header; make the window
+  narrower: moved panels follow; move the Map panel low, then turn a chemistry picture on: the panel moves up so the
+  note and the Spots list stay inside.

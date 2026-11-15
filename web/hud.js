@@ -17,7 +17,8 @@ const FOLD_KEY = "spherex.app.hudFold.v1";          // T137: {<data-hud>: true} 
 const NAMES = { field: "Field", view: "Map" };      // T137: a folded panel's name
 const PINNED = matchMedia("(min-width: 1280px)");   // the same breakpoint as style.css
 const INTERACTIVE = "input, select, button:not(.hud-grip), textarea, a, label, output, summary, [contenteditable]";
-const KEEP = 48;          // px of a panel that always stay on screen
+const KEEP = 48;          // px: the narrowest a panel gets
+const MARGIN = 8;         // T137: px between a moved panel and the window's edges
 const THRESHOLD = 3;      // px before a press becomes a drag (so a click stays a click)
 
 function loadAll(key = KEY) {
@@ -35,15 +36,19 @@ function stageBox(hud) {
   return s ? s.getBoundingClientRect() : { left: 0, top: 0, width: innerWidth, height: innerHeight };
 }
 
-/** Put a panel at (left, top) px relative to the map's screen, kept reachable: its top edge (with the
- *  grip) stays inside it. */
+/** Put a panel at (left, top) px relative to the map's screen, all of it inside (T137; before only its top 48 px
+ *  stayed on screen) and below the page header. Larger than the screen: its top-left corner (with the grip) stays. */
 function place(hud, left, top) {
-  const r = hud.getBoundingClientRect(), box = stageBox(hud);
+  const box = stageBox(hud);
+  hud.style.maxWidth = `${Math.max(KEEP, box.width - 2 * MARGIN)}px`;    // T137: never wider than the window
+  const r = hud.getBoundingClientRect();
   // keep its width: near the right edge the box would otherwise shrink and re-wrap its contents (folded: only the
   // one-line tab shows, its width is taken when it opens)
   if (!hud.style.width && !hud.classList.contains("hud-folded")) hud.style.width = `${Math.ceil(r.width)}px`;
-  const x = Math.min(Math.max(left, KEEP - r.width), box.width - KEEP);
-  const y = Math.min(Math.max(top, 0), box.height - KEEP);
+  // the page header is fixed over the top of the map (both layouts): not under it
+  const minTop = (document.querySelector(".app-header")?.offsetHeight ?? 0) + MARGIN;
+  const x = Math.min(Math.max(left, MARGIN), Math.max(MARGIN, box.width - r.width - MARGIN));
+  const y = Math.min(Math.max(top, minTop), Math.max(minTop, box.height - r.height - MARGIN));
   Object.assign(hud.style, { left: `${x}px`, top: `${y}px`, right: "auto", bottom: "auto", transform: "none" });
   hud.classList.add("hud-moved");
   return { left: x, top: y };
@@ -56,7 +61,7 @@ function relPos(hud) {
 }
 
 function reset(hud) {
-  for (const p of ["left", "top", "right", "bottom", "transform", "width"]) hud.style.removeProperty(p);
+  for (const p of ["left", "top", "right", "bottom", "transform", "width", "max-width"]) hud.style.removeProperty(p);
   hud.classList.remove("hud-moved");
 }
 
@@ -148,12 +153,16 @@ function makeDraggable(hud) {
 export function initHud() {
   const huds = [...document.querySelectorAll("[data-hud]")];
   huds.forEach(makeDraggable);
-  // a smaller window must not strand a moved panel off screen
-  addEventListener("resize", () => {
-    for (const hud of huds) {
-      if (!hud.classList.contains("hud-moved")) continue;
-      const p = relPos(hud);
-      place(hud, p.left, p.top);
-    }
-  });
+  // a smaller window must not strand a moved panel off screen, nor a panel that grows (T137: the chemistry note,
+  // the Spots list, a longer line) push its bottom out of the window
+  const keepIn = (hud) => {
+    if (!hud.classList.contains("hud-moved") || hud.classList.contains("hud-dragging")) return;
+    const p = relPos(hud);
+    place(hud, p.left, p.top);
+  };
+  addEventListener("resize", () => huds.forEach(keepIn));
+  if (typeof ResizeObserver === "function") {
+    const ro = new ResizeObserver((entries) => entries.forEach((e) => keepIn(e.target)));
+    huds.forEach((hud) => ro.observe(hud));
+  }
 }
