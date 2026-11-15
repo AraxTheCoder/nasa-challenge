@@ -28,6 +28,7 @@ import "./passes.js";    // T82: blink SPHEREx's six-month survey passes anywher
 import "./outliers.js";  // T86: sources in the field with unusual spectra
 import "./tour.js";      // T92: guided tour of the official targets ("▶ Tour", ?tour=1)
 import "./flagsmap.js";  // T60: SPHEREx quality flags as an overlay on the map
+import "./community.js"; // T120: views + discussion per map tile ("💬" on the map)
 import { initLamPick, lamFromUrl, setLamUrl } from "./lampick.js";
 import { initStack } from "./stackview.js";
 import { nearestBand, parseLam } from "./lambda.js";

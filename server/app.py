@@ -27,6 +27,7 @@ from .builder import REPO, Builder
 from .photometry import router as photometry_router  # T49
 from .fieldspectra import router as fieldspectra_router  # T85/T86
 from .motion import router as motion_router  # T91
+from .community import router as community_router  # T120
 from .flagsmap import router as flags_router  # T60
 from .updates import router as updates_router  # T64
 from .chemistry import router as chemistry_router  # T93
@@ -54,6 +55,7 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
     app.include_router(photometry_router)  # T49: /api/targets/<id>/photometry
     app.include_router(fieldspectra_router)  # T85/T86: /api/targets/<id>/spectral-outliers
     app.include_router(motion_router)  # T91: /api/targets/<id>/motion?name=
+    app.include_router(community_router)  # T120: /api/community/... (views + discussion per map tile)
     app.include_router(flags_router)  # T60: /api/targets/<id>/flags, flags.png
     app.include_router(updates_router)  # T64: /api/targets/<id>/updates
     app.include_router(chemistry_router)  # T93: /api/targets/<id>/chemistry
