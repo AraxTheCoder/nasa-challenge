@@ -21,6 +21,8 @@ const BACK_COSC = -0.6;                   // don't draw beyond ~127 deg from the
 const MIN_FOV = 1 / 60;                   // 1 arcmin
 const MAX_TEXTURES = 200;           // 1 MB of GPU memory each
 const MAX_PARALLEL_LOADS = 6;             // = what a browser opens per host over HTTP/1.1
+const LOAD_TIMEOUT_MS = 45000;        // T101: a tile download without an answer for this long is given up and retried
+const SLOW_LOAD_TIMEOUT_MS = 150000;  // ... live-rendered tiles (deep zoom, survey passes) are computed on request
 const MAX_SLOW_LOADS = 4;                 // live-rendered tiles; leaves 2 connections for the rest
 // T94: float rounding put the order-0 zoom limit at log2 = 1e-16 for ~20% of window widths / pixel ratios, and
 // ceil() made that "wants 1": an exact boundary counts as the lower order
@@ -334,6 +336,10 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   async function load(job) {
     const t = job.t;
     job.ctrl = new AbortController();
+    job.timedOut = false;
+    // T101: fetch never gives up by itself: after a server crash or a dropped connection the download would
+    // keep its slot for good (all slots taken = no tile until a reload). Live renders may take a while.
+    const limit = setTimeout(() => { job.timedOut = true; job.ctrl.abort(); }, job.slow ? SLOW_LOAD_TIMEOUT_MS : LOAD_TIMEOUT_MS);
     st.inflight.add(job);
     try {
       const res = await fetch(job.url ?? job.layer.tileUrl(job.order, job.pix), { signal: job.ctrl.signal });
@@ -361,7 +367,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       evict();
       markDirty();
     } catch (e) {
-      if (e.name === "AbortError") {             // left the screen: forget it, asked again if it comes back
+      if (e.name === "AbortError" && !job.timedOut) {   // left the screen: forget it, asked again if it comes back
         t.state = "aborted";
         job.layer.tiles.delete(t.key);
         if (job.preempted) markDirty();          // a preload made room: ask for it again next frame
@@ -373,7 +379,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
         // T94: not given up for good (a restarted or briefly busy server left holes until a reload): after a
         // pause the tile is forgotten, so the next frame that still shows it asks again from scratch
         t.state = "failed";
-        t.error = String(e.message ?? e);
+        t.error = job.timedOut ? "no answer in time" : String(e.message ?? e);
         setTimeout(() => {
           if (t.state === "failed" && job.layer.tiles.get(t.key) === t) { job.layer.tiles.delete(t.key); markDirty(); }
         }, FAILED_RETRY_MS);
@@ -384,6 +390,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
           500 * 2 ** t.tries);
       }
     } finally {
+      clearTimeout(limit);
       st.inflight.delete(job);
       st.loads--;
       pump();
