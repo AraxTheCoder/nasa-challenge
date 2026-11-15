@@ -188,6 +188,8 @@ Text for the project page: `docs/SUBMISSION.md`.
 - **SIMBAD** and **VizieR**, operated at CDS, Strasbourg, France (Wenger et al. 2000; Ochsenbein et al.
   2000), also through the Harvard mirrors; the **AAVSO International Variable Star Index (VSX)** through
   VizieR; the SPHEREx per-detector **HiPS** maps of CDS (HiPS: Fernique et al. 2015).
+- **CatWISE2020** (Marocco et al. 2021, through VizieR), built from NASA's WISE and NEOWISE data: brown dwarf
+  labels and catalogue look-ups; the **AllWISE** and **2MASS** catalogues (through VizieR) for chemistry spots.
 - **Minor Planet Center**: this project has made use of data and services provided by the International
   Astronomical Union's Minor Planet Center (orbit catalogue MPCORB). **SkyBoT**, IMCCE / Paris
   Observatory (Berthier et al. 2006).
@@ -204,8 +206,9 @@ Anything simulated or injected in this project is labelled as synthetic in the d
 
 This project was built with the help of Claude (Anthropic) through Claude Code, used for
 planning, code, documentation and repo coordination. Each team member worked with their own
-Claude Code session; the rules those sessions follow are in `CLAUDE.md`. All results were
-reviewed by the team.
+Claude Code session; the rules those sessions follow are in `CLAUDE.md`. Some tasks (T129–T140, marked
+"Codex" in `TEAM.md`) were done with OpenAI Codex. All results were reviewed by the team. The project
+contains no AI-generated images, video or audio.
 
 ## Team
 
