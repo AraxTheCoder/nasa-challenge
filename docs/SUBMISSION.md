@@ -67,7 +67,7 @@ Our tool is a blink comparator for SPHEREx: the method that found Pluto, in a br
    (ionised gas, ices in cold clouds, lit cloud edges), each tried on real fields.
 8. **Explore the whole sky.** A pan-and-zoom map shows the SPHEREx all-sky maps in any of the 102
    channels or in false colour, with 2MASS and AllWISE for comparison, and computes deeper zoom levels
-   from the original images while you zoom. "Blink this spot" turns any view into a field.
+   from the original images while you zoom. "Build field" turns any position into a field of the size you choose.
 
 Every view has a link: `?ra=…&dec=…&size=…` opens a field directly, so the tool can be linked or
 embedded from other sites.

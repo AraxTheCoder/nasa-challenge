@@ -8,323 +8,311 @@
   <script type="module" src="app.js"></script>
 </head>
 <body>
-  <!-- T90: one page. First screen = the T55 map (the sky map fills the window, the controls float over it,
-       blinking starts by itself at level 6/7). Scroll down (scrollbar on the right; the mouse wheel over the
-       map zooms) for everything else: map tools, the field form, frame viewer, analysis, spectra,
-       objects, frames, provenance. -->
+  <!-- T124: the sky map stays behind the whole page (fixed); everything else floats over it as panels.
+       First screen: the controls (hud.js: drag a panel by its grip). Scrolling (the thumbwheel on the right
+       edge, wheel.js; the mouse wheel over the map zooms the map) brings up the analysis panels. -->
   <section id="explore" class="mapstage" aria-label="Sky map">
-    <!-- T30/T36 Sky map: pan/zoom the whole sky (own WebGL HiPS renderer, sky.js). -->
     <div id="sky" class="sky-stage" aria-label="Sky map: drag to move, scroll or pinch to zoom, double-click to zoom in"></div>
 
-    <!-- Default layout (Jonathan's arrangement, 2026-11-14): one dock on the left. Top: the go-to
-         form (+ progress, messages), then one panel with three lines: view size, band + switches, what
-         blinks. A dragged panel leaves its dock (hud.js); double-clicking its ⠿ docks it again. -->
-    <div class="hud-dock hud-dock-top">
-    <!-- go to a position, then progress and messages -->
-    <div class="hud" data-hud="field">
-      <header class="hud-panel topbar">
-        <!-- "Go" only moves the map: the position centred, zoomed in fully, 📍 on it (no build). -->
-        <form id="go-form" class="field-form" autocomplete="off" aria-label="Go to a position">
-          <label title="Right ascension: decimal degrees (133.795) or hours (08h55m10.8s, 08:55:10.8)">RA
-            <input name="ra" type="text" required placeholder="08h55m10.8s or 133.795" spellcheck="false"></label>
-          <label title="Declination: decimal degrees (-7.245) or -7d14m42.5s, -07:14:42.5">Dec
-            <input name="dec" type="text" required placeholder="-7d14m42.5s or -7.245" spellcheck="false"></label>
-          <button type="submit" class="primary" title="Centre the map on this position, zoomed in fully, and stand the 📍 on it">Go</button>
-          <button type="button" id="pin-btn" aria-pressed="false"
-                  title="Pick a position on the map: the 📍 follows the mouse, a left click takes the spot (Esc cancels)">📍</button>
-          <select id="go-preset" aria-label="Test fields" title="The five test fields named in the challenge, and more fields where something moves (T65): Go there" hidden>
-            <option value="">Test fields…</option>
-          </select>
-        </form>
-        <span id="synthetic-badge" class="badge badge-synthetic" hidden>Synthetic data · not SPHEREx</span>
-      </header>
-
-      <section id="job" class="hud-panel job" hidden aria-live="polite">
-        <div class="job-head">
-          <strong id="job-title">Building field…</strong>
-          <span id="job-elapsed" class="muted"></span>
-          <button id="job-cancel" type="button" class="link">Stop waiting</button>
-        </div>
-        <progress id="job-progress"></progress>
-        <p id="job-message" class="muted small"></p>
-      </section>
-
-      <div id="messages" class="messages" role="status" aria-live="polite"></div>
-      <p id="pick-why" class="pick-why hud-panel small" hidden></p>
-    </div>
-
-    <!-- line 1: how much the map shows; line 2: band (+ typed µm, T78) + switches; line 3: what blinks. -->
-    <div class="hud" data-hud="view">
-      <div class="hud-panel hud-stack">
-        <div class="hud-row hud-nowrap">
-          <span id="explore-pos" class="muted small"></span>
-        </div>
-        <div class="hud-row">
-          <label id="explore-band-box" hidden title="SPHEREx has 102 spectral channels; pick one">Band
-            <input id="explore-band" type="range" min="0" max="101" step="1" value="0">
-            <input id="explore-band-lam" type="text" inputmode="decimal" list="lam-features" placeholder="µm" size="6"
-                   title="Type a wavelength in µm: the map jumps to the closest of the 102 channels" aria-label="Band wavelength in µm">
-            <output id="explore-band-out" class="small"></output></label>
-          <label class="small" title="False colour of all bands: blue = 0.75–1.62 µm (detectors 1+2), green = 1.63–3.82 µm (3+4), red = 3.83–5.0 µm (5+6); the whole map, survey passes and field epochs. Zoomed in, the detail comes from the band chosen on the slider, the colour from all bands (LRGB)">
-            <input id="band-colour" type="checkbox"> false colour</label>
-          <label title="Names of catalogued stars and objects in the field (SIMBAD, Gaia DR3). Asked only when switched on.">
-            <input id="labels-toggle" type="checkbox"> Labels <span id="labels-note" class="muted small"></span></label>
-          <label id="tiles-box" class="muted small" hidden
-                 title="Where the live deep-zoom tiles are computed. balanced (default): here and on the Google Cloud VM next to the AWS SPHEREx bucket at once, more tiles to whichever is faster right now; local: only here; US VM: only on the VM">Tiles
-            <select id="tiles-mode"><option value="balanced">balanced</option><option value="local">local</option><option value="remote">US VM</option></select></label>
-          <label class="muted small" title="Debug: tile outlines (green sharp, yellow still blurry, red no tile), zoom level and loading state">
-            <input id="sky-debug" type="checkbox"> Debug</label>
-          <label class="muted small" title="On: the map blinks by itself between the dates SPHEREx imaged this spot. Off: it stands still; click a date label below to show that one">
-            <input id="blink-on" type="checkbox" checked> Blink</label>
-          <span id="blink-status" class="muted small" title="What blinks, chosen by itself: from level 6 the survey passes (SPHEREx's 6-month all-sky passes, anywhere, right away); at level 7, after resting on one map tile, that tile's field epochs (aligned single frames, traces and detections of moving objects; built in the background). Using the map tools or the frame viewer below takes over until you move to another tile."></span>
-        </div>
-        <div class="hud-row">
-          <span id="blink-passes" class="explore-epochs" hidden></span>
-          <span id="explore-epochs" class="explore-epochs" hidden></span>
-          <!-- T93/T96/T108: chemistry maps of the shown field (feature minus continuum), several as one colour picture, chemistry.js -->
-          <details id="chem-box" class="chem-pick" hidden>
-            <summary title="Where in this field chemical features absorb or emit: the image at their wavelength minus the neighbouring wavelengths. Tick one for a grey map, more for one colour picture">Chemistry: <span id="chem-summary">off</span></summary>
-            <div id="chem-list" class="chem-list" role="group" aria-label="Chemical features">
-              <p id="chem-hint" class="muted small"></p>
-              <button id="chem-clear" type="button" class="link small" hidden>Clear</button>
+    <div class="hud-dock">
+      <!-- where: one form. Go moves the map (no build); Build field asks the Live API for that field. -->
+      <div class="hud" data-hud="field">
+        <header class="hud-panel search">
+          <h1 class="brand">SPHEREx Blink</h1>
+          <form id="field-form" class="field-form" autocomplete="off" aria-describedby="form-tip-text">
+            <label title="Right ascension: decimal degrees (133.795) or hours (08h55m10.8s, 08:55:10.8)">RA
+              <input name="ra" type="text" required placeholder="08h55m10.8s or 133.795" spellcheck="false"></label>
+            <label title="Declination: decimal degrees (-7.245) or -7d14m42.5s, -07:14:42.5">Dec
+              <input name="dec" type="text" required placeholder="-7d14m42.5s or -7.245" spellcheck="false"></label>
+            <button type="button" id="go-btn" class="primary" title="Centre the map on this position, zoomed in fully">Go</button>
+            <button type="button" id="pin-btn" aria-pressed="false"
+                    title="Pick a position on the map: the 📍 follows the mouse, a click takes the spot (Esc cancels)">📍</button>
+            <select id="preset" aria-label="Test fields" title="The five test fields named in the challenge, and more fields where something moves" hidden>
+              <option value="">Test fields…</option>
+            </select>
+            <button type="button" id="surprise" class="link" title="A random field where something moves" hidden>Surprise me</button>
+            <span class="build">
+              <label title="Side of the square field, 5–210 arcmin. Larger fields catch faster movers but take longer to build.">Field
+                <input name="size" type="number" min="5" max="210" step="1" value="15" required> ′</label>
+              <button type="submit" id="show-btn"
+                      title="Build this field from the SPHEREx images: its frames, objects and spectra open in the analysis">Build field</button>
+            </span>
+            <button type="button" id="form-help" class="help-btn" aria-controls="form-tip" aria-expanded="false"
+                    title="How to enter coordinates">?</button>
+            <!-- RA/Dec help bubble (T29): the ? button, or ?tip=1 in the URL -->
+            <div id="form-tip" class="form-tip" role="note" hidden>
+              <span class="form-tip-icon" aria-hidden="true">i</span>
+              <p id="form-tip-text">
+                <strong>Choose any patch of sky.</strong> RA and Dec in decimal degrees (133.795, -7.245) or
+                sexagesimal (08h55m10.8s, -7d14m42.5s), a field of view of 5–210 arcmin, or a test field.
+                Then press <strong>Build field</strong>.
+              </p>
+              <button type="button" id="form-tip-close" class="form-tip-close">Got it</button>
             </div>
-          </details>
-        </div>
+          </form>
+          <!-- offline mode (?data=<folder>): pick from a static index.json -->
+          <label id="picker" class="picker" hidden>Target
+            <select id="target-select"></select>
+          </label>
+          <span id="synthetic-badge" class="badge badge-synthetic" hidden>Synthetic data · not SPHEREx</span>
+        </header>
+
+        <section id="job" class="hud-panel job" hidden aria-live="polite">
+          <div class="job-head">
+            <strong id="job-title">Building field…</strong>
+            <span id="job-elapsed" class="muted"></span>
+            <button id="job-cancel" type="button" class="link">Stop waiting</button>
+          </div>
+          <progress id="job-progress"></progress>
+          <p id="job-message" class="muted small"></p>
+        </section>
+
+        <div id="messages" class="messages" role="status" aria-live="polite"></div>
+        <p id="pick-why" class="pick-why hud-panel small" hidden></p>
       </div>
-      <p id="chem-note" class="hud-panel small chem-note" role="status" aria-live="polite" hidden></p>
-      <span id="objects-hud-note" class="hud-panel muted small"></span>
-    </div>
+
+      <!-- what the map shows: band, layers, what blinks -->
+      <div class="hud" data-hud="view">
+        <div class="hud-panel hud-stack">
+          <div class="hud-row">
+            <label id="explore-band-box" class="band" hidden title="SPHEREx has 102 spectral channels; pick one">Band
+              <input id="explore-band" type="range" min="0" max="101" step="1" value="0">
+              <input id="explore-band-lam" type="text" inputmode="decimal" list="lam-features" placeholder="µm" size="6"
+                     title="Type a wavelength in µm: the map jumps to the closest of the 102 channels" aria-label="Band wavelength in µm">
+              <output id="explore-band-out" class="small"></output></label>
+          </div>
+          <div class="hud-row">
+            <label title="False colour of all bands: blue = 0.75–1.62 µm (detectors 1+2), green = 1.63–3.82 µm (3+4), red = 3.83–5.0 µm (5+6). Zoomed in, the detail comes from the band on the slider, the colour from all bands">
+              <input id="band-colour" type="checkbox"> False colour</label>
+            <label title="Names of catalogued stars and objects in the field (SIMBAD, Gaia DR3)">
+              <input id="labels-toggle" type="checkbox"> Labels <span id="labels-note" class="muted small"></span></label>
+            <label title="On: the map blinks by itself between the dates SPHEREx imaged this spot. Off: it stands still; click a date to show that one">
+              <input id="blink-on" type="checkbox" checked> Blink</label>
+            <details class="more">
+              <summary>More</summary>
+              <div class="more-list">
+                <label title="The base map. Another survey (2MASS, AllWISE) shows without the blinking layers over it">Map
+                  <select id="explore-survey"></select></label>
+                <label id="tiles-box" hidden
+                       title="Where the live deep-zoom tiles are computed. balanced: here and on the cloud VM next to the SPHEREx bucket, more to whichever is faster; local: only here; US VM: only there">Tiles
+                  <select id="tiles-mode"><option value="balanced">balanced</option><option value="local">local</option><option value="remote">US VM</option></select></label>
+                <label title="Tile outlines (green sharp, yellow still blurry, red no tile), zoom level and loading state">
+                  <input id="sky-debug" type="checkbox"> Tile outlines</label>
+              </div>
+            </details>
+          </div>
+          <div class="hud-row">
+            <span id="blink-status" class="muted small" title="What blinks is chosen by itself: from level 6 the survey passes (SPHEREx's 6-month all-sky passes); at level 7, after resting on one spot, that spot's field epochs (aligned single frames, with traces and detections of moving objects; built in the background)."></span>
+            <span id="blink-passes" class="explore-epochs" hidden></span>
+            <span id="explore-epochs" class="explore-epochs" hidden></span>
+            <!-- T93/T96/T108: chemistry maps of the shown field (feature minus continuum), chemistry.js -->
+            <details id="chem-box" class="chem-pick" hidden>
+              <summary title="Where in this field chemical features absorb or emit: the image at their wavelength minus the neighbouring wavelengths. Tick one for a grey map, more for one colour picture">Chemistry: <span id="chem-summary">off</span></summary>
+              <div id="chem-list" class="chem-list" role="group" aria-label="Chemical features">
+                <p id="chem-hint" class="muted small"></p>
+                <button id="chem-clear" type="button" class="link small" hidden>Clear</button>
+              </div>
+            </details>
+          </div>
+        </div>
+        <p id="chem-note" class="hud-panel small chem-note" role="status" aria-live="polite" hidden></p>
+        <span id="objects-hud-note" class="hud-panel muted small"></span>
+      </div>
     </div>
 
-    <!-- bottom right: how to move the map -->
-    <p class="hud-hint muted small">Drag to move · scroll or pinch to zoom · double-click to zoom in · arrow keys, +/− and N ·
-      drag a panel by ⠿ to rearrange it (double-click ⠿ docks it again) ·
-      <strong>Go</strong> centres a position, zoomed in fully; from level 6 the map blinks by itself (survey passes; at level 7, resting on a spot: its field epochs) ·
-      scroll the page (scrollbar on the right) for the frame viewer, spectra and map tools</p>
-    <button id="to-below" type="button" class="to-below" title="Frame viewer, spectra, map tools (or use the scrollbar on the right)">▾ more below</button>
+    <!-- where the cursor (or the view centre) is, and north up -->
+    <div class="map-readout hud-panel">
+      <span id="map-pos"></span>
+      <button id="sky-north" type="button" class="link" title="North up (key N). Dragging over a pole can turn the picture.">N↑</button>
+    </div>
   </section>
 
   <datalist id="lam-features"></datalist>
 
-  <!-- ===================== below the first screen: everything of web/ ===================== -->
+  <!-- the analysis: floats over the map; the spectrum of a map click and the unusual spectra are placed
+       right after #analysis-top by photometry.js and outliers.js -->
+  <div id="analysis" class="deck" aria-label="Analysis">
+    <div id="analysis-top" hidden></div>
 
-  <!-- the map's other controls (web/ explore bar): base map, north up, Joerg's pass buttons (T82), cursor
-       position, "Blink this spot" (builds a field from the view). They act on the map above. -->
-  <section id="map-tools" class="map-tools panel" aria-label="Map tools">
-    <div class="explore-bar">
-      <label>Map
-        <select id="explore-survey"></select></label>
-      <span id="explore-passes" class="explore-epochs" title="SPHEREx maps the whole sky once every ~6 months: blink those passes anywhere, zoomed in to 2° or closer (T82)"></span>
-      <span class="spacer"></span>
-      <button id="sky-north" type="button" class="link" title="North up (key N). Dragging over a pole can turn the picture.">N↑</button>
-      <span id="map-pos" class="muted small"></span>
-      <button id="explore-blink" type="button" class="primary"
-              title="Build the per-epoch blink for the centre of this view (field of view clamped to 5–210′)">Blink this spot</button>
-    </div>
-    <p class="muted small explore-note">The map above: drag to move · scroll or pinch to zoom · double-click to zoom in ·
-      arrow keys, +/− and N (north up) when the map has focus. The all-sky maps combine every epoch; a field's
-      epochs appear on the map after <strong>Show</strong>, <strong>Blink this spot</strong> or by themselves at level 7.</p>
-  </section>
-
-  <!-- the field form of web/: build a field of a chosen size (frame viewer, spectra, objects below) -->
-  <header class="topbar build-bar">
-    <h1>SPHEREx Blink</h1>
-
-    <!-- Live mode (default): ask the Live API for any RA/Dec. -->
-    <form id="field-form" class="field-form" autocomplete="off" aria-describedby="form-tip-text">
-      <label title="Right ascension: decimal degrees (133.795) or hours (08h55m10.8s, 08:55:10.8)">RA
-        <input name="ra" type="text" required placeholder="08h55m10.8s or 133.795" spellcheck="false"></label>
-      <label title="Declination: decimal degrees (-7.245) or -7d14m42.5s, -07:14:42.5">Dec
-        <input name="dec" type="text" required placeholder="-7d14m42.5s or -7.245" spellcheck="false"></label>
-      <label title="Side of the square field, 5–210 arcmin. Larger fields catch faster movers but take longer to build.">Field of view
-        <input name="size" type="number" min="5" max="210" step="1" value="15" required> arcmin</label>
-      <button type="submit" class="primary">Show</button>
-      <select id="preset" aria-label="Quick picks" title="The five test fields named in the challenge, and more fields where something moves (T65)" hidden>
-        <option value="">Pick a field…</option>
-      </select>
-      <button type="button" id="surprise" class="link" title="Open a random field from the quick picks" hidden>Surprise me</button>
-      <button type="button" id="form-help" class="help-btn" aria-controls="form-tip" aria-expanded="false"
-              title="How to enter coordinates">?</button>
-      <!-- RA/Dec help bubble (T29). Switched off for now: FORM_TIP_ENABLED in app.js, or ?tip=1. -->
-      <div id="form-tip" class="form-tip" role="note" hidden>
-        <span class="form-tip-icon" aria-hidden="true">i</span>
-        <p id="form-tip-text">
-          <strong>Choose any patch of sky.</strong> Change RA and Dec, in decimal degrees (133.795, -7.245)
-          or sexagesimal (08h55m10.8s, -7d14m42.5s), and the field of view (5–210 arcmin), or pick a test
-          field. Then press <strong>Show</strong>.
-        </p>
-        <button type="button" id="form-tip-close" class="form-tip-close">Got it</button>
-      </div>
-    </form>
-
-    <!-- Offline mode (?data=<folder>): pick from a static index.json. -->
-    <label id="picker" class="picker" hidden>Target
-      <select id="target-select"></select>
-    </label>
-  </header>
-
-  <main class="layout">
-    <section class="viewer" aria-label="Frame viewer">
-      <div id="empty" class="empty">
-        <h2>Pick a patch of sky</h2>
-        <p id="empty-default" hidden>The form above is filled in with
-          <strong id="empty-default-name"></strong><span id="empty-default-kind"></span>.
-          Press <strong>Show</strong> to load it.</p>
-        <p class="muted">Or type any RA and Dec (decimal degrees or sexagesimal) and a field of view, or
-          choose another test field. The first request for a field builds it from SPHEREx data and can
-          take a minute or two; later requests come from the cache.</p>
-      </div>
-
-      <div id="viewer-body" hidden>
-        <div class="target-head">
-          <div>
-            <h2 id="target-name"></h2>
-            <p id="target-meta" class="muted"></p>
-            <!-- T64: newer SPHEREx data since this field was built (GET /api/targets/<id>/updates) -->
-            <p id="target-updates" class="target-updates small" hidden><span id="target-updates-text"></span>
-              <button id="target-updates-rebuild" type="button" class="link" hidden>Rebuild now</button></p>
-            <p id="objects-summary" class="objects-summary"></p>
-          </div>
-          <div class="target-actions">
-            <button id="btn-copy" type="button" class="link" title="Copy a link to this field">Copy link</button>
-            <button id="btn-rebuild" type="button" class="link" title="Rebuild from IRSA to pick up new data">Rebuild</button>
-          </div>
-        </div>
-
-        <div id="stage" class="stage">
-          <div id="frame-stack" class="frame-stack"></div>
-          <!-- Overlay layer for detections / known objects (T13). Pixel coords per CONTRACTS. -->
-          <svg id="overlay" class="overlay" aria-hidden="true"></svg>
-          <div id="stage-label" class="stage-label"></div>
-          <div id="stage-diff-label" class="stage-label stage-diff-label" hidden></div>
-          <div id="stage-stack-label" class="stage-label stage-diff-label" hidden></div>
-          <div id="stage-error" class="stage-error" hidden></div>
-          <!-- T49: while "Measure a star" is on, a click here measures that spot -->
-          <div id="ph-catcher" class="ph-catcher" hidden title="Click a star to measure it (Esc cancels)"></div>
-          <div id="stage-watermark" class="stage-watermark" hidden>SYNTHETIC · NOT SPHEREx DATA</div>
-        </div>
-
-        <div class="controls">
-          <button id="btn-a" type="button" class="slot slot-a" title="Show frame A">A</button>
-          <button id="btn-play" type="button" class="play" aria-pressed="false" title="Blink A/B (Space)">▶ Blink</button>
-          <button id="btn-b" type="button" class="slot slot-b" title="Show frame B">B</button>
-          <button id="btn-diff" type="button" class="diff-btn" aria-pressed="false"
-                  title="Show A − B: steady stars cancel, movers show as a white/black pair (D)">A − B</button>
-          <label class="stack-pick" title="Add frames together so faint sources stand out: all detectors of the shown frame's epoch, its detector over all epochs (T59), or shifted along an object or a guessed motion (T69)">Stack
-            <select id="stack-mode">
-              <option value="off">off</option>
-              <option value="epoch">per epoch</option>
-              <option value="detector">per detector</option>
-              <option value="object">along the selected object</option>
-              <option value="motion">along a guessed motion</option>
-            </select></label>
-          <span id="stack-motion" class="stack-motion" hidden>
-            <input id="stack-rate" type="number" min="0.01" max="3600" step="0.05" value="0.25" aria-label="Guessed rate in arcseconds per hour">″/h
-            toward <input id="stack-pa" type="number" min="0" max="360" step="5" value="90" aria-label="Guessed direction in degrees east of north">°
-          </span>
-          <button id="btn-film" type="button" class="play" aria-pressed="false"
-                  title="Play the frames one after another, like a short film (P)">▶ Play all</button>
-          <select id="film-mode" aria-label="What Play all shows" title="All frames inside the wavelength filter, or one frame per epoch at the wavelength closest to A">
-            <option value="all">all frames</option>
-            <option value="epoch">1 per epoch, A's λ</option>
-          </select>
-          <label class="speed">Interval
-            <input id="speed" type="range" min="100" max="2000" step="50" value="500">
-            <output id="speed-out" for="speed">500 ms</output>
-          </label>
-        </div>
-        <p id="diff-note" class="diff-note muted small" hidden></p>
-        <p id="stack-note" class="diff-note muted small" hidden></p>
-        <!-- T12: compare at the same wavelength. SPHEREx sees each spot at a different wavelength on
-             every visit, and stars change brightness with wavelength. -->
-        <div class="compare" role="group" aria-label="Wavelength filter and matching">
-          <label class="lam">λ
-            <input id="lam-min" type="number" step="0.01" min="0.5" max="5.5" placeholder="min" aria-label="Minimum wavelength in µm">
-            –
-            <input id="lam-max" type="number" step="0.01" min="0.5" max="5.5" placeholder="max" aria-label="Maximum wavelength in µm">
-            µm</label>
-          <label id="det-wrap" hidden>Detector <select id="det-filter"></select></label>
-          <button id="lam-reset" type="button" class="link" hidden>All frames</button>
-          <span id="filter-count" class="muted small"></span>
-          <button id="btn-match" type="button" title="Set B to the frame from another epoch at the closest wavelength to A (M)">Match B to A's λ</button>
-          <label class="lam-at" title="Type a wavelength (µm): A and B become the frames closest to it in the earliest and the latest epoch">Frames at
-            <input id="lam-at" type="text" inputmode="decimal" list="lam-features" placeholder="e.g. 2.17" size="7" aria-label="Show frames at this wavelength, in µm"> µm</label>
-          <span id="lam-at-note" class="muted small" aria-live="polite"></span>
-          <label id="pair-wrap" hidden>Matched pairs <select id="pair-select"></select></label>
-        </div>
-
-        <div id="timeline" class="timeline"></div>
-        <p class="tl-legend muted small">
-          <span class="tl-key tl-key-dot"></span> frame
-          <span class="tl-key tl-key-a"></span> A
-          <span class="tl-key tl-key-b"></span> B
-          <span class="tl-key tl-key-shown"></span> shown ·
-          one panel per epoch, height = wavelength: frames at the same height in different epochs make a fair blink.
-        </p>
-
-        <!-- T49: light curves and spectra on the fly (Live API, real SPHEREx fields only) -->
-        <section id="photometry" class="photometry" aria-labelledby="ph-title" hidden>
-          <div class="ph-head">
-            <h3 id="ph-title">Brightness: spectrum and change over time</h3>
-            <button id="ph-measure" type="button" aria-pressed="false" title="Then click a star on the image">Measure a star</button>
-            <button id="ph-centre" type="button" class="link">Field centre</button>
-            <span id="ph-status" class="muted small"></span>
-          </div>
-          <div id="ph-body"></div>
-        </section>
-
-        <p class="hint muted">
-          <kbd>Space</kbd> blink on/off · <kbd>P</kbd> play all frames · <kbd>X</kbd> flip A/B · <kbd>M</kbd> match B to A's wavelength · <kbd>D</kbd> A − B difference ·
-          <kbd>←</kbd>/<kbd>→</kbd> step through frames · <span class="nodata-swatch" aria-hidden="true"></span> hatched = no data
-        </p>
-      </div>
+    <section id="deck-empty" class="panel deck-empty">
+      <h2>Nothing to analyse yet</h2>
+      <p class="muted">Click a dot on the map for its spectrum. Zoom in until the map blinks, or build a field (Build field, or ▭ Select region on the map):
+        its frames, objects and unusual spectra open here.</p>
     </section>
 
-    <aside id="side" class="side" hidden>
-      <section class="panel">
-        <h3>Shown frame</h3>
-        <dl id="frame-info" class="info"></dl>
-      </section>
+    <main class="layout">
+      <section class="viewer panel" aria-label="Field and frames">
+        <div id="empty" class="empty">
+          <h2>Pick a patch of sky</h2>
+          <p id="empty-default" hidden>The form is filled in with
+            <strong id="empty-default-name"></strong><span id="empty-default-kind"></span>.
+            Press <strong>Build field</strong> to load it.</p>
+          <p class="muted">The first request for a field builds it from SPHEREx data and can take a minute or
+            two; later requests come from the cache.</p>
+        </div>
 
-      <section class="panel" aria-labelledby="objects-title">
-        <h3 id="objects-title">Objects <span id="objects-count" class="muted"></span></h3>
-        <label id="objects-artifacts" class="small muted objects-toggle" hidden>
-          <input id="objects-show-artifacts" type="checkbox"><span>show artifacts (<span id="objects-artifacts-n">0</span>)</span>
-        </label>
-        <p id="objects-note" class="muted small"></p>
-        <ul id="objects-list" class="objects"></ul>
-      </section>
+        <div id="viewer-body" hidden>
+          <div class="target-head">
+            <div>
+              <h2 id="target-name"></h2>
+              <p id="target-meta" class="muted"></p>
+              <!-- T64: newer SPHEREx data since this field was built -->
+              <p id="target-updates" class="target-updates small" hidden><span id="target-updates-text"></span>
+                <button id="target-updates-rebuild" type="button" class="link" hidden>Rebuild now</button></p>
+              <p id="objects-summary" class="objects-summary"></p>
+            </div>
+            <div class="target-actions">
+              <button id="btn-copy" type="button" class="link" title="Copy a link to this field">Copy link</button>
+              <button id="btn-rebuild" type="button" class="link" title="Rebuild from IRSA to pick up new data">Rebuild</button>
+            </div>
+          </div>
 
-      <section class="panel">
-        <h3>Frames <span id="frame-count" class="muted"></span></h3>
-        <p class="muted small">Pick A and B to blink. Click a row to view that frame.</p>
-        <div class="table-wrap">
-          <table id="frame-table" class="frames">
-            <thead>
-              <tr>
-                <th title="Blink slot A">A</th>
-                <th title="Blink slot B">B</th>
-                <th>Frame</th>
-                <th>Time (UTC)</th>
-                <th title="Survey epoch">Ep.</th>
-                <th title="Wavelength at target centre">λ µm</th>
-                <th title="Detector">Det.</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+          <div id="stage" class="stage">
+            <div id="frame-stack" class="frame-stack"></div>
+            <!-- detections / known objects (T13); pixel coords per CONTRACTS -->
+            <svg id="overlay" class="overlay" aria-hidden="true"></svg>
+            <div id="stage-label" class="stage-label"></div>
+            <div id="stage-diff-label" class="stage-label stage-diff-label" hidden></div>
+            <div id="stage-stack-label" class="stage-label stage-diff-label" hidden></div>
+            <div id="stage-error" class="stage-error" hidden></div>
+            <!-- T49: while "Measure a star" is on, a click here measures that spot -->
+            <div id="ph-catcher" class="ph-catcher" hidden title="Click a star to measure it (Esc cancels)"></div>
+            <div id="stage-watermark" class="stage-watermark" hidden>SYNTHETIC · NOT SPHEREx DATA</div>
+          </div>
+
+          <div class="controls">
+            <button id="btn-a" type="button" class="slot slot-a" title="Show frame A">A</button>
+            <button id="btn-play" type="button" class="play" aria-pressed="false" title="Blink A/B (Space)">▶ Blink</button>
+            <button id="btn-b" type="button" class="slot slot-b" title="Show frame B">B</button>
+            <button id="btn-diff" type="button" class="diff-btn" aria-pressed="false"
+                    title="Show A − B: steady stars cancel, movers show as a white/black pair (D)">A − B</button>
+            <label class="stack-pick" title="Add frames together so faint sources stand out: all detectors of the shown frame's epoch, its detector over all epochs, or shifted along an object or a guessed motion">Stack
+              <select id="stack-mode">
+                <option value="off">off</option>
+                <option value="epoch">per epoch</option>
+                <option value="detector">per detector</option>
+                <option value="object">along the selected object</option>
+                <option value="motion">along a guessed motion</option>
+              </select></label>
+            <span id="stack-motion" class="stack-motion" hidden>
+              <input id="stack-rate" type="number" min="0.01" max="3600" step="0.05" value="0.25" aria-label="Guessed rate in arcseconds per hour">″/h
+              toward <input id="stack-pa" type="number" min="0" max="360" step="5" value="90" aria-label="Guessed direction in degrees east of north">°
+            </span>
+            <button id="btn-film" type="button" class="play" aria-pressed="false"
+                    title="Play the frames one after another, like a short film (P)">▶ Play all</button>
+            <select id="film-mode" aria-label="What Play all shows" title="All frames inside the wavelength filter, or one frame per epoch at the wavelength closest to A">
+              <option value="all">all frames</option>
+              <option value="epoch">1 per epoch, A's λ</option>
+            </select>
+            <label class="speed">Interval
+              <input id="speed" type="range" min="100" max="2000" step="50" value="500">
+              <output id="speed-out" for="speed">500 ms</output>
+            </label>
+          </div>
+          <p id="diff-note" class="diff-note muted small" hidden></p>
+          <p id="stack-note" class="diff-note muted small" hidden></p>
+          <!-- T12: compare at the same wavelength: SPHEREx sees each spot at a different wavelength on every visit -->
+          <div class="compare" role="group" aria-label="Wavelength filter and matching">
+            <label class="lam">λ
+              <input id="lam-min" type="number" step="0.01" min="0.5" max="5.5" placeholder="min" aria-label="Minimum wavelength in µm">
+              –
+              <input id="lam-max" type="number" step="0.01" min="0.5" max="5.5" placeholder="max" aria-label="Maximum wavelength in µm">
+              µm</label>
+            <label id="det-wrap" hidden>Detector <select id="det-filter"></select></label>
+            <button id="lam-reset" type="button" class="link" hidden>All frames</button>
+            <span id="filter-count" class="muted small"></span>
+            <button id="btn-match" type="button" title="Set B to the frame from another epoch at the closest wavelength to A (M)">Match B to A's λ</button>
+            <label class="lam-at" title="Type a wavelength (µm): A and B become the frames closest to it in the earliest and the latest epoch">Frames at
+              <input id="lam-at" type="text" inputmode="decimal" list="lam-features" placeholder="e.g. 2.17" size="7" aria-label="Show frames at this wavelength, in µm"> µm</label>
+            <span id="lam-at-note" class="muted small" aria-live="polite"></span>
+            <label id="pair-wrap" hidden>Matched pairs <select id="pair-select"></select></label>
+          </div>
+
+          <div id="timeline" class="timeline"></div>
+          <p class="tl-legend muted small">
+            <span class="tl-key tl-key-dot"></span> frame
+            <span class="tl-key tl-key-a"></span> A
+            <span class="tl-key tl-key-b"></span> B
+            <span class="tl-key tl-key-shown"></span> shown ·
+            one panel per epoch, height = wavelength
+          </p>
+
+          <!-- T49: light curves and spectra on the fly (Live API, real SPHEREx fields only) -->
+          <section id="photometry" class="photometry" aria-labelledby="ph-title" hidden>
+            <div class="ph-head">
+              <h3 id="ph-title">Brightness: spectrum and change over time</h3>
+              <button id="ph-measure" type="button" aria-pressed="false" title="Then click a star on the image">Measure a star</button>
+              <button id="ph-centre" type="button" class="link">Field centre</button>
+              <span id="ph-status" class="muted small"></span>
+            </div>
+            <div id="ph-body"></div>
+          </section>
+
+          <p class="hint muted">
+            <kbd>Space</kbd> blink · <kbd>P</kbd> play · <kbd>X</kbd> flip A/B · <kbd>M</kbd> match λ · <kbd>D</kbd> A − B ·
+            <kbd>←</kbd>/<kbd>→</kbd> step · <span class="nodata-swatch" aria-hidden="true"></span> no data
+          </p>
         </div>
       </section>
 
-      <details class="panel" id="provenance">
-        <summary>Provenance</summary>
-        <ul id="provenance-list" class="provenance"></ul>
-      </details>
-    </aside>
-  </main>
+      <aside id="side" class="side" hidden>
+        <section class="panel">
+          <h3>Shown frame</h3>
+          <dl id="frame-info" class="info"></dl>
+        </section>
 
-  <footer class="footer muted small">
-    <span id="source-info">–</span>
-  </footer>
+        <section class="panel" aria-labelledby="objects-title">
+          <h3 id="objects-title">Objects <span id="objects-count" class="muted"></span></h3>
+          <label id="objects-artifacts" class="small muted objects-toggle" hidden>
+            <input id="objects-show-artifacts" type="checkbox"><span>show artifacts (<span id="objects-artifacts-n">0</span>)</span>
+          </label>
+          <p id="objects-note" class="muted small"></p>
+          <ul id="objects-list" class="objects"></ul>
+        </section>
+
+        <section class="panel">
+          <h3>Frames <span id="frame-count" class="muted"></span></h3>
+          <div class="table-wrap">
+            <table id="frame-table" class="frames">
+              <thead>
+                <tr>
+                  <th title="Blink slot A">A</th>
+                  <th title="Blink slot B">B</th>
+                  <th>Frame</th>
+                  <th>Time (UTC)</th>
+                  <th title="Survey epoch">Ep.</th>
+                  <th title="Wavelength at target centre">λ µm</th>
+                  <th title="Detector">Det.</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <details class="panel" id="provenance">
+          <summary>Provenance</summary>
+          <ul id="provenance-list" class="provenance"></ul>
+        </details>
+      </aside>
+    </main>
+
+    <footer class="footer muted small">
+      <span id="source-info">–</span>
+    </footer>
+  </div>
+
+  <!-- T124: the thumbwheel (wheel.js): roll the mouse wheel over it or drag it to scroll the page; the
+       arrows jump to the map and to the analysis -->
+  <nav id="wheel" class="wheel at-top" aria-label="Scroll between the map and the analysis">
+    <button id="wheel-up" type="button" class="wheel-btn" title="Back to the map" aria-label="Back to the map">▴</button>
+    <div id="wheel-knob" class="wheel-knob" role="scrollbar" tabindex="0" aria-controls="analysis" aria-orientation="vertical"
+         aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Page position"
+         title="Roll the mouse wheel here, or drag, to scroll to the analysis"></div>
+    <button id="wheel-down" type="button" class="wheel-btn" title="To the analysis" aria-label="To the analysis">▾</button>
+    <span class="wheel-tag" aria-hidden="true">Analysis</span>
+    <button id="wheel-wide" type="button" class="wheel-btn wheel-wide" aria-pressed="false"
+            title="Wider analysis panels" aria-label="Wider analysis panels">⇤</button>
+  </nav>
 </body>
 </html>

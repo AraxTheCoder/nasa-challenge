@@ -1,11 +1,16 @@
+/* SPHEREx Blink. T124: the sky map is the page's background (fixed); controls and analysis float over
+   it as glass panels. Sections: tokens · base · controls · map screen (HUD) · thumbwheel · analysis deck ·
+   frame tools · charts (timeline, spectra, unusual spectra) · overlays (tour, discussion) · no-map page. */
+
 :root {
-  --bg: #0b0d12;
-  --panel: #141821;
-  --panel-2: #1b2030;
-  --border: #2a3142;
-  --text: #e6e9ef;
-  --muted: #8b93a7;
-  --accent: #6cb4ff;
+  --bg: #05070d;                         /* the sky behind everything */
+  --panel: #101623;                      /* chart backgrounds, solid cards */
+  --panel-2: #1a2233;                    /* inputs, wells, hovered rows */
+  --glass: rgb(28 28 30 / 0.96);         /* floating panels over the map: solid, no frosted glass */
+  --border: rgb(255 255 255 / 0.12);
+  --text: #f5f5f7;
+  --muted: #a1a1aa;
+  --accent: #0a84ff;                     /* system blue, dark appearance */
   --slot-a: #5ad1a4;
   --slot-b: #f29e6d;
   --warn: #f5c04a;
@@ -13,7 +18,16 @@
   --synthetic: #ffb020;
   --nodata-1: #1a1e28;
   --nodata-2: #10131a;
+  --r-panel: 18px;                       /* panels */
+  --r-ctl: 10px;                          /* buttons, inputs */
+  --lift: 0 4px 24px rgb(0 0 0 / 0.35);
+  --blur: none;
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, "Helvetica Neue", Roboto, sans-serif;
+  /* titles and readouts: the same system family at display size */
+  --font-din: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, "Helvetica Neue", Roboto, sans-serif;
+  --wheel-lane: 56px;                    /* room the thumbwheel keeps on the right edge */
   color-scheme: dark;
+  accent-color: var(--accent);
 }
 
 * { box-sizing: border-box; }
@@ -23,13 +37,15 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 14px/1.45 var(--font-ui);
 }
+/* the thumbwheel is the page's scroll control while the map is there */
+:root:not(:has(body.no-map)) { scrollbar-width: none; }
+:root:not(:has(body.no-map))::-webkit-scrollbar { display: none; }
 
-h1, h2, h3 { margin: 0; font-weight: 600; }
-h1 { font-size: 18px; letter-spacing: 0.02em; }
-h2 { font-size: 20px; }
-h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 8px; }
+h1, h2, h3 { margin: 0; font-family: var(--font-din); font-weight: 600; letter-spacing: -0.015em; }
+h2 { font-size: 21px; line-height: 1.2; }
+h3 { font-size: 15px; margin-bottom: 8px; }
 
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
@@ -37,58 +53,267 @@ code, kbd { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; fo
 kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; background: var(--panel-2); }
 a { color: var(--accent); }
 
-/* ---------- top bar ---------- */
-.topbar {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
-  padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--panel);
-}
-.picker { display: flex; align-items: center; gap: 8px; color: var(--muted); }
-select, button {
-  font: inherit; color: var(--text); background: var(--panel-2);
-  border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
+/* ---------- controls ---------- */
+select, button, input[type="text"], input[type="number"], textarea {
+  font: inherit; color: var(--text); background: rgb(255 255 255 / 0.10);
+  border: 1px solid transparent; border-radius: var(--r-ctl); padding: 5px 11px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 select { max-width: 60vw; }
+select option, select optgroup { background: var(--panel); color: var(--text); }
 button { cursor: pointer; }
-button:hover:not(:disabled) { border-color: var(--accent); }
-button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button:disabled { opacity: 0.45; cursor: default; }
+button:hover:not(:disabled):not(.link):not(.primary), select:hover { background: rgb(255 255 255 / 0.17); }
+button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible, textarea:focus-visible,
+[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+button.link { background: none; border: none; color: var(--accent); padding: 4px 6px; }
+button.link:hover:not(:disabled) { text-decoration: underline; }
+button:where([aria-pressed="true"]:not(.link)) { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 .badge { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
 .badge-synthetic { background: var(--synthetic); color: #1a1200; }
+.badge-small { font-size: 10px; padding: 1px 6px; vertical-align: 1px; }
 
-/* ---------- messages ---------- */
+/* a floating panel: the map's panels (.hud-panel) and the analysis panels (.panel) */
+.hud-panel, .panel {
+  background: var(--glass); border: 1px solid var(--border); border-radius: var(--r-panel);
+  box-shadow: var(--lift); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+}
+.panel { padding: 14px 16px; min-width: 0; }
+.panel p { margin: 0 0 8px; }
+details.panel summary { cursor: pointer; font: 600 15px var(--font-din); }
+
+/* ---------- messages, build progress ---------- */
 .messages:empty { display: none; }
-.messages { padding: 8px 16px 0; display: grid; gap: 6px; }
-.msg { padding: 8px 12px; border-radius: 6px; border: 1px solid; }
-.msg-error { border-color: var(--error); color: var(--error); background: #2a1215; }
-.msg-warn { border-color: var(--warn); color: var(--warn); background: #2a2210; }
+.messages { display: grid; gap: 6px; }
+.msg { padding: 8px 12px; border-radius: 10px; border: 1px solid; box-shadow: var(--lift);
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
+.msg-error { border-color: var(--error); color: var(--error); background: rgb(42 18 21 / 0.88); }
+.msg-warn { border-color: var(--warn); color: var(--warn); background: rgb(42 34 16 / 0.88); }
 
-/* ---------- layout ---------- */
-.layout {
-  display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px;
-  padding: 16px; max-width: 1280px; margin: 0 auto;
-}
-@media (max-width: 900px) {
-  .layout { grid-template-columns: minmax(0, 1fr); }
-}
+.job { padding: 10px 12px; border-color: var(--accent); min-width: min(360px, 100%); }
+.job-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.job-head .link { margin-left: auto; }
+.job progress { width: 100%; height: 6px; margin-top: 8px; }
+.job p { margin: 6px 0 0; overflow-wrap: anywhere; }
+#job-elapsed { font-variant-numeric: tabular-nums; }
 
+/* ---------- the map screen ---------- */
+/* #sky is fixed behind the page. .mapstage is the first screen: one viewport of free map, with the panels
+   over it. Docks and groups let drags through to the map; only the panels catch the mouse. */
+.mapstage { position: relative; height: 100vh; height: 100dvh; }
+.mapstage[hidden] { display: none; }
+.sky-stage { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: var(--bg); }
+.sky-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.sky-stage .sky-gl { cursor: grab; outline: none; }
+.sky-stage .sky-gl:active { cursor: grabbing; }
+
+.hud-dock { position: absolute; left: 12px; top: 12px; z-index: 10; display: flex; flex-direction: column; align-items: flex-start;
+  gap: 8px; max-width: min(600px, calc(100vw - 24px)); pointer-events: none; }
+.hud { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-width: 100%;
+  pointer-events: none; margin: 0; }
+.hud > * { pointer-events: auto; }
+.hud-moved { position: absolute; z-index: 11; max-width: none; }
+.hud-panel { padding: 9px 12px; }
+.hud-panel:empty, .hud-row:not(:has(> :not([hidden]):not(.hud-grip))) { display: none; }   /* nothing to show yet */
+/* drag handles (hud.js): the grip, or any empty part of a panel, moves its group */
+.hud[data-hud] .hud-panel { cursor: grab; touch-action: none; }
+.hud-panel input, .hud-panel select, .hud-panel button, .hud-panel label, .hud-panel output { cursor: auto; }
+.hud-panel button, .hud-panel select, .hud-panel label, .hud-panel summary { cursor: pointer; }
+.hud-grip { cursor: grab !important; background: none; border: none; padding: 0 2px; margin-right: -4px;
+  color: var(--muted); font-size: 16px; line-height: 1; letter-spacing: -1px; user-select: none; touch-action: none; }
+.hud-grip:hover { color: var(--text); }
+.hud-dragging, .hud-dragging .hud-panel, .hud-dragging .hud-grip { cursor: grabbing !important; }
+.hud-dragging .hud-panel { box-shadow: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 20px 48px rgb(0 0 0 / 0.65); }
+.hud-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.hud-row label { display: inline-flex; align-items: center; gap: 6px; }
+.hud-stack { display: flex; flex-direction: column; align-items: stretch; gap: 9px; }
+/* switches as chips: lit while on */
+.hud-row > label:has(> input[type="checkbox"]) { position: relative; padding: 3px 11px; border-radius: 999px;
+  border: 1px solid transparent; background: rgb(255 255 255 / 0.10); color: var(--text); user-select: none; }
+.hud-row > label > input[type="checkbox"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.hud-row > label:has(> input[type="checkbox"]):hover { background: rgb(255 255 255 / 0.17); }
+.hud-row > label:has(> input[type="checkbox"]:checked) { color: #fff; background: var(--accent); }
+.hud-row > label:has(> input[type="checkbox"]:checked) .muted { color: rgb(255 255 255 / 0.8); }
+.hud-row > label:has(> input[type="checkbox"]:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+.band { flex: 1 1 100%; flex-wrap: wrap; }
+.band input[type="range"] { flex: 1 1 120px; min-width: 90px; }
+#explore-band-lam, #lam-at { width: 6.5em; font-variant-numeric: tabular-nums; }
+
+/* where: wordmark + the one coordinate form */
+.search { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.brand { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; white-space: nowrap; }
+.brand::before { content: ""; width: 17px; height: 11px; flex: none;   /* the two blink slots, A over B */
+  background: radial-gradient(circle at 5.5px 50%, var(--slot-a) 0 5px, transparent 5.5px),
+              radial-gradient(circle at 11.5px 50%, var(--slot-b) 0 5px, transparent 5.5px); }
+.field-form { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.field-form label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.field-form input[type="text"] { width: 13ch; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; padding: 5px 8px; }
+.field-form input[type="number"] { width: 6.5ch; padding: 5px 6px; }
+.field-form input:invalid:not(:placeholder-shown) { border-color: var(--error); }
+.build { display: inline-flex; align-items: center; gap: 8px; padding-left: 10px; border-left: 1px solid var(--border); }
+.picker { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+#pin-btn { padding: 3px 8px; font-size: 16px; line-height: 1.2; }
+.help-btn { width: 28px; height: 28px; padding: 0; border-radius: 50%; font-weight: 700; color: var(--muted); }
+.help-btn[aria-expanded="true"] { color: var(--text); border-color: var(--accent); }
+/* RA/Dec help bubble (T29); positioned by app.js */
+.form-tip {
+  position: absolute; z-index: 20; top: 0; left: 0;
+  display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 10px;
+  width: min(380px, calc(100vw - 32px)); padding: 10px 12px; border-radius: 10px;
+  background: #2b3140; color: #fff; border: 1px solid #4c5568;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.55); font-size: 13px; line-height: 1.45;
+}
+.form-tip::before {
+  content: ""; position: absolute; top: -7px; left: var(--arrow-x, 20px);
+  width: 12px; height: 12px; background: inherit; transform: rotate(45deg);
+  border-left: 1px solid #4c5568; border-top: 1px solid #4c5568;
+}
+.form-tip-icon {
+  flex: none; width: 22px; height: 22px; border-radius: 4px; display: grid; place-items: center;
+  background: var(--accent); color: #fff; font: 700 14px/1 Georgia, serif; font-style: italic;
+}
+.form-tip p { flex: 1 1 calc(100% - 40px); margin: 0; min-width: 0; }   /* the button wraps below */
+.form-tip-close { margin-left: auto; padding: 3px 10px; font-size: 12px; }
+/* T65: why a quick pick is interesting */
+.pick-why { margin: 0; max-width: 520px; border-left: 3px solid var(--accent); color: var(--muted); }
+.pick-why strong { color: var(--text); }
+
+/* "More": base map, tiles, tile outlines */
+.more { position: relative; }
+.more > summary, .chem-pick > summary { cursor: pointer; list-style: none; white-space: nowrap; padding: 3px 11px;
+  border: 1px solid transparent; border-radius: 999px; background: rgb(255 255 255 / 0.10); }
+.more > summary::-webkit-details-marker, .chem-pick > summary::-webkit-details-marker { display: none; }
+.more > summary::after, .chem-pick > summary::after { content: " ▾"; }
+.more[open] > summary::after, .chem-pick[open] > summary::after { content: " ▴"; }
+.more[open] > summary, .chem-pick[open] > summary, .more > summary:hover, .chem-pick > summary:hover { background: rgb(255 255 255 / 0.17); }
+.more-list, .chem-list { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; display: flex; flex-direction: column;
+  min-width: 240px; padding: 10px 12px; background: rgb(36 38 46 / 0.96); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.55); }
+.more-list { gap: 8px; }
+.more-list label { justify-content: space-between; white-space: nowrap; color: var(--muted); }
+.more-list select { max-width: 260px; }
+/* an open list lies over the panels below it (each glass panel is a stacking context of its own, T103) */
+.hud-panel:has(.chem-pick[open], .more[open]) { position: relative; z-index: 30; }
+
+/* dates of the survey passes / field epochs; the shown one marked, those still loading dimmed */
+.explore-epochs { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.explore-epochs button[aria-pressed="true"] { outline: 2px solid currentColor; }
+.pass-label { cursor: pointer; padding: 1px 8px; border-radius: 999px; font-size: 12px; opacity: 0.7; white-space: nowrap;
+  border: 1px solid transparent; font-variant-numeric: tabular-nums; }
+.pass-label.current { opacity: 1; border-color: currentColor; }
+.pass-label.loading { opacity: 0.4; }
+
+/* cursor / centre position, north up: bottom left */
+.map-readout { position: absolute; left: 12px; bottom: 12px; z-index: 9; display: flex; align-items: center; gap: 6px;
+  padding: 4px 6px 4px 12px; border-radius: 999px; font: 13px var(--font-din); font-variant-numeric: tabular-nums;
+  color: var(--muted); max-width: calc(100vw - 24px - var(--wheel-lane)); white-space: nowrap; }
+.map-readout #map-pos { overflow: hidden; text-overflow: ellipsis; }
+.map-readout:not(:has(#map-pos:not(:empty))) { display: none; }
+
+/* 📍 marker (cursorpin.js): needle tip on the point, RA/Dec under it; fades 5 s after Go / a pick.
+   --pin-tip-y: where the needle tip sits in the glyph (fraction of its height from the top) */
+.cursor-pin { position: fixed; left: 0; top: 0; z-index: 30; pointer-events: none; will-change: transform;
+  --pin-tip-y: 94%; transition: opacity 0.8s ease; }
+.cursor-pin-fading { opacity: 0; }
+.cursor-pin-icon { position: absolute; left: 0; top: 0; transform: translate(-50%, calc(-1 * var(--pin-tip-y)));
+  font-size: 28px; line-height: 1; filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.7)); }
+body.pin-picking .sky-stage canvas { cursor: crosshair !important; }
+.cursor-pin-pill { position: absolute; left: 0; top: 6px; transform: translateX(-50%); white-space: nowrap;
+  display: flex; flex-direction: column; align-items: center; padding: 3px 9px; border-radius: 9px;
+  font-size: 12px; line-height: 1.35; font-variant-numeric: tabular-nums;
+  background: rgb(36 38 46 / 0.9); border: 1px solid var(--border); color: var(--text);
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.5); }
+/* hover card of the map names (skylabels.js) */
+.paths-tip {
+  position: absolute; z-index: 5; max-width: 300px; padding: 8px 10px; border-radius: 10px;
+  background: rgb(36 38 46 / 0.94); border: 1px solid var(--border); color: var(--text);
+  font-size: 12px; line-height: 1.4; pointer-events: auto; box-shadow: 0 4px 14px rgb(0 0 0 / 0.45);
+}
+.paths-tip strong { display: block; font-size: 13px; margin-bottom: 4px; color: #ffe2a8; }
+.paths-tip dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; }
+.paths-tip dt { color: var(--muted); }
+.paths-tip dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.paths-tip-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 11px; }
+
+/* buttons on the map, top right: tour (T92), discussion (T120) */
+.tour-start, .community-btn { position: absolute; right: 12px; z-index: 7; background: var(--glass); color: var(--text);
+  border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-weight: 600; box-shadow: var(--lift);
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
+.tour-start { top: 12px; }
+.community-btn { top: 54px; }
+
+/* ---------- the thumbwheel (wheel.js) ---------- */
+.wheel { position: fixed; right: 10px; top: 50%; transform: translateY(-50%); z-index: 40;
+  display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.wheel-btn { width: 32px; height: 32px; padding: 0; border-radius: 50%; display: grid; place-items: center; line-height: 1;
+  background: var(--glass); box-shadow: var(--lift); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
+/* a knurled wheel seen edge-on: the ridges roll with the page (--roll, px), the shading makes it round */
+.wheel-knob { position: relative; width: 30px; height: 150px; border-radius: 15px; cursor: ns-resize; touch-action: none;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, rgb(20 22 28 / 0.9) 0%, rgb(20 22 28 / 0.25) 24%, rgb(255 255 255 / 0.10) 50%, rgb(20 22 28 / 0.25) 76%, rgb(20 22 28 / 0.9) 100%),
+    repeating-linear-gradient(180deg, rgb(255 255 255 / 0.34) 0 1px, rgb(255 255 255 / 0.05) 1px 6px),
+    var(--glass);
+  background-position: 0 0, 0 var(--roll, 0px), 0 0;
+  box-shadow: var(--lift); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
+.wheel-knob:hover, .wheel-knob.rolling { border-color: rgb(255 255 255 / 0.4); }
+/* how far down the page is: a mark travelling along the wheel's left side (--p: 0 map … 1 end) */
+.wheel-knob::before { content: ""; position: absolute; left: -11px; top: 4px; bottom: 4px; width: 2px; border-radius: 1px;
+  background: rgb(255 255 255 / 0.16); }
+.wheel-knob::after { content: ""; position: absolute; left: -14px; width: 8px; height: 8px; border-radius: 50%;
+  top: calc(4px + var(--p, 0) * (100% - 16px)); background: #fff; }
+.wheel-tag { position: absolute; right: calc(100% + 10px); top: calc(32px + 8px + 150px + 8px + 4px); padding: 3px 10px;
+  border-radius: 999px; background: var(--glass); border: 1px solid var(--border); font: 600 13px var(--font-din);
+  white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.2s ease; }
+.wheel.at-top .wheel-tag { opacity: 1; }
+.wheel-wide { display: none; }
+body.no-map .wheel { display: none; }
+
+/* ---------- the analysis: panels over the map ---------- */
+.deck { position: relative; z-index: 20; container: deck / inline-size; display: grid; grid-template-columns: minmax(0, 1fr);
+  gap: 12px; align-content: start;
+  margin: 0 var(--wheel-lane) 0 12px; padding: 12px 0 16px; pointer-events: none; }
+.deck > *, .layout > *, .side > * { pointer-events: auto; min-width: 0; }
+.deck > .layout, .layout > .side { pointer-events: none; }
+.deck > .photometry, .deck > .outliers { margin: 0; }
+.deck-empty h2 { margin-bottom: 6px; }
+.deck-empty p { margin: 0; max-width: 60ch; }
+body:not(.map-only) .deck-empty,
+.deck:has(> #photometry:not([hidden]), > #outliers:not([hidden]), #viewer-body:not([hidden])) .deck-empty { display: none; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
+@container deck (min-width: 940px) {
+  .layout { grid-template-columns: minmax(0, 1fr) 380px; }
+}
+.side { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; min-width: 0; }
+.footer { padding: 2px 6px; width: fit-content; max-width: 100%; text-shadow: 0 1px 3px #000; overflow-wrap: anywhere; }
+
+/* the field: name, frame tools, timeline, spectrum */
+.viewer { min-width: 0; }
+body.map-only .viewer:has(> #viewer-body[hidden]) { display: none; }
 .target-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
 .target-head h2 { overflow-wrap: anywhere; }
 .target-head p { margin: 2px 0 0; }
 .target-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.target-updates { margin: 4px 0 0; padding: 4px 8px; border-left: 3px solid var(--warn); color: var(--text); }
+.target-updates button { margin-left: 6px; }
+.empty h2 { margin-bottom: 8px; }
+.empty p { margin: 0; max-width: 60ch; }
+.empty p + p { margin-top: 8px; }
 
-/* ---------- stage ---------- */
+/* ---------- frame image (?frames=1, offline, ?explore=0) ---------- */
 .stage {
   position: relative; width: 100%; max-width: min(100%, 78vh);
   aspect-ratio: var(--ar, 1 / 1);
-  border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
-  /* Hatched background shows through transparent pixels = no data. */
+  border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+  /* hatched background shows through transparent pixels = no data */
   background: repeating-linear-gradient(45deg, var(--nodata-1) 0 6px, var(--nodata-2) 6px 12px);
 }
 .frame-stack, .frame-stack img, .overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
 .frame-stack img { image-rendering: pixelated; visibility: hidden; user-select: none; -webkit-user-drag: none; }
 .frame-stack img.shown { visibility: visible; }
 .overlay { pointer-events: none; overflow: visible; }
-
 .stage-label {
   position: absolute; top: 8px; left: 8px; right: 8px; width: fit-content; z-index: 1; padding: 3px 8px; border-radius: 4px;
   background: rgb(0 0 0 / 0.75); color: #fff; font: 600 12px ui-monospace, Menlo, Consolas, monospace;
@@ -104,130 +329,44 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   position: absolute; left: 0; right: 0; bottom: 0; padding: 4px; text-align: center;
   background: rgb(255 176 32 / 0.85); color: #1a1200; font-weight: 700; font-size: 12px; letter-spacing: 0.08em;
 }
+/* Map only (default, see app.js): no frame image or what is drawn on it; the frame tools (A/B, blink, A − B,
+   play, λ filter, timeline, frame panels) drive the map instead (T81, mapframes.js). ?frames=1 shows it. */
+body.map-only #empty, body.map-only #stage, body.map-only #paths-controls, body.map-only #trail-controls,
+body.map-only #ph-measure { display: none !important; }
 
-/* ---------- controls ---------- */
+/* ---------- frame tools ---------- */
 .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
 .slot { min-width: 44px; font-weight: 700; }
 .slot-a { border-left: 4px solid var(--slot-a); }
 .slot-b { border-left: 4px solid var(--slot-b); }
-.slot.active { background: #26304a; }
-.play { min-width: 110px; }
-.play[aria-pressed="true"] { background: var(--accent); color: #04111f; border-color: var(--accent); }
+.slot.active { background: rgb(125 185 255 / 0.22); }
+.play { min-width: 104px; }
+.diff-btn { font-weight: 700; }
 .speed { display: flex; align-items: center; gap: 8px; color: var(--muted); margin-left: auto; }
 .speed output { min-width: 60px; font-variant-numeric: tabular-nums; color: var(--text); }
-.hint { margin: 8px 0 0; font-size: 12px; }
+.hint { margin: 10px 0 0; font-size: 12px; }
 .nodata-swatch {
   display: inline-block; width: 12px; height: 12px; vertical-align: -2px; border: 1px solid var(--border);
   background: repeating-linear-gradient(45deg, var(--nodata-1) 0 3px, var(--nodata-2) 3px 6px);
 }
-
-/* ---------- side panels ---------- */
-.side { display: grid; gap: 16px; align-content: start; min-width: 0; }
-.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px; min-width: 0; }
-.panel p { margin: 0 0 8px; }
-details.panel summary { cursor: pointer; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; }
-
-.info { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; }
-.info dt { color: var(--muted); }
-.info dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
-
-.table-wrap { max-height: 420px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
-table.frames { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
-.frames th, .frames td { padding: 4px 6px; text-align: left; white-space: nowrap; }
-.frames th { position: sticky; top: 0; background: var(--panel-2); color: var(--muted); font-weight: 600; }
-.frames tbody tr { cursor: pointer; border-top: 1px solid var(--border); }
-.frames tbody tr:hover { background: var(--panel-2); }
-.frames tbody tr.shown { background: #22304d; }
-.frames tbody tr.broken td:nth-child(3) { color: var(--error); }
-.frames input[type="radio"] { margin: 0; cursor: pointer; }
-.frames input[name="slot-a"] { accent-color: var(--slot-a); }
-.frames input[name="slot-b"] { accent-color: var(--slot-b); }
-
-.provenance { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }
-.provenance code { overflow-wrap: anywhere; }
-
-.footer { padding: 8px 16px 16px; max-width: 1280px; margin: 0 auto; }
-
-/* ---------- field request form (live mode) ---------- */
-.field-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; flex: 1 1 520px; }
-.field-form label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
-.field-form input {
-  font: inherit; color: var(--text); background: var(--panel-2);
-  border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px;
-}
-.field-form input[type="text"] { width: 13ch; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; }
-.field-form input[type="number"] { width: 6ch; }
-.field-form input:invalid:not(:placeholder-shown) { border-color: var(--error); }
-/* RA/Dec help bubble (T29), styled like the browser's own validation popup; positioned by app.js */
-.field-form { position: relative; }
-.form-tip {
-  position: absolute; z-index: 20; top: 0; left: 0;
-  display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 10px;
-  width: min(380px, calc(100vw - 32px)); padding: 10px 12px; border-radius: 8px;
-  background: #3a3d45; color: #fff; border: 1px solid #575c68;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.55); font-size: 13px; line-height: 1.45;
-}
-.form-tip::before {
-  content: ""; position: absolute; top: -7px; left: var(--arrow-x, 20px);
-  width: 12px; height: 12px; background: inherit; transform: rotate(45deg);
-  border-left: 1px solid #575c68; border-top: 1px solid #575c68;
-}
-.form-tip-icon {
-  flex: none; width: 22px; height: 22px; border-radius: 4px; display: grid; place-items: center;
-  background: var(--accent); color: #04111f; font: 700 14px/1 Georgia, serif; font-style: italic;
-}
-.form-tip p { flex: 1 1 calc(100% - 40px); margin: 0; min-width: 0; } /* button wraps below */
-.help-btn { width: 30px; height: 30px; padding: 0; border-radius: 50%; font-weight: 700; color: var(--muted); }
-.help-btn[aria-expanded="true"] { color: var(--text); border-color: var(--accent); }
-.form-tip-close { margin-left: auto; padding: 3px 10px; font-size: 12px; }
-button.primary { background: var(--accent); color: #04111f; border-color: var(--accent); font-weight: 600; }
-button.link { background: none; border: none; color: var(--accent); padding: 4px 6px; }
-button.link:hover { text-decoration: underline; }
-/* T65: why a quick pick is interesting, under the header */
-.pick-why { margin: 8px 16px 0; padding: 6px 10px; border-left: 3px solid var(--accent); color: var(--muted); font-size: 0.9em; max-width: 900px; }
-.pick-why strong { color: var(--text); }
-/* T78: type an exact wavelength */
-#explore-band-lam, #lam-at { width: 6.5em; font-variant-numeric: tabular-nums; }
-.lam-at { display: inline-flex; align-items: center; gap: 4px; }
+.lam-at, .stack-pick, .stack-motion { display: inline-flex; align-items: center; gap: 4px; }
 #lam-at-note { flex-basis: 100%; }
-/* T59: stacks */
-.stack-pick { display: inline-flex; align-items: center; gap: 4px; }
-.stack-motion { display: inline-flex; align-items: center; gap: 4px; }
 #stack-rate, #stack-pa { width: 5em; }
+#film-mode { max-width: 15rem; }
+/* T43: difference view A − B */
+.diff-canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.stage-diff-label { z-index: 2; border-left-color: var(--accent); }
+.diff-note { margin: 6px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.diff-key { display: inline-block; width: 12px; height: 12px; border: 1px solid var(--border); vertical-align: -2px; }
+.diff-white { background: #fff; }
+.diff-black { background: #000; }
+.diff-grey { background: #808080; }
+.diff-nodata { background: rgb(64, 84, 140); }
 
-/* ---------- build progress ---------- */
-.job {
-  margin: 12px 16px 0; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 8px;
-  background: #0f1a2b; max-width: 1248px;
-}
-@media (min-width: 1280px) { .job { margin-left: auto; margin-right: auto; } }
-.job-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
-.job-head .link { margin-left: auto; }
-.job progress { width: 100%; height: 8px; margin-top: 8px; accent-color: var(--accent); }
-.job p { margin: 6px 0 0; overflow-wrap: anywhere; }
-#job-elapsed { font-variant-numeric: tabular-nums; }
-
-/* ---------- empty state ---------- */
-.empty {
-  border: 1px dashed var(--border); border-radius: 8px; padding: 32px 24px; max-width: 640px;
-}
-.empty h2 { margin-bottom: 8px; }
-.empty p { margin: 0; }
-.empty p + p { margin-top: 8px; }
-
-@media (max-width: 600px) {
-  .field-form input[type="text"] { width: 100%; }
-  .field-form label:has(input[type="text"]) { flex: 1 1 100%; }
-  .field-form label:has(input[type="text"]) input { flex: 1; }
-}
-
-/* ---------- T12: wavelength filter, matching, epoch timeline ---------- */
+/* T12: wavelength filter, matching, epoch timeline */
 .compare { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; color: var(--muted); }
 .compare label { display: flex; align-items: center; gap: 6px; }
-.compare input[type="number"] {
-  width: 7ch; font: inherit; color: var(--text); background: var(--panel-2);
-  border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px;
-}
+.compare input[type="number"] { width: 7ch; padding: 5px 6px; }
 .timeline { margin-top: 10px; width: 100%; min-height: 136px; }
 .tl-svg { display: block; overflow: visible; }
 .tl-panel { fill: var(--panel); stroke: var(--border); stroke-width: 1; }
@@ -237,7 +376,7 @@ button.link:hover { text-decoration: underline; }
 .tl-band { fill: var(--accent); opacity: 0.12; }
 .tl-frame { cursor: pointer; }
 .tl-hit { fill: transparent; }
-.tl-dot { fill: #6da7ec; stroke: var(--panel); stroke-width: 2; paint-order: stroke; pointer-events: none; } /* the larger .tl-hit takes clicks */
+.tl-dot { fill: #6da7ec; stroke: var(--panel); stroke-width: 2; paint-order: stroke; pointer-events: none; }   /* the larger .tl-hit takes clicks */
 .tl-frame:hover .tl-dot { fill: #9ec5f4; }
 .tl-frame.is-a .tl-dot { fill: var(--slot-a); }
 .tl-frame.is-b .tl-dot { fill: var(--slot-b); }
@@ -251,16 +390,35 @@ button.link:hover { text-decoration: underline; }
 .tl-key-b { background: var(--slot-b); }
 .tl-key-shown { border: 2px solid #fff; }
 
-/* ---------- T13: objects panel ---------- */
+/* ---------- side panels: shown frame, objects, frames, provenance ---------- */
+.info { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; }
+.info dt { color: var(--muted); }
+.info dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+
+.table-wrap { max-height: 420px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+table.frames { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.frames th, .frames td { padding: 4px 6px; text-align: left; white-space: nowrap; }
+.frames th { position: sticky; top: 0; background: var(--panel-2); color: var(--muted); font-weight: 600; }
+.frames tbody tr { cursor: pointer; border-top: 1px solid var(--border); }
+.frames tbody tr:hover { background: var(--panel-2); }
+.frames tbody tr.shown { background: rgb(125 185 255 / 0.2); }
+.frames tbody tr.broken td:nth-child(3) { color: var(--error); }
+.frames input[type="radio"] { margin: 0; cursor: pointer; }
+.frames input[name="slot-a"] { accent-color: var(--slot-a); }
+.frames input[name="slot-b"] { accent-color: var(--slot-b); }
+
+.provenance { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }
+.provenance code { overflow-wrap: anywhere; }
+
+/* T13: objects */
 .objects-summary { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
 .objects-summary:empty { display: none; }
 .obj-unknown-text { color: var(--warn); }
-.badge-small { font-size: 10px; padding: 1px 6px; vertical-align: 1px; }
 .objects-toggle { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .objects { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 280px; overflow: auto; }
 .obj-row {
   display: grid; gap: 2px; width: 100%; text-align: left; padding: 6px 8px;
-  background: var(--panel-2); border: 1px solid transparent; border-radius: 6px;
+  background: rgb(255 255 255 / 0.05); border: 1px solid transparent; border-radius: var(--r-ctl);
 }
 .obj-row.is-focus { border-color: var(--warn); }
 .obj-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -274,105 +432,14 @@ button.link:hover { text-decoration: underline; }
 .obj-artifact { color: var(--muted); border-color: var(--border); border-style: dashed; }
 .focus-ring { fill: none; stroke: var(--warn); stroke-width: 2.5; animation: focus-pulse 1.4s ease-in-out infinite; }
 @keyframes focus-pulse { 50% { stroke-opacity: 0.35; } }
-@media (prefers-reduced-motion: reduce) { .focus-ring { animation: none; } }
-/* T30/T36 sky map (own renderer, sky.js).
-   T55 /app/: the map fills the whole window; the controls float over it in panels. Default layout:
-   two docks on the left edge (.hud-dock-top: field request, then "Blink this spot"; .hud-dock-bottom:
-   switches above band + epochs). .hud = one draggable group, .hud-panel = its clickable glass card.
-   A dragged group leaves its dock (.hud-moved = fixed at its own spot, hud.js). Docks and groups let
-   drags through to the map; only the panels catch the mouse. */
-.sky-stage { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: #05080f; }
-body.fullmap { overflow: hidden; height: 100vh; }
-.hud-dock { position: fixed; left: 12px; z-index: 10; display: flex; flex-direction: column; align-items: flex-start;
-  gap: 8px; max-width: min(760px, calc(100vw - 24px)); pointer-events: none; }
-.hud-dock-top { top: 12px; }
-.hud-dock-bottom { bottom: 12px; }
-.hud { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-width: 100%;
-  pointer-events: none; margin: 0; }
-.hud > * { pointer-events: auto; }
-.hud-moved { position: fixed; z-index: 11; max-width: none; }
-.hud-hint { position: fixed; right: 16px; bottom: 14px; z-index: 5; max-width: min(420px, 40vw); margin: 0;
-  text-align: right; pointer-events: none; text-shadow: 0 1px 3px #000; opacity: 0.75; }
-.hud-panel {
-  background: rgb(20 24 33 / 0.82); border: 1px solid rgb(255 255 255 / 0.10); border-radius: 10px;
-  padding: 8px 12px; box-shadow: 0 6px 20px rgb(0 0 0 / 0.45);
-  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-}
-.hud-panel:empty, .hud-row:not(:has(> :not([hidden]):not(.hud-grip))) { display: none; }   /* nothing to show yet */
-/* T55 drag handles (hud.js): grip, plus any empty part of a panel, moves the whole corner group */
-.hud-panel { cursor: grab; touch-action: none; }
-.hud-panel input, .hud-panel select, .hud-panel button, .hud-panel label, .hud-panel output { cursor: auto; }
-.hud-panel button, .hud-panel select, .hud-panel label { cursor: pointer; }
-.hud-grip { cursor: grab !important; background: none; border: none; padding: 0 2px; margin-right: -4px;
-  color: var(--muted); font-size: 16px; line-height: 1; letter-spacing: -1px; user-select: none; touch-action: none; }
-.hud-grip:hover { color: var(--text); }
-.hud-dragging, .hud-dragging .hud-panel, .hud-dragging .hud-grip { cursor: grabbing !important; }
-.hud-dragging .hud-panel { box-shadow: 0 10px 30px rgb(0 0 0 / 0.6); }
-.hud-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
-.hud-row label { display: inline-flex; align-items: center; gap: 6px; }
-.hud-stack { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }   /* one panel, several lines */
-.hud-nowrap { flex-wrap: nowrap; white-space: nowrap; }                                 /* position + Blink stay side by side */
-.hud-nowrap #explore-pos { flex: 1 1 auto; }
-#explore-pos { font-variant-numeric: tabular-nums; }
-/* T55 📍 marker (cursorpin.js): needle tip on the point (the mouse in pick mode), RA/Dec in two lines
-   centred under it. Fades out 5 s after Go / a pick.
-   --pin-tip-y: where the needle tip sits in the glyph (fraction of its height from the top); tune per emoji font. */
-.cursor-pin { position: fixed; left: 0; top: 0; z-index: 30; pointer-events: none; will-change: transform;
-  --pin-tip-y: 94%; transition: opacity 0.8s ease; }
-.cursor-pin-fading { opacity: 0; }
-.cursor-pin-icon { position: absolute; left: 0; top: 0; transform: translate(-50%, calc(-1 * var(--pin-tip-y)));
-  font-size: 28px; line-height: 1; filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.7)); }
-body.pin-picking .sky-stage canvas { cursor: crosshair !important; }   /* pick mode: the cursor marks the spot */
-#pin-btn { padding: 4px 9px; font-size: 16px; line-height: 1.2; }
-#pin-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
-.cursor-pin-pill { position: absolute; left: 0; top: 6px; transform: translateX(-50%); white-space: nowrap;
-  display: flex; flex-direction: column; align-items: center; padding: 3px 9px; border-radius: 9px;
-  font-size: 12px; line-height: 1.35; font-variant-numeric: tabular-nums;
-  background: rgb(20 24 33 / 0.88); border: 1px solid rgb(255 255 255 / 0.15); color: var(--text);
-  box-shadow: 0 3px 10px rgb(0 0 0 / 0.5); }
-.hud .topbar { border-bottom: none; padding: 10px 12px; gap: 8px 14px; }
-.hud .field-form { flex: 0 1 auto; }
-.hud .job { margin: 0; max-width: none; background: rgb(15 26 43 / 0.9); border-color: var(--accent); }
-.hud .messages { padding: 0; }
-.hud .msg { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-@media (max-width: 900px) { .hud-hint { display: none; } }   /* the docks need the room */
-/* Hover card of the map names (skylabels.js); was in paths.css with the frame viewer */
-.paths-tip {
-  position: absolute; z-index: 5; max-width: 300px; padding: 8px 10px; border-radius: 6px;
-  background: rgba(14, 17, 24, 0.94); border: 1px solid var(--border); color: var(--text);
-  font-size: 12px; line-height: 1.4; pointer-events: auto; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
-}
-.paths-tip strong { display: block; font-size: 13px; margin-bottom: 4px; color: #ffe2a8; }
-.paths-tip dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; }
-.paths-tip dt { color: var(--muted); }
-.paths-tip dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.paths-tip-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 11px; }
-.sky-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.sky-stage .sky-gl { cursor: grab; outline: none; }
-.sky-stage .sky-gl:active { cursor: grabbing; }
-.explore-epochs { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.explore-epochs button[aria-pressed="true"] { outline: 2px solid currentColor; }
 
-/* ---------- T43: difference view A − B ---------- */
-.diff-canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
-.diff-btn { font-weight: 700; }
-.diff-btn[aria-pressed="true"] { background: var(--accent); color: #04111f; border-color: var(--accent); }
-.stage-diff-label { z-index: 2; border-left-color: var(--accent); }
-.diff-note { margin: 6px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.diff-key { display: inline-block; width: 12px; height: 12px; border: 1px solid var(--border); vertical-align: -2px; }
-.diff-white { background: #fff; }
-.diff-black { background: #000; }
-.diff-grey { background: #808080; }
-.diff-nodata { background: rgb(64, 84, 140); }
-
-/* ---------- T45: play the series ---------- */
-#film-mode { max-width: 15rem; }
-
-/* ---------- T49: photometry (spectrum + change at the same wavelength) ---------- */
-.photometry { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+/* ---------- T49: spectrum and change over time ---------- */
+.photometry { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+/* a map click's spectrum sits in the deck as a panel of its own (photometry.js placePanel) */
+.deck > .photometry { padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--glass);
+  box-shadow: var(--lift); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); min-width: 0; }
 .ph-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .ph-head h3 { margin: 0; }
-#ph-measure[aria-pressed="true"] { background: var(--accent); color: #04111f; border-color: var(--accent); }
 .photometry h4 { margin: 10px 0 4px; font-size: 13px; font-weight: 600; }
 .photometry p { margin: 4px 0; }
 .ph-svg { display: block; overflow: visible; }
@@ -391,7 +458,7 @@ body.pin-picking .sky-stage canvas { cursor: crosshair !important; }   /* pick m
 .ph-catcher { position: absolute; inset: 0; z-index: 3; cursor: crosshair; }
 .stage.is-measuring { outline: 2px dashed var(--accent); outline-offset: 2px; }
 .ph-marker { fill: none; stroke: var(--warn); stroke-width: 2; }
-/* T63 spectrum context */
+/* T63: spectrum context */
 .ph-toggles { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 2px 0 6px; }
 .ph-toggle { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .ph-base { fill: none; stroke: var(--text); stroke-width: 1.5; opacity: 0.75; }
@@ -401,34 +468,30 @@ body.pin-picking .sky-stage canvas { cursor: crosshair !important; }   /* pick m
 .ph-feature { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.8; }
 .ph-feature-hit { stroke: transparent; stroke-width: 9; }
 .ph-feature-g:hover .ph-feature { stroke: var(--text); opacity: 1; }
-.ph-context { border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; margin: 8px 0; }
+.ph-context { border: 1px solid var(--border); border-radius: 10px; padding: 6px 12px; margin: 8px 0; }
 .ph-context h4 { margin: 4px 0; }
 .ph-context p { margin: 6px 0; }
 .ph-hint-mark { color: var(--warn); }
-
-/* T55: pass / epoch dates; the shown one highlighted, passes still loading for this view dimmed */
-.pass-label { cursor: pointer; padding: 1px 6px; border-radius: 4px; font-size: 0.85em; opacity: 0.75; white-space: nowrap; }
-.pass-label.current { opacity: 1; outline: 2px solid currentColor; }
-.pass-label.loading { opacity: 0.4; }
-
-/* Map only (default, see app.js): no frame image or what is drawn on it; the frame viewer's controls
-   (A/B, blink, A − B, play, λ filter, timeline, frame panels) drive the map instead (T81, mapframes.js).
-   ?frames=1 shows the frame image again. */
-body.map-only #empty, body.map-only #stage, body.map-only #paths-controls, body.map-only #trail-controls,
-body.map-only #ph-measure { display: none !important; }
-
 /* T84: spectral anomalies */
 .ph-anom { fill: none; stroke: #e5484d; stroke-width: 2; }
 .ph-anomalies .ph-anom-list { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
 .ph-anomalies .ph-anom-known { color: #e5484d; }
+/* T91: motion measured by SPHEREx */
+.ph-motion-big { font: 600 1.5em var(--font-din); margin: 4px 0; }
+/* T60: quality flags */
+.ph-flag-list { margin: 6px 0; padding-left: 0; list-style: none; display: grid; gap: 4px; }
+.ph-flag { display: inline-block; font-family: ui-monospace, monospace; font-size: 0.85em; padding: 1px 6px; border-radius: 4px;
+  border: 1px solid var(--border); margin-right: 4px; }
+.ph-flag-bad { border-color: var(--error); color: var(--error); }
+.ph-flag-warn { border-color: var(--warn); color: var(--warn); }
+.ph-flag-info { color: var(--muted); }
 
-/* T86: unusual spectra in the field */
-.outliers { max-width: 1248px; margin: 8px auto 0; }
-@media (max-width: 1280px) { .outliers { margin: 8px 16px 0; } }
+/* ---------- T86: unusual spectra in the field ---------- */
 .ol-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .ol-head h3 { margin: 0 0 6px; }
 .ol-list { margin: 8px 0; padding-left: 22px; display: grid; gap: 10px; }
-.ol-item { border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.ol-item { border-bottom: 1px solid var(--border); padding-bottom: 8px; cursor: pointer; border-radius: 4px; }
+.ol-item.is-selected { background: rgb(255 255 255 / 0.06); box-shadow: inset 3px 0 0 #3987e5; }
 .ol-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .ol-detail { align-items: center; margin-top: 4px; flex-wrap: nowrap; }
 .ol-detail p { margin: 0; min-width: 0; }
@@ -447,12 +510,11 @@ body.map-only #ph-measure { display: none !important; }
 .ol-subhead { margin: 0 0 4px; }
 .ol-new { color: var(--warn); font-weight: 600; }
 .ol-var .ol-item p { margin: 4px 0 0; }
-@media (max-width: 600px) { .ol-detail { flex-wrap: wrap; } .ol-chart { width: 100%; } }
-/* T86 view: colour–colour diagram + selected source's bands */
+/* colour–colour diagram + the selected source's bands */
 .ol-viz { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0 4px; }
 .ol-fig { margin: 0; min-width: 0; }
 .ol-fig figcaption { margin-bottom: 4px; }
-.ol-cc, .ol-shape { display: block; background: var(--panel-2); border-radius: 6px; max-width: 100%; }
+.ol-cc, .ol-shape { display: block; background: var(--panel-2); border-radius: 8px; max-width: 100%; }
 .ol-grid { stroke: var(--border); stroke-width: 1; opacity: 0.6; }
 .ol-axis { fill: var(--muted); font-size: 10px; }
 .ol-dot { fill: #8b93a7; opacity: 0.75; stroke: var(--panel-2); stroke-width: 1; }
@@ -471,115 +533,51 @@ body.map-only #ph-measure { display: none !important; }
 .ol-sw-sel { background: none; border: 2px solid var(--c); }
 .ol-sw-line { width: 16px; height: 0; border-radius: 0; background: none; border-top: 2px dashed var(--c); }
 .ol-sw-env { width: 16px; height: 10px; border-radius: 2px; background: #8b93a7; opacity: 0.35; }
-.ol-item { cursor: pointer; border-radius: 4px; }
-.ol-item.is-selected { background: var(--panel-2); box-shadow: inset 3px 0 0 #3987e5; }
-
-/* ---------- T64: newer SPHEREx data for the shown field ---------- */
-.target-updates { margin: 4px 0 0; padding: 4px 8px; border-left: 3px solid var(--warn); color: var(--text); }
-.target-updates button { margin-left: 6px; }
-/* T88: unusual spectra on the map */
-.ol-card { position: absolute; z-index: 6; width: min(300px, calc(100% - 16px)); background: var(--panel);
-  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; box-shadow: 0 6px 24px rgba(0,0,0,0.5); }
+.ol-maptoggle { margin-left: auto; color: var(--muted); }
+/* T88: an unusual source's card on the map */
+.ol-card { position: absolute; z-index: 6; width: min(300px, calc(100% - 16px)); background: rgb(36 38 46 / 0.94);
+  border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.5); }
 .ol-card p { margin: 4px 0; }
 .ol-card .ol-chart { width: 100%; height: auto; }
 .ol-card-head { display: flex; align-items: baseline; gap: 8px; }
 .ol-card-head strong { overflow-wrap: anywhere; }
 .ol-card-x { margin-left: auto; font-size: 18px; line-height: 1; padding: 0 4px; }
 .ol-card-actions { display: flex; gap: 12px; align-items: center; margin-top: 6px; }
-.ol-maptoggle { margin-left: auto; color: var(--muted); }
-
-/* ---------- T90: one page. First screen = the T55 map (.mapstage, one viewport high, scrolls away
-   with the page); below it everything else of web/. The map's panels, hint and grips sit inside it
-   (absolute, not fixed), so they never cover the content below. ---------- */
-.mapstage { position: relative; height: 100vh; height: 100dvh; overflow: hidden; background: #05080f; }
-.mapstage .sky-stage { position: absolute; inset: 0; }
-.mapstage .hud-dock, .mapstage .hud-moved, .mapstage .hud-hint { position: absolute; }
-.mapstage[hidden] { display: none; }
-.to-below { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 6;
-  background: rgb(15 26 43 / 0.75); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px;
-  color: var(--muted); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-.to-below:hover { color: var(--text); }
-.hud .pick-why { margin: 0; max-width: 520px; }
-/* the map's other controls (web/ explore bar), below the first screen */
-.map-tools { max-width: 1248px; margin: 12px auto 0; }
-@media (max-width: 1280px) { .map-tools { margin: 12px 16px 0; } }
-.explore-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 8px; }
-.explore-bar label { display: inline-flex; align-items: center; gap: 6px; }
-.explore-bar .spacer { flex: 1; }
-.explore-note { margin: 6px 0; }
-.build-bar { margin-top: 12px; }
-/* T91: motion measured by SPHEREx */
-.ph-motion-big { font-size: 1.35em; font-weight: 600; margin: 4px 0; }
 
 /* ---------- T93: chemistry map of the shown field ---------- */
-.chem-note { margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--accent); color: var(--muted); max-width: 520px; }
+.chem-note { margin: 0; border-left: 3px solid var(--accent); color: var(--muted); max-width: 520px; }
 .chem-note strong { color: var(--text); }
 .chem-key { display: inline-block; width: 11px; height: 11px; border: 1px solid var(--border); vertical-align: -1px; }
 .chem-dark { background: #111; }
 .chem-grey { background: #808080; }
 .chem-bright { background: #eee; }
-/* T96: tick up to 3 features (a dropdown in the map's view panel) */
 .chem-pick { position: relative; }
-.chem-pick > summary { cursor: pointer; list-style: none; white-space: nowrap; }
-.chem-pick > summary::-webkit-details-marker { display: none; }
-.chem-pick > summary::after { content: " ▾"; color: var(--muted); }
-.chem-pick[open] > summary::after { content: " ▴"; }
-.chem-list { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; display: flex; flex-direction: column; gap: 2px;
-  min-width: 240px; padding: 8px 10px; background: rgb(20 24 33 / 0.96); border: 1px solid var(--border); border-radius: 8px;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5); }
+.chem-list { gap: 2px; }
 .chem-list .chem-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; padding: 2px 0; }
 .chem-list .chem-row:has(input:disabled) { opacity: 0.5; }
 .chem-list p { order: -1; margin: 0 0 4px; white-space: normal; }
 .chem-line { display: block; margin: 2px 0; }
-/* T117: on a phone the list opened at the summary's x and ran off the right edge (and a fixed list is placed by
-   the panel, whose backdrop-filter makes it the containing block): there it opens inside the panel, full width */
-@media (max-width: 600px) {
-  .chem-pick[open] { flex: 1 1 100%; }
-  .chem-list { position: static; margin-top: 6px; max-height: 55vh; overflow-y: auto; }
-  .chem-list .chem-row, .chem-preset { white-space: normal; }
-}
 /* T109: redshift of the object */
 .chem-zrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
 .chem-zrow input { width: 7em; }
 .chem-zrow p { flex-basis: 100%; max-width: 300px; margin: 0; }
-/* T107: presets at the top of the Chemistry list */
+/* T107: presets at the top of the list */
 .chem-presets { display: flex; flex-direction: column; gap: 3px; padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
-.chem-preset { text-align: left; white-space: nowrap; padding: 3px 8px; border: 1px solid var(--border); border-radius: 4px; background: transparent; color: var(--text); cursor: pointer; }
-.chem-preset:hover { border-color: var(--accent); }
-.chem-preset[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
-/* T103: the open list must lie over the legend below it (#chem-note is a later glass card: its backdrop
-   filter makes a stacking context of its own, so the list's z-index alone did not help) */
-.hud-panel:has(.chem-pick[open]) { position: relative; z-index: 30; }
-/* T92: guided tour */
-.tour-start { position: absolute; top: 12px; right: 12px; z-index: 7; background: rgb(15 26 43 / 0.8); color: var(--text);
-  border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-weight: 600;
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-.tour-start:hover { border-color: var(--accent); }
-.tour-card { position: fixed; right: 16px; bottom: 16px; z-index: 50; width: min(380px, calc(100vw - 32px));
-  background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px 14px;
-  box-shadow: 0 10px 36px rgba(0,0,0,0.55); }
-.tour-card h3 { margin: 4px 0 6px; font-size: 1.15em; text-transform: none; letter-spacing: normal; color: var(--text); }
+.chem-preset { text-align: left; white-space: nowrap; padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; }
+.chem-preset[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); }
+
+/* ---------- overlays: guided tour (T92), discussion per map tile (T120) ---------- */
+.tour-card, .community { position: fixed; right: calc(var(--wheel-lane) + 4px); background: rgb(36 38 46 / 0.86);
+  border: 1px solid var(--border); border-radius: var(--r-panel); padding: 12px 16px 14px; box-shadow: var(--lift);
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
+.tour-card { bottom: 16px; z-index: 50; width: min(380px, calc(100vw - 32px)); }
+.tour-card h3 { margin: 4px 0 6px; font-size: 18px; }
 .tour-card p { margin: 0 0 10px; line-height: 1.45; }
 .tour-head { display: flex; align-items: center; }
 .tour-x { margin-left: auto; font-size: 20px; line-height: 1; padding: 0 4px; }
 .tour-nav { display: flex; justify-content: space-between; margin-top: 10px; }
-@media (max-width: 600px) { .tour-start { top: auto; right: auto; bottom: 12px; left: 12px; } }
-/* T60: quality flags */
-.ph-flag-list { margin: 6px 0; padding-left: 0; list-style: none; display: grid; gap: 4px; }
-.ph-flag { display: inline-block; font-family: ui-monospace, monospace; font-size: 0.85em; padding: 1px 6px; border-radius: 4px;
-  border: 1px solid var(--border); margin-right: 4px; }
-.ph-flag-bad { border-color: var(--error); color: var(--error); }
-.ph-flag-warn { border-color: var(--warn); color: var(--warn); }
-.ph-flag-info { color: var(--muted); }
-/* T120: discussion per map tile */
-.community-btn { position: absolute; top: 56px; right: 12px; z-index: 7; background: rgb(15 26 43 / 0.8); color: var(--text);
-  border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-weight: 600;
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-.community-btn:hover { border-color: var(--accent); }
-.community { position: fixed; right: 16px; top: 16px; z-index: 49; width: min(400px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px); overflow: auto; background: var(--panel); border: 1px solid var(--border);
-  border-radius: 12px; padding: 12px 16px 14px; box-shadow: 0 10px 36px rgba(0,0,0,0.55); }
-.community h3 { margin: 8px 0 2px; text-transform: none; letter-spacing: normal; color: var(--text); font-size: 1.1em; }
+.community { top: 16px; z-index: 49; width: min(400px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; }
+.community h3 { margin: 8px 0 2px; font-size: 17px; }
 .cm-top { display: flex; align-items: center; gap: 12px; }
 .cm-tabs { display: flex; gap: 14px; }
 .cm-tabs .active { color: var(--text); font-weight: 600; text-decoration: underline; }
@@ -590,31 +588,79 @@ body.map-only #ph-measure { display: none !important; }
 .cm-text { margin: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.4; }
 .cm-actions { display: flex; gap: 12px; align-items: center; }
 .cm-form { display: grid; gap: 6px; margin-top: 10px; }
-.cm-form textarea, .cm-form input[type=text] { width: 100%; box-sizing: border-box; background: var(--panel-2); color: var(--text);
-  border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font: inherit; }
-@media (max-width: 600px) { .community-btn { top: auto; bottom: 56px; right: 12px; } .community { top: auto; bottom: 0; right: 0;
-  width: 100vw; max-height: 75vh; border-radius: 12px 12px 0 0; } }
+.cm-form textarea, .cm-form input[type=text] { width: 100%; }
 
-/* T122: the analysed field drawn with the mouse */
-.region-btn { position: absolute; top: 100px; right: 12px; z-index: 7; background: rgb(15 26 43 / 0.8); color: var(--text);
-  border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-weight: 600;
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-.region-btn:hover, .region-btn.active { border-color: #ff5a5a; }
-.region-btn.active { background: rgb(80 20 20 / 0.85); }
+/* ---------- wide screens: the map's panels stay put on the left, the analysis is a column on the right,
+   so the map stays visible between them while the frame tools drive it ---------- */
+@media (min-width: 1280px) {
+  .mapstage .hud-dock, .mapstage .hud-moved, .mapstage .map-readout { position: fixed; }
+  .deck { width: clamp(520px, 46vw, 720px); margin-left: auto; margin-right: calc(var(--wheel-lane) + 4px); }
+  body.deck-wide .deck { width: min(1240px, calc(100vw - 2 * var(--wheel-lane) - 24px)); }
+  .wheel-wide { display: grid; }
+  body.deck-wide .wheel-wide { transform: scaleX(-1); }
+}
+
+/* ---------- phones ---------- */
+@media (max-width: 600px) {
+  :root { --wheel-lane: 46px; }
+  .wheel { right: 6px; }
+  .wheel-knob { height: 112px; }
+  .wheel-tag { top: calc(32px + 8px + 112px + 8px + 4px); }
+  .hud-dock { left: 8px; top: 8px; max-width: calc(100vw - 16px); }
+  .field-form input[type="text"] { width: 100%; }
+  .field-form label:has(input[type="text"]) { flex: 1 1 100%; }
+  .field-form label:has(input[type="text"]) input { flex: 1; }
+  .build { padding-left: 0; border-left: none; }
+  /* T117: lists open inside their panel, full width, instead of running off the right edge */
+  .chem-pick[open], .more[open] { flex: 1 1 100%; }
+  .chem-list, .more-list { position: static; margin-top: 6px; max-height: 55vh; overflow-y: auto; }
+  .chem-list .chem-row, .chem-preset { white-space: normal; }
+  .map-readout { left: 8px; bottom: 8px; max-width: calc(100vw - 150px); font-size: 12px; }
+  .tour-start, .community-btn { top: auto; right: 8px; }
+  .tour-start { bottom: 8px; }
+  .community-btn { bottom: 50px; }
+  .tour-card { right: 8px; bottom: 8px; width: calc(100vw - 16px); }
+  .community { top: auto; bottom: 0; right: 0; width: 100vw; max-height: 75vh; border-radius: var(--r-panel) var(--r-panel) 0 0; }
+  .deck { margin-left: 8px; }
+  .panel, .deck > .photometry { padding: 12px; }
+  body.no-map .deck { padding: 8px; }
+  .form-tip { width: min(380px, calc(100vw - 64px)); }
+  .ol-detail { flex-wrap: wrap; }
+  .ol-chart { width: 100%; }
+}
+
+/* ---------- no map (?explore=0, offline ?data=): an ordinary page, the same panels in the flow ---------- */
+body.no-map .deck { width: auto; max-width: 1280px; margin: 0 auto; padding: 16px; pointer-events: auto; }
+body.no-map .hud { width: 100%; }
+body.no-map .hud-panel { cursor: auto; touch-action: auto; }
+body.no-map .search #go-btn, body.no-map .search #pin-btn { display: none; }
+body.no-map .build { padding-left: 0; border-left: none; }
+body.no-map #show-btn { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  .focus-ring { animation: none; }
+  .wheel-tag, .cursor-pin { transition: none; }
+}
+
+/* ---------- T122: the analysed field drawn with the mouse (third button top right, under 💬) ---------- */
+.region-btn { position: absolute; right: 12px; top: 96px; z-index: 7; background: var(--glass); color: var(--text);
+  border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-weight: 600; box-shadow: var(--lift); }
+.region-btn.active { background: #ff453a; border-color: #ff453a; color: #fff; }
 .sky-stage.region-drawing, .sky-stage.region-drawing canvas { cursor: crosshair; }
 .region-hint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 7; max-width: calc(100% - 32px);
-  background: rgb(15 26 43 / 0.88); color: var(--text); border: 1px solid #ff5a5a; border-radius: 8px; padding: 6px 12px;
-  font-size: 0.9em; pointer-events: none; text-align: center; }
-@media (max-width: 600px) { .region-btn { top: auto; bottom: 100px; } }
+  background: var(--glass); color: var(--text); border: 1px solid #ff453a; border-radius: 999px; padding: 6px 14px;
+  font-size: 13px; pointer-events: none; text-align: center; box-shadow: var(--lift); }
+@media (min-width: 1280px) { .mapstage .region-hint { position: fixed; } }
+@media (max-width: 600px) { .region-btn { top: auto; right: 8px; bottom: 92px; } .region-hint { bottom: 140px; border-radius: 12px; } }
 
-/* T123: one progress bar for everything that loads or runs */
+/* ---------- T123: one progress bar for everything that loads or runs ---------- */
 .activity { position: fixed; top: 0; left: 0; right: 0; z-index: 60; pointer-events: none; }
 .activity[hidden] { display: none; }
 .activity-track { height: 3px; background: rgb(255 255 255 / 0.08); overflow: hidden; }
 .activity-fill { height: 100%; width: 0; background: var(--accent); transition: width 0.4s ease; }
 .activity-fill.activity-busy { width: 30%; animation: activity-move 1.3s ease-in-out infinite; }
 @keyframes activity-move { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
-.activity-text { display: inline-block; margin: 4px 0 0 50%; transform: translateX(-50%); max-width: calc(100vw - 32px);
-  background: rgb(15 26 43 / 0.9); color: var(--text); border: 1px solid var(--border); border-radius: 0 0 8px 8px;
-  padding: 3px 12px; font-size: 0.82em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.activity-text { display: inline-block; margin: 6px 0 0 50%; transform: translateX(-50%); max-width: calc(100vw - 32px);
+  background: var(--glass); color: var(--text); border: 1px solid var(--border); border-radius: 999px;
+  padding: 3px 14px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: var(--lift); }
 @media (prefers-reduced-motion: reduce) { .activity-fill.activity-busy { animation: none; width: 100%; opacity: 0.5; } }

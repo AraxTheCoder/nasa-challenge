@@ -22,7 +22,8 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `explore.js`, `sky.js`, `healpix.js` | sky map: own WebGL HiPS renderer, surveys, the field's epochs (T30, T36, T41, T42) |
 | `traces.js` | the field's objects drawn on the sky map (T35) |
 | `skylabels.js` | catalogue labels anywhere on the zoomed-in map from `/api/sky-labels` (T72), follows the Labels switch |
-| `passes.js` | blink SPHEREx's survey passes anywhere on the map (T82): live tiles per pass |
+| `autoblink.js` | the survey passes blink by themselves from level 6 (T55); dates per pass |
+| `hud.js`, `wheel.js` | the floating panels (draggable) and the thumbwheel that scrolls between map and analysis (T124) |
 | `mapframes.js` | the frame viewer's tools act on the map (T81): the shown frame / A − B drawn as its layer |
 | `flagsmap.js` | "Quality flags" in the map bar (T60): where the field's pixels are unreliable, as a mask |
 | `outliers.js` | "Unusual spectra" (T86/T88): sources whose spectral shape stands out, as a panel and rings on the map; T61: "Changes brightness", sources whose flux changes at the same wavelength (dashed V rings) |
@@ -37,17 +38,20 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `tests/live_check.py` | exploratory browser check on real data against the running web/dev.py (10 scenarios, report + screenshots, no asserts; T115–T117) |
 | `tests/*.mjs` | Node checks, e.g. HEALPix geometry against astropy-healpix |
 
-## Page layout (T90)
+## Page layout (T124)
 
-One page. The first screen is the T55 map: the sky map fills the window and the controls float over it
-(`hud.js`, draggable; `cursorpin.js` for the 📍, `coords.js` for RA/Dec input). "Go" only moves the map.
-Blinking starts by itself (`autoblink.js` + `app.js`): from level 6 the survey passes, at level 7 resting on
-one HiPS order-6 tile builds that tile's field for the shown band in the background and blinks its epochs;
-the band slider (+ typed µm) and "false colour" apply to all of it. Scroll the page (scrollbar on the right;
-the mouse wheel over the map zooms) for everything else: map tools (base map, N↑, the T82 pass buttons,
-"Blink this spot"), the field form ("Show" builds a field of a chosen size), the frame viewer,
-analysis, spectra, objects, frames, provenance. Using the map tools or the frame viewer takes the map over
-until the view moves to another tile; the "Blink:" text on the map says what is shown.
+The sky map stays behind the whole page; everything floats over it as panels. First screen: the wordmark and
+one form (RA, Dec, **Go** = move the map; field size + **Build field** = build that field; test fields,
+Surprise me), the view panel (band, False colour, Labels, Unusual spectra, Quality flags, Blink, *More*: base
+map, tiles, tile outlines; what blinks; Chemistry), a position readout with N↑ bottom left, Tour and discussion
+top right. Blinking starts by itself (`autoblink.js` + `app.js`): from level 6 the survey passes, at level 7
+resting on one HiPS order-6 tile builds that tile's field in the background and blinks its epochs.
+The mouse wheel over the map zooms, so the page scrolls with the thumbwheel on the right edge (`wheel.js`:
+roll over it, drag it, or its arrows) or with the wheel over any panel. Scrolling brings up the analysis
+(`#analysis`): the spectrum of a map click, unusual spectra, the field with its frame tools, objects, frames,
+provenance. On wide screens (≥ 1280 px) the map's panels stay on the left and the analysis is a column on the
+right, so the map stays visible while the frame tools drive it; the ⇤ button under the wheel widens it.
+Without the map (`?explore=0`, offline) the same panels sit in an ordinary page (`body.no-map`).
 
 ## Run locally
 

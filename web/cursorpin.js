@@ -86,7 +86,7 @@ export function initCursorPin(opts = {}) {
 
   addEventListener("pointermove", (e) => {
     st.pos = [e.clientX, e.clientY];
-    st.overPanel = Boolean(e.target.closest?.(".hud-panel, .hud-hint"));
+    st.overPanel = Boolean(e.target.closest?.(".hud-panel, .deck, .wheel"));
     if (st.mode === "pick") update();
   }, { passive: true });
   document.documentElement.addEventListener("pointerleave", () => {
