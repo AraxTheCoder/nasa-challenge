@@ -26,3 +26,11 @@ Validation: all 9 Node suites pass, including new deterministic delayed-response
 To inspect: pan away during a tile build or switch band/source while metadata loads, wait for the old requests to finish, and verify the current view stays selected. Return to the old tile to reuse its cached field. Turn Blink off or select a chemistry/frame tool and verify delayed work does not restart the old field's timer.
 
 ## Notes from others
+
+- 2026-11-15 [Mati] T139: your exact-object checks were right and stay; they exposed that `setLabels()` and
+  `loadObjects()` swap in a fresh copy of the field (`app.shownTarget = fresh`) without telling `autoField` or the
+  blink, so the blink froze once labels / known objects arrived. Now they call `refreshShown(fresh)` (same id: the
+  fresh copy replaces the old object in app.shownTarget, autoField.explicit, autoField.ready and `epochField`). Your
+  `pick()` and the two post-await checks compare `epochField` (= the call's `target` unless handed over) instead of
+  `target`. Test: web/tests/blink_refresh_check.mjs (your harness from field_focus_check). If you replace the shown
+  field elsewhere with a copy of the same field, go through refreshShown.

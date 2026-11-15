@@ -686,6 +686,22 @@ let epochTimer = null;
 let epochCall = 0;               // T102: the latest showEpochLayers call
 let epochShown = 0;
 let epochVariant = null;
+let epochField = null;           // T139: the field object the latest showEpochLayers call blinks (refreshShown hands it over)
+
+/** T139: a fresh copy of the shown field arrived (its labels or known objects; same id, same images). It takes the old
+ *  copy's place everywhere the page remembers this field: T134's checks compare the exact object (any other replacement
+ *  stops the old timer, so it never blinks images that aren't the view's), so without this hand-over the blink froze
+ *  on one date, and the next view change swapped the old copy back (the labels / known objects vanished again). */
+function refreshShown(fresh) {
+  const old = app.shownTarget;
+  app.shownTarget = fresh;
+  if (old && old !== fresh && old.id === fresh.id) {
+    if (autoField.explicit === old) autoField.explicit = fresh;
+    for (const [key, t] of autoField.ready) if (t === old) autoField.ready.set(key, fresh);
+    if (epochField === old) epochField = fresh;                 // the running blink carries on, no reload
+  }
+  publishTarget(fresh);
+}
 
 /** T89: which epoch image fits the band setting: false colour (e<n>c), the band's detector (e<n>d<det>, when
  *  the field holds several), else the epoch's frames as they are (a one-detector field). */
@@ -699,6 +715,7 @@ async function showEpochLayers(target) {
   // T102: called from several places (field ready, band / colour, mode); a call overtaken by a newer one stops
   // after each await, otherwise every call appended its own date row and started a timer that was never stopped
   const call = ++epochCall;
+  epochField = target;
   const box = $("#explore-epochs");
   clearInterval(epochTimer);
   box.replaceChildren();
@@ -711,21 +728,23 @@ async function showEpochLayers(target) {
     info = await res.json();
   } catch { return; }
   if (call !== epochCall) return;
-  if (app.shownTarget !== target || !info.layers?.length || passes.mode() !== "epochs") return;
+  if (app.shownTarget !== epochField || !info.layers?.length || passes.mode() !== "epochs") return;
   const abs = (l) => ({ ...l, url: new URL(l.url, app.api).href });
   epochVariant = `${target.id}|${passes.colour() ? "rgb" : explore.detector()}`;
   const layers = await explore.setFieldLayers(info.layers.map((l) => ({ ...abs(l), url: abs(l).url + epochSuffix(l) })),
     (info.frame_layers ?? []).map(abs), new URL(`/api/hips/${encodeURIComponent(target.id)}`, app.api).href);
   if (call !== epochCall) return;
-  if (!layers.length || app.shownTarget !== target || passes.mode() !== "epochs") return;
+  if (!layers.length || app.shownTarget !== epochField || passes.mode() !== "epochs") return;
   // T55: when, not "Ep. n": the epoch's month(s) from its label "Epoch 1 · 2025-06-03 – 2025-06-10 · …"
   const labels = layers.map((l) => {
     const d = (l.label ?? "").match(/\d{4}-\d{2}-\d{2}/g);
     return el("span", { class: "pass-label", title: l.label }, d ? passes.monthSpan(d[0], d[d.length - 1]) : `epoch ${l.epoch}`);
   });
   const pick = (i) => {
-    if (call !== epochCall || passes.mode() !== "epochs" || app.shownTarget !== target ||
-        app.manualMap || !(explicitHere() === target || autoField.ready.get(fieldKey()) === target)) return;
+    // T134: only the latest call, for the exact field shown and in focus (T139: epochField = target, or the fresh
+    // copy refreshShown handed over; call === epochCall makes it this call's)
+    if (call !== epochCall || passes.mode() !== "epochs" || app.shownTarget !== epochField ||
+        app.manualMap || !(explicitHere() === epochField || autoField.ready.get(fieldKey()) === epochField)) return;
     epochShown = i;
     explore.showEpoch(i);
     // mapframes.js steps aside; auto: picked by the blink itself, not by hand (T96: chemistry stays on top)
@@ -1060,8 +1079,7 @@ async function setLabels(on) {
     }
     const fresh = await fetchJson(app.shownTargetUrl);
     if (app.shownTarget?.id !== id || !app.labelsOn) return;
-    app.shownTarget = fresh;
-    publishTarget(fresh);
+    refreshShown(fresh);                                  // T139: also for the blink and the field "here"
     note.textContent = `${fresh.labels?.length ?? 0}`;
   } catch (err) {
     note.textContent = "";
@@ -1121,8 +1139,7 @@ async function loadObjects(target) {
     const fresh = await fetchJson(app.shownTargetUrl);
     if (app.shownTarget?.id !== id) return;
     say("");
-    app.shownTarget = fresh;
-    publishTarget(fresh);
+    refreshShown(fresh);                                  // T139: also for the blink and the field "here"
   } catch (err) {
     if (app.shownTarget?.id === id) say(`Known objects unavailable: ${err.message}`);
   }

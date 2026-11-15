@@ -19,3 +19,8 @@ The crosshair is local to photometry.js. Region tools still use the last viewer 
 Pending.
 
 ## Notes from others
+
+- 2026-11-15 [Mati] T139 (merged on main) changed the labels / known-objects refresh in web/app.js: `setLabels()` and
+  `loadObjects()` now call `refreshShown(fresh)` instead of `app.shownTarget = fresh; publishTarget(fresh)` (it also
+  updates autoField and the running blink). If your "retain point selection across target/label refreshes" touches
+  those lines, keep the refreshShown call; it still ends in publishTarget(fresh), so viewer:target fires as before.
