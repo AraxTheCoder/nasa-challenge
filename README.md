@@ -18,9 +18,15 @@ aligns them and the viewer blinks them. What works today:
 - known asteroids and comets in the field (MPC orbit catalogue, SkyBoT / JPL; positions as seen from SPHEREx)
 - spectrum and light curve at any point (aperture photometry on the SPHEREx images)
 - a pan-and-zoom map of the whole sky (SPHEREx all-sky maps, live deep zoom) with the field's epochs
+- our own detection of things that are there at one moment and gone at others, seen by both simultaneous
+  detectors (T06), with artifacts such as afterglows of bright stars sorted out (T67)
+- per field: sources with an unusual spectrum (T86) and sources that change brightness at the same wavelength
+  (T61), as lists and rings on the map; SPHEREx's quality flags as a mask (T60)
+- chemistry maps: where ices, PAH or hydrogen lines absorb or emit, one feature or several as one colour picture,
+  presets tried on real fields, and a redshift for galaxies (T93, T96, T107–T109)
 
-Open: our own mover detection (T06), so far only known objects are marked. Synthetic data appears only
-in fixture mode and tests, and is labelled as such everywhere. Plan and task board: `TEAM.md`.
+Synthetic data appears only in fixture mode and tests, and is labelled as such everywhere. Plan and task board:
+`TEAM.md`.
 
 ## How it works
 
@@ -28,10 +34,11 @@ in fixture mode and tests, and is labelled as such everywhere. Plan and task boa
    reads cutouts (IRSA, or byte ranges from the AWS bucket), aligns them north up on one grid and
    writes display frames plus one `target.json` per field. Also: catalogue labels, motion summaries,
    photometry, shift-and-stack.
-2. `detect/`: known asteroids and comets in the field (local MPC orbit catalogue, SkyBoT / JPL), classification of detections
-   as known / unknown / artifact; mover detection itself is in progress (T06).
+2. `detect/`: known asteroids and comets in the field (local MPC orbit catalogue, SkyBoT / JPL), our own
+   detections from the cached SPHEREx images (T06), classification as known / unknown / artifact (T08, T67),
+   and sources that change brightness (T61).
 3. `server/`: Live API. Builds a field on request for any RA/Dec (step 1), caches it, adds labels and
-   known objects when the viewer asks, serves photometry and sky-map tiles.
+   known objects when the viewer asks, serves photometry, field spectra, chemistry maps and sky-map tiles.
 4. `web/`: static viewer, no build step. Asks the Live API for a field, shows build progress, then
    blinks, plays and compares the frames. Details and URL options: `web/README.md`.
 5. `tilegen/`: renders deep-zoom sky-map tiles from the SPHEREx images, locally or on a small VM next
