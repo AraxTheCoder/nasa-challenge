@@ -199,3 +199,46 @@ def test_flags_in_the_aperture_are_named(tmp_path):
     assert flags.names((1 << 1) | (1 << 21)) == ["OVERFLOW", "SOURCE"]
     mean = flags.meanings([m, {"flags": ["SOURCE"]}])
     assert mean["TRANSIENT"]["kind"] == "bad" and mean["SOURCE"]["kind"] == "info" and "cosmic ray" in mean["TRANSIENT"]["meaning"]
+
+
+def test_worker_processes_fit_the_machine():
+    """T98: 16 workers took 3.3 GB and got the API OOM-killed on 8 GB: a quarter of the RAM, one per CPU, at most 16."""
+    from pipeline import photometry
+    assert photometry.spectrum_processes(ram_gb=31, cpus=16, env="") == 16
+    assert photometry.spectrum_processes(ram_gb=8, cpus=16, env="") == 8
+    assert photometry.spectrum_processes(ram_gb=4, cpus=2, env="") == 2
+    assert photometry.spectrum_processes(ram_gb=1, cpus=8, env="") == 2          # never fewer than 2
+    assert photometry.spectrum_processes(ram_gb=64, cpus=64, env="") == 16
+    assert photometry.spectrum_processes(ram_gb=8, cpus=16, env="3") == 3        # SPHEREX_SPECTRUM_PROCESSES wins
+    assert photometry.spectrum_processes(ram_gb=8, cpus=16, env="0") == 0        # threads only
+    assert photometry.spectrum_processes(ram_gb=8, cpus=16, env="many") == 8     # not a number: ignored
+
+
+def test_idle_pool_is_retired_but_not_while_it_works(monkeypatch):
+    """T98: the worker processes exit after POOL_IDLE_S without work; a pool with tasks in it is left alone."""
+    import threading
+    import time
+    from pipeline import photometry
+
+    class FakePool:
+        def __init__(self):
+            self._pending_work_items, self.down = {}, threading.Event()
+
+        def shutdown(self, wait=True):
+            self.down.set()
+
+    pool = FakePool()
+    pool._pending_work_items[1] = "running"
+    monkeypatch.setattr(photometry, "_proc_pool", pool)
+    monkeypatch.setattr(photometry, "_pool_used", time.monotonic() - 100)
+    t = threading.Thread(target=photometry._retire_when_idle, args=(pool, 0.05, 0.01), daemon=True)
+    t.start()
+    assert not pool.down.wait(0.3) and photometry._proc_pool is pool            # busy: kept
+    pool._pending_work_items.clear()
+    assert pool.down.wait(2) and photometry._proc_pool is None                  # idle: shut down, next _pool() starts anew
+    t.join(1)
+
+    other = FakePool()                                   # a pool that was replaced (after a failure) is not the watcher's
+    monkeypatch.setattr(photometry, "_proc_pool", other)
+    photometry._retire_when_idle(pool, 0.0, 0.01)
+    assert photometry._proc_pool is other and not other.down.is_set()
