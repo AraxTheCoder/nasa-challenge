@@ -22,6 +22,9 @@ aligns them and the viewer blinks them. What works today:
   detectors (T06), with artifacts such as afterglows of bright stars sorted out (T67)
 - per field: sources with an unusual spectrum (T86) and sources that change brightness at the same wavelength
   (T61), as lists and rings on the map; SPHEREx's quality flags as a mask (T60)
+- a moving star's motion measured from SPHEREx alone, next to the catalogue value, and its distance when the
+  parallax fit is consistent (T91: Barnard's Star 10.46 ± 0.19″/yr vs Gaia 10.39; Epsilon Indi B 3.49 pc vs 3.64)
+- a guided tour of the five official targets: "▶ Tour" on the map or `?tour=1` in a link (T92)
 - chemistry maps: where ices, PAH or hydrogen lines absorb or emit, one feature or several as one colour picture,
   presets tried on real fields, and a redshift for galaxies (T93, T96, T107–T109)
 

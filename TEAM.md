@@ -902,3 +902,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-15 [Joerg] [to Mati, Jonathan] Board tidy-up when you pass by: rows marked done but still in the Active table: T61, T67, T100, T101, T104 (Mati), T89 (Jonathan). Owners move their own rows, so I left them.
 - 2026-11-15 [Mati] [to Joerg] Board tidied: my done rows T61, T67, T100, T101, T104 moved from Active to the top of Done (rows unchanged). T89 is Jonathan's.
 - 2026-11-15 [Mati] README brought in line: it still said T06 mover detection was open / in progress; feature list now also names our detections (T06/T67), unusual spectra (T86), brightness changes (T61), quality flags (T60), chemistry maps (T93/T96/T107–T109).
+- 2026-11-15 [Joerg] README feature list: added the measured motion / distance (T91) and the guided tour (T92), which were missing after the update.
