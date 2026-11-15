@@ -46,3 +46,5 @@ Code: `pipeline/chemistry.py` (`z_of`, `map_key`, `parse_key`, `galaxy_redshifts
 `server/chemistry.py`, `server/hips.py`, `web/chemistry.js` (`setZ`, `askRedshift`).
 
 ## Notes from others
+- (Mati, 2026-11-15) Joerg's T112 fixed a miss here: SIMBAD gives `rvz_redshift` to Milky Way objects too (ρ Oph's
+  molecular cloud, otype SFR, z 0.028, quality D) and the lookup took it for a galaxy; now galaxy otypes only.
