@@ -565,6 +565,7 @@ table.frames { width: 100%; border-collapse: collapse; font-size: 12px; font-var
 .chem-presets { display: flex; flex-direction: column; gap: 3px; padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
 .chem-preset { text-align: left; white-space: nowrap; padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; }
 .chem-preset[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); }
+.chem-presets .chem-group:not(:first-child) { margin-top: 5px; }  /* T127: objects / places */
 
 /* ---------- overlays: guided tour (T92), discussion per map tile (T120) ---------- */
 .tour-card, .community { position: fixed; right: calc(var(--wheel-lane) + 4px); background: rgb(36 38 46 / 0.86);

@@ -1,4 +1,10 @@
-# Contracts (v0.37)
+# Contracts (v0.38)
+
+v0.38 (T127): chemistry presets for kinds of objects. Each preset in `/api/chemistry/features` gains `group`
+(`"object"` or `"place"`, the T107 ones are places) and optionally `needs_z: true` (made only at the object's
+redshift: galaxies, quasars). Four new features: `h_alpha` (Hα 0.656 µm, reachable from z ≈ 0.15 on, else
+`no_data` with a message), `pa_alpha` (Pa-α 1.875 µm), `co_23` (CO band heads 2.34 µm), `ch4` (CH₄ 3.32 µm,
+absorption); `pah` is named "PAH" (was "PAH / CH₄"). Additive: old ids, keys and layers unchanged.
 
 v0.37 (T120): `/api/community/...`: a view counter and a discussion thread per map tile (HEALPix order 6),
 recent discussions across the sky. New endpoints and storage (`data/community/`) only. See "Community".
@@ -752,6 +758,7 @@ GET /api/chemistry/features                          {"features": [{id, name, um
                                                      v0.34 (T107) + "presets": [{id, name, features (2-3, wavelength
                                                      order), looks_for, read, caveats, try: {name, ra, dec, size},
                                                      tested}]: one click ticks `features`; visualization only
+                                                     v0.38 (T127): + group ("object" | "place"), needs_z (optional)
 GET /api/targets/<id>/chemistry?feature=<f>          cached result, else {"status": "not_started"}
 GET /api/targets/<id>/chemistry?feature=<f>&start=1  202 {"status": "building", "done", "total"} while it runs,
                                                      then 200 as below
@@ -778,7 +785,7 @@ Cached as `<target>/chemistry/<f>.png` + `.json`. Unknown feature: 400. Unknown 
 `{"status": "no_data"}`; no exposure reaches the feature: `no_data` with a message.
 
 **Combined (v0.27, T96; any number since v0.35, T108).** Features list: each feature also has `"shows": "emission" |
-"absorption"` (hydrogen lines and PAH emit, ices and water bands absorb); top level `"combine": {"max": 10,
+"absorption"` (hydrogen lines and PAH emit; ices, water bands, CO 2.3 µm and CH₄ absorb, T127); top level `"combine": {"max": 14,
 "colours": {"2": ["#00ffff", "#ff0000"], "3": ["#0000ff", "#00ff00", "#ff0000"], "4": [...], …}}` (`max` = the
 number of features; from 4 on hues from blue to red by wavelength). With 2 or more maps made first (as above):
 
@@ -791,7 +798,8 @@ Each feature adds its colour (shortest wavelength first in the list above) times
 (or absorbs) beyond 1 noise level in the grey map's stretch, full at 5. Alpha = where all the maps have data. A
 picture of maps not all made yet: PNG 404, layer tiles empty. With 4 or more, a mix can look like another
 feature's own colour (only 2-3 colours are independent).
-Presets (v0.34, T107): see the `presets` line above.
+Presets (v0.34, T107): see the `presets` line above. Since v0.38 (T127) also for kinds of objects (`group`):
+brown dwarfs, young stars, cool giants, protostars, star-forming galaxies, quasars; `needs_z` ones only at a z > 0.
 
 **Redshift (v0.36, T109).** A receding source's features arrive at λ(1 + z); from cz ≈ 1 300 km/s (Br-α; ≈ 2 000
 for CO₂/CO, ≈ 4 000 for Pa-β, Br-γ, PAH) they leave the rest-wavelength window. Milky Way objects need z = 0.
