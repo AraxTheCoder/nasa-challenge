@@ -10,11 +10,14 @@
 // T107: presets at the top of the list (from /api/chemistry/features `presets`): tested combinations for kinds of
 // places (ionised gas, ices in cold clouds, lit cloud edges). One click ticks their features; the note then says
 // how to read the colours, what fools it and a field where it was tried. Visualization only, nothing classified.
+// T109: "Redshift z" in the list. A galaxy's features arrive at λ(1 + z); from cz ≈ 1 300 km/s (Br-α) they miss
+// the rest-wavelength window. The maps are made at the z in the box (one z per picture); when the list is opened
+// the Live API names the field's galaxies with a measured redshift (SIMBAD) and a big one at the centre fills it in.
 
 import { $, el, fmtNum } from "./util.js";
 import * as explore from "./explore.js";
 
-const st = { api: null, target: null, features: [], presets: [], presetBtns: new Map(), combine: { max: 3, colours: {} }, sel: [], boxes: new Map(),
+const st = { api: null, target: null, z: 0, zTouched: false, zAsked: null, features: [], presets: [], presetBtns: new Map(), combine: { max: 3, colours: {} }, sel: [], boxes: new Map(),
   ready: new Map(), token: 0, shown: null };
 
 const byId = (id) => st.features.find((f) => f.id === id);
@@ -90,12 +93,16 @@ function choosePreset(p) {
   apply();
 }
 
-/** Make (or reuse) one feature's map; resolves with the ready body or an error body. */
+const atZ = (um) => um * (1 + st.z);
+const zText = () => (st.z > 0 ? ` at z = ${st.z} (seen at λ × ${fmtNum(1 + st.z, 4)})` : "");
+
+/** Make (or reuse) one feature's map at the current z; resolves with the ready body or an error body. */
 async function ensure(id, token, k, n) {
-  if (st.ready.has(id)) return st.ready.get(id);
+  const ck = `${id}@${st.z}`;
+  if (st.ready.has(ck)) return st.ready.get(ck);
   const f = byId(id);
   const which = n > 1 ? ` (${k + 1} of ${n})` : "";
-  const url = `${base()}?feature=${encodeURIComponent(id)}`;
+  const url = `${base()}?feature=${encodeURIComponent(id)}${st.z > 0 ? `&z=${st.z}` : ""}`;
   note([el("strong", {}, `${label(f)}${which}: `), "measuring the field's SPHEREx exposures around this wavelength…"]);
   let res = await fetch(`${url}&start=1`);
   let body = await res.json();
@@ -105,7 +112,7 @@ async function ensure(id, token, k, n) {
     res = await fetch(url);
     body = await res.json();
   }
-  if (body.status === "ready") st.ready.set(id, body);
+  if (body.status === "ready") st.ready.set(ck, body);
   return body;
 }
 
@@ -125,18 +132,19 @@ async function apply() {
     if (token === st.token) note([`Chemistry map unavailable: ${err.message ?? err}`]);
     return;
   }
-  const layer = `x-${ids.join("-")}`;
+  const keys = stats.map((b, i) => b.key ?? ids[i]);           // T109: <feature>[_z<z·10⁴>]
+  const layer = `x-${keys.join("-")}`;
   st.shown = layer;
   document.dispatchEvent(new CustomEvent("map:take"));          // the automatic blink leaves the map alone
   const ok = await explore.showLayer(layer);
   if (token !== st.token) return;
-  const png = `${base()}/${ids.join("-")}.png`;
+  const png = `${base()}/${keys.join("-")}.png`;
   const tail = [ok ? null : "(The map layer could not be shown here.) ",
     el("a", { href: png, target: "_blank", rel: "noopener" }, ids.length > 1 ? "picture" : "map image")];
   if (ids.length === 1) {
     const b = stats[0];
     note([
-      el("strong", {}, `${label(b)} minus its continuum. `),
+      el("strong", {}, `${label(b)} minus its continuum${zText()}${st.z > 0 ? `: ${fmtNum(atZ(b.um), 3)} µm` : ""}. `),
       el("span", { class: "chem-key chem-dark" }), " darker = less light than at the neighbouring wavelengths (absorption) · ",
       el("span", { class: "chem-key chem-grey" }), " grey = like the neighbours · ",
       el("span", { class: "chem-key chem-bright" }), " brighter = more light (emission). ",
@@ -156,10 +164,10 @@ async function apply() {
     pre ? el("span", { class: "chem-line" }, el("em", {}, "Can fool it: "), pre.caveats) : null,
     pre && !here ? el("span", { class: "chem-line" }, "Tried on: ",
       el("a", { href: `?ra=${pre.try.ra}&dec=${pre.try.dec}&size=${pre.try.size}` }, pre.try.name), ".") : null,
-    el("strong", {}, `${stats.map((b) => b.name).join(" + ")}, one colour each. `),
+    el("strong", {}, `${stats.map((b) => b.name).join(" + ")}, one colour each${zText()}. `),
     ...stats.map((b) => el("span", { class: "chem-line" },
       el("span", { class: "chem-key", style: `background:${cs.get(b.feature ?? b.id)}` }),
-      ` ${label(b)}: ${byId(b.feature ?? b.id).shows === "emission" ? "where it emits" : "where it absorbs (depth)"} · `,
+      ` ${label(b)}${st.z > 0 ? ` → ${fmtNum(atZ(b.um), 3)} µm` : ""}: ${byId(b.feature ?? b.id).shows === "emission" ? "where it emits" : "where it absorbs (depth)"} · `,
       `${b.what} · ${b.exposures_used} exposures`)),
     "Brighter = stronger (from one noise level; full colour at five). Where colours mix, several are strong at the same spot ",
     ids.length <= 3 ? "(e.g. red + green = yellow, all three = white); " :
@@ -168,6 +176,50 @@ async function apply() {
     "Coloured pairs at stars are sharpness differences, not chemistry. ",
     ...tail,
   ]);
+}
+
+/** T109: set z (rounded like the server: 4 decimals); maps follow if a picture is on. */
+function setZ(z, touched = true) {
+  const v = Math.min(1, Math.max(0, Math.round((Number(z) || 0) * 1e4) / 1e4));
+  st.zTouched ||= touched;
+  const box = $("#chem-z");
+  if (box && Number(box.value) !== v) box.value = v ? String(v) : "0";
+  if (v === st.z) return;
+  st.z = v;
+  syncZ();
+  if (st.sel.length) apply();
+}
+
+function syncZ() {
+  const hint = $("#chem-z-hint");
+  if (!hint) return;
+  const g = st.zInfo?.galaxies?.[0];
+  const parts = [];
+  if (g) {
+    const use = el("button", { type: "button", class: "link small" }, "use");
+    use.addEventListener("click", () => setZ(g.z));
+    parts.push(`SIMBAD: ${g.name}, z = ${g.z} (${g.cz_km_s.toLocaleString("en")} km/s) `, g.z === st.z ? "· in use" : use);
+  } else if (st.zInfo) {
+    parts.push("No galaxy with a measured redshift here: z = 0 (Milky Way objects need none).");
+  }
+  if (st.z > 0) parts.push(el("span", { class: "chem-line" }, `Features are looked for at λ × ${fmtNum(1 + st.z, 4)}.`));
+  hint.replaceChildren(...parts);
+}
+
+/** Ask the Live API once per field which galaxies with a redshift it holds; fill z for a big one at the centre. */
+async function askRedshift() {
+  if (!st.target || st.target.synthetic || st.zAsked === st.target.id) return;
+  const tid = st.target.id;
+  st.zAsked = tid;
+  try {
+    const body = await (await fetch(`${st.api}/api/targets/${encodeURIComponent(tid)}/redshift`)).json();
+    if (st.target?.id !== tid) return;
+    st.zInfo = body;
+    const g = body.galaxies?.[0];
+    // fill in only for the galaxy the field is about (at the centre, or covering it) and if nobody typed a z
+    if (g && !st.zTouched && !st.shown && (g.sep_arcmin <= 1 || g.sep_arcmin <= (g.major_arcmin ?? 0) / 2)) setZ(g.z, false);
+    syncZ();
+  } catch { st.zAsked = null; }
 }
 
 export async function initChemistry(api) {
@@ -197,6 +249,11 @@ export async function initChemistry(api) {
     off();
     st.ready.clear();
     st.target = e.detail?.target ?? null;
+    st.zInfo = null;
+    st.zTouched = false;
+    setZ(0, false);
+    syncZ();
+    if ($("#chem-box")?.open) askRedshift();
     visible();
   });
   $("#chem-clear").addEventListener("click", clear);
@@ -216,7 +273,13 @@ export async function initChemistry(api) {
       st.presetBtns.set(p.id, b);
       return b;
     })) : null;
-  $("#chem-list").prepend(...[presets].filter(Boolean), ...st.features.map((f) => {
+  const zIn = el("input", { id: "chem-z", type: "number", min: "0", max: "1", step: "0.0001", value: "0", inputmode: "decimal",
+    title: "Redshift of the object: its features arrive at λ × (1 + z). 0 for anything in the Milky Way." });
+  zIn.addEventListener("change", () => setZ(zIn.value));
+  const zRow = el("div", { class: "chem-zrow" }, el("label", { for: "chem-z" }, "Redshift z "), zIn,
+    el("p", { id: "chem-z-hint", class: "muted small" }));
+  box.addEventListener("toggle", () => { if (box.open) askRedshift(); });
+  $("#chem-list").prepend(...[presets, zRow].filter(Boolean), ...st.features.map((f) => {
     const cb = el("input", { type: "checkbox", value: f.id });
     cb.addEventListener("change", () => toggle(f.id, cb.checked));
     st.boxes.set(f.id, cb);

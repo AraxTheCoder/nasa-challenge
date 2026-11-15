@@ -119,3 +119,40 @@ def test_colours_for_any_number_of_features():
         cs = C.COMBINE_COLOURS[n]
         assert len(set(cs)) == n and cs[0] == (0, 0, 1) and cs[-1] == (1, 0, 0) and max(map(max, cs)) == 1
     assert C.combo(list(C.FEATURES)) == sorted(C.FEATURES, key=lambda f: C.FEATURES[f][1])
+
+
+def test_redshift_moves_the_window():
+    """T109: Br-α of a galaxy at z = 0.0052 (M100, cz 1 570 km/s) arrives at 4.073 µm: found at that z, missed at z = 0."""
+    z = 0.0052
+    obs = 4.052 * (1 + z)
+    s = _samples(lam0=obs, bw=0.036, n=40)                                   # R ~ 112 at 4 µm
+    at_z = C.combine(s, obs, 0.0, z)
+    at_rest = C.combine(s, 4.052, 0.0)
+    assert np.nanmedian(at_z["diff"][:5]) > 0.4
+    assert np.nanmedian(at_rest["diff"][:5]) < 0.5 * np.nanmedian(at_z["diff"][:5])
+
+
+def test_redshift_keys_and_limits(tmp_path):
+    assert C.map_key("pah", 0) == "pah" and C.map_key("pah", 0.02448) == "pah_z245"
+    assert C.parse_key("pah_z245") == ("pah", 0.0245) and C.parse_key("h2o_14") == ("h2o_14", 0.0)
+    for bad in ("pah_z0", "gold", "gold_z5"):
+        try:
+            C.parse_key(bad)
+        except ValueError:
+            continue
+        raise AssertionError(bad)
+    assert C.combo(["br_alpha_z52", "pah_z52"]) == ["pah_z52", "br_alpha_z52"]
+    try:
+        C.combo(["br_alpha_z52", "pah"])
+    except ValueError as e:
+        assert "redshift" in str(e)
+    else:
+        raise AssertionError("two redshifts in one picture")
+    try:                                                                     # CO 4.67 µm at z = 0.1: 5.14 µm
+        C.compute(tmp_path, "co_ice", z=0.1)
+    except LookupError as e:
+        assert "beyond SPHEREx" in str(e)
+    else:
+        raise AssertionError("beyond 5 µm not reported")
+    others = [um for um, _ in C._other_features(4.052 * 1.0052, 0.0052)]       # the galaxy's own lines move too
+    assert any(abs(um - 3.29 * 1.0052) < 1e-9 for um in others) and all(abs(um - 4.052 * 1.0052) > 1e-6 for um in others)

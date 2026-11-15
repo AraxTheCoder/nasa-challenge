@@ -1,4 +1,9 @@
-# Contracts (v0.35)
+# Contracts (v0.36)
+
+v0.36 (T109): chemistry maps at a redshift: `GET /api/targets/<id>/chemistry?feature=<f>&z=<z>` (0 <= z <= 1, 4
+decimals), map key `<f>_z<z·10⁴>` (files, PNG, layer `x-<key>`; one z per combined picture); the answer adds
+`key`, `z`, `um_observed`. New `GET /api/targets/<id>/redshift`: galaxies with a measured redshift in the field
+(SIMBAD). Additive: z = 0 keeps every old name. See "Chemistry maps".
 
 v0.35 (T108): chemistry pictures combine any number of features (was 2-3): `combine.max` = all features,
 `combine.colours` has an entry per count (2 and 3 unchanged; from 4 on hues by wavelength, blue to red); layer
@@ -761,6 +766,19 @@ Each feature adds its colour (shortest wavelength first in the list above) times
 picture of maps not all made yet: PNG 404, layer tiles empty. With 4 or more, a mix can look like another
 feature's own colour (only 2-3 colours are independent).
 Presets (v0.34, T107): see the `presets` line above.
+
+**Redshift (v0.36, T109).** A receding source's features arrive at λ(1 + z); from cz ≈ 1 300 km/s (Br-α; ≈ 2 000
+for CO₂/CO, ≈ 4 000 for Pa-β, Br-γ, PAH) they leave the rest-wavelength window. Milky Way objects need z = 0.
+
+```
+GET /api/targets/<id>/chemistry?feature=<f>&z=<z>[&start=1]   as above, at redshift z (0..1, rounded to 1e-4)
+     -> {..., "key": "<f>_z<z·10⁴>" (just "<f>" at z = 0), "z", "um_observed", "layer": "x-<key>"}
+     beyond 5 µm: 200 {"status": "no_data", "message": "... beyond SPHEREx's 5 µm"}; z outside 0..1: 400
+GET /api/targets/<id>/chemistry/<key>[-<key>...].png          keys of one z only (else 404)
+GET /api/targets/<id>/redshift
+     -> {"status": "ready", "galaxies": [{name, otype, z, cz_km_s, quality, major_arcmin, sep_arcmin, ra_deg,
+         dec_deg}], "provenance"}   SIMBAD basic.rvz_redshift >= 0.001, biggest first; cached per field
+```
 
 ### Frontend URL
 

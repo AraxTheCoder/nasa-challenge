@@ -1,6 +1,8 @@
 """T93: chemistry maps for a built field (CONTRACTS "Chemistry maps").
 
     GET /api/chemistry/features                                 the features (id, name, µm, kind, what), T107 presets
+    GET /api/targets/<id>/chemistry?feature=<f>&z=<z>           T109: the map at a redshift (key <f>_z<z·10⁴>)
+    GET /api/targets/<id>/redshift                              T109: galaxies with a measured redshift in the field
     GET /api/targets/<id>/chemistry?feature=<f>                 cached result, else {"status": "not_started"}
     GET /api/targets/<id>/chemistry?feature=<f>&start=1         start; 202 {"status": "building", done, total},
                                                                 then 200 {"status": "ready", ...stats, "layer"}
@@ -43,10 +45,10 @@ def features():
             "presets": PRESETS}                                                 # T107
 
 
-def _run(target_dir, tid: str, feature: str, job: dict) -> None:
+def _run(target_dir, tid: str, feature: str, job: dict, z: float = 0.0) -> None:
     from pipeline.chemistry import compute
     try:
-        job["stats"] = compute(target_dir, feature, progress=lambda d, t: job.update(done=d, total=t))
+        job["stats"] = compute(target_dir, feature, progress=lambda d, t: job.update(done=d, total=t), z=z)
         job["status"] = "ready"
     except LookupError as e:
         job.update(status="no_data", message=str(e))
@@ -56,22 +58,28 @@ def _run(target_dir, tid: str, feature: str, job: dict) -> None:
 
 
 @router.get("/api/targets/{tid}/chemistry")
-def chemistry(tid: str, request: Request, feature: str, start: int = 0):
+def chemistry(tid: str, request: Request, feature: str, start: int = 0, z: float = 0.0):
+    from pipeline.chemistry import map_key, z_of
     if feature not in _features():
         return JSONResponse({"status": "error", "message": f"unknown feature {feature!r}"}, status_code=400)
+    try:
+        z = z_of(z)                                       # T109: the map at a redshift
+    except ValueError as e:
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
+    mkey = map_key(feature, z)
     d = request.app.state.builder.target_dir(tid) if _ID.match(tid) else None
     if d is None or not (d / "target.json").is_file():
         return JSONResponse({"status": "error", "message": "target not built"}, status_code=404)
     import json
     if json.loads((d / "target.json").read_text(encoding="utf-8")).get("synthetic"):
         return {"status": "no_data", "id": tid, "message": "synthetic target: no SPHEREx exposures to map"}
-    meta = d / "chemistry" / f"{feature}.json"
-    if meta.is_file() and (d / "chemistry" / f"{feature}.png").is_file():
+    meta = d / "chemistry" / f"{mkey}.json"
+    if meta.is_file() and (d / "chemistry" / f"{mkey}.png").is_file():
         from pipeline.chemistry import VERSION
         stats = json.loads(meta.read_text(encoding="utf-8"))
         if stats.get("version") == VERSION:
-            return {"status": "ready", "id": tid, "layer": f"x-{feature}", **stats}
-    key = (tid, feature)
+            return {"status": "ready", "id": tid, "layer": f"x-{mkey}", "key": mkey, "z": z, **stats}
+    key = (tid, mkey)
     with _lock:
         job = _jobs.get(key)
         if job and job["status"] in ("ready", "error", "no_data") and start:
@@ -79,17 +87,38 @@ def chemistry(tid: str, request: Request, feature: str, start: int = 0):
         if job is None and start:
             job = {"status": "building", "done": 0, "total": 0}
             _jobs[key] = job
-            threading.Thread(target=_run, args=(d, tid, feature, job), daemon=True, name=f"chem-{tid}-{feature}").start()
+            threading.Thread(target=_run, args=(d, tid, feature, job, z), daemon=True, name=f"chem-{tid}-{mkey}").start()
     if job is None:
-        return {"status": "not_started", "id": tid, "feature": feature}
+        return {"status": "not_started", "id": tid, "feature": feature, "z": z, "key": mkey}
     if job["status"] == "building":
-        return JSONResponse({"status": "building", "id": tid, "feature": feature, "done": job["done"],
-                             "total": job["total"]}, status_code=202)
+        return JSONResponse({"status": "building", "id": tid, "feature": feature, "z": z, "key": mkey,
+                             "done": job["done"], "total": job["total"]}, status_code=202)
     if job["status"] == "ready":
-        return {"status": "ready", "id": tid, "layer": f"x-{feature}", **job["stats"]}
+        return {"status": "ready", "id": tid, "layer": f"x-{mkey}", "key": mkey, "z": z, **job["stats"]}
     code = 200 if job["status"] == "no_data" else 500
-    return JSONResponse({"status": job["status"], "id": tid, "feature": feature, "message": job.get("message")},
-                        status_code=code)
+    return JSONResponse({"status": job["status"], "id": tid, "feature": feature, "z": z, "key": mkey,
+                         "message": job.get("message")}, status_code=code)
+
+
+@router.get("/api/targets/{tid}/redshift")
+def redshift(tid: str, request: Request):
+    """T109: galaxies with a measured redshift in the field (SIMBAD), biggest first; cached per field."""
+    import json
+    d = request.app.state.builder.target_dir(tid) if _ID.match(tid) else None
+    if d is None or not (d / "target.json").is_file():
+        return JSONResponse({"status": "error", "message": "target not built"}, status_code=404)
+    target = json.loads((d / "target.json").read_text(encoding="utf-8"))
+    if target.get("synthetic"):
+        return {"status": "ready", "id": tid, "galaxies": [], "provenance": None}
+    cache = d / "chemistry" / "redshift.json"
+    if cache.is_file():
+        return {"status": "ready", "id": tid, **json.loads(cache.read_text(encoding="utf-8"))}
+    from pipeline.chemistry import galaxy_redshifts
+    out = galaxy_redshifts(target)
+    if out["provenance"] is not None:                  # SIMBAD answered: keep it (no answer: ask again next time)
+        cache.parent.mkdir(exist_ok=True)
+        cache.write_text(json.dumps(out, indent=1, ensure_ascii=False), encoding="utf-8")
+    return {"status": "ready", "id": tid, **out}
 
 
 @router.get("/api/targets/{tid}/chemistry/{name}")
@@ -111,6 +140,11 @@ def chemistry_png(tid: str, name: str, request: Request):
         buf = io.BytesIO()
         Image.fromarray(np.dstack([rgb, np.where(cov, 255, 0).astype(np.uint8)]), "RGBA").save(buf, "PNG")
         return Response(buf.getvalue(), media_type="image/png", headers={"Cache-Control": "no-cache"})
-    if parts[0] not in _features() or not (d / "chemistry" / name).is_file():
+    from pipeline.chemistry import parse_key
+    try:
+        parse_key(parts[0])                              # T109: <feature>[_z<z·10⁴>]
+    except ValueError:
+        return missing
+    if not (d / "chemistry" / name).is_file():
         return missing
     return FileResponse(d / "chemistry" / name, media_type="image/png", headers={"Cache-Control": "no-cache"})

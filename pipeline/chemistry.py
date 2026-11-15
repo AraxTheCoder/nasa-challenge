@@ -77,6 +77,12 @@ PRESETS = [
      "tested": "NGC 7023: PAH (blue) fills the reflection nebula, ice (red) in the cloud beside it; ρ Oph: ice "
                "inside the cloud, PAH on the side facing the bright stars; Orion: unclear"},
 ]
+# T109: a receding source's features arrive at λ(1 + z). A map can be made at a redshift: the feature window, its
+# continuum and the bright lines kept out of it all move. Milky Way objects (|cz| < ~300 km/s) need none; galaxies
+# from cz ≈ 1 300 km/s on (Br-α; ~4 000 km/s for PAH and Pa-β) miss the rest-wavelength window without it.
+Z_MAX = 1.0
+Z_STEP = 1e-4                # z is kept to 4 decimals (30 km/s): the file key, the cache, the layer name
+SPHEREX_MAX_UM = 5.02        # the longest wavelength SPHEREx sees (band 6 ends at 5.0 µm)
 CONT_CHANNELS = 3.0          # continuum reaches this many channel widths beyond the feature (+ half a channel gap)
 SIGMA_SPAN = 5.0             # ±this many sigma = black / white
 THREADS = 8
@@ -118,19 +124,48 @@ def sample_exposure(path: Path, out_w, npix: int):
     return out, wl, bw
 
 
-def _other_features(lam0: float):
+def _other_features(lam0: float, z: float = 0.0):
     """(centre, half-width) of the bright emission features (PAH, hydrogen lines): another feature's continuum
     must not include them (Orion, 2026-11-14: PAH 3.3 µm in the continuum above 3.05 µm painted the PAH filaments
-    dark on the water-ice map). Excluding every feature left rows without continuum; ices are weak enough."""
-    return [(um, hw) for fid, (_, um, hw, kind, _) in FEATURES.items()
-            if abs(um - lam0) > 1e-6 and (kind == "line" or fid == "pah")]   # bright emission only
+    dark on the water-ice map). Excluding every feature left rows without continuum; ices are weak enough.
+    lam0 is observed (shifted) like these, by (1 + z) (T109: the galaxy's own lines move with it)."""
+    k = 1.0 + z
+    return [(um * k, hw * k) for fid, (_, um, hw, kind, _) in FEATURES.items()
+            if abs(um * k - lam0) > 1e-6 and (kind == "line" or fid == "pah")]   # bright emission only
 
 
-def combine(samples, lam0: float, half: float):
-    """samples: [(flux, wl, bw)] on one grid -> dict of per-pixel maps: on, cont, diff, n_on, n_blue, n_red."""
+def z_of(z) -> float:
+    """z rounded to Z_STEP; ValueError outside 0..Z_MAX."""
+    z = round(float(z or 0.0) / Z_STEP) * Z_STEP
+    if not 0.0 <= z <= Z_MAX or not math.isfinite(z):
+        raise ValueError(f"redshift z must be 0 to {Z_MAX:g}")
+    return round(z, 4)
+
+
+def map_key(feature: str, z: float = 0.0) -> str:
+    """T109: name of a map's files and layer: the feature id, + "_z<z × 10⁴>" when made at a redshift."""
+    zi = round(z_of(z) / Z_STEP)
+    return feature if zi == 0 else f"{feature}_z{zi}"
+
+
+def parse_key(key: str) -> tuple[str, float]:
+    """(feature, z) of a map key; ValueError if it names no feature."""
+    import re
+    m = re.match(r"^([a-z0-9_]+?)(?:_z(\d{1,5}))?$", key or "")
+    if not m or m.group(1) not in FEATURES:
+        raise ValueError(f"unknown chemistry map {key!r}")
+    z = int(m.group(2)) * Z_STEP if m.group(2) else 0.0
+    if m.group(2) is not None and (int(m.group(2)) == 0 or z > Z_MAX):
+        raise ValueError(f"unknown chemistry map {key!r}")
+    return m.group(1), round(z, 4)
+
+
+def combine(samples, lam0: float, half: float, z: float = 0.0):
+    """samples: [(flux, wl, bw)] on one grid -> dict of per-pixel maps: on, cont, diff, n_on, n_blue, n_red.
+    lam0, half: the feature as observed (at redshift z, T109)."""
     shape = samples[0][0].shape
     on, blue, red, lb, lr = [], [], [], [], []
-    others = _other_features(lam0)
+    others = _other_features(lam0, z)
     for f, wl, bw in samples:
         ok = np.isfinite(f) & np.isfinite(wl) & np.isfinite(bw)
         w_on = np.maximum(half, bw / 2)
@@ -182,14 +217,20 @@ def relevant(exposures, lam0: float, half: float):
     return [e for e in exposures if e.wave_min_um - reach <= lam0 <= e.wave_max_um + reach]
 
 
-def compute(target_dir: Path, feature: str, progress=None, refresh: bool = False) -> dict:
-    """Make (or reuse) <target_dir>/chemistry/<feature>.png + .json. Returns the stats dict."""
+def compute(target_dir: Path, feature: str, progress=None, refresh: bool = False, z: float = 0.0) -> dict:
+    """Make (or reuse) <target_dir>/chemistry/<key>.png + .json (key = map_key(feature, z)). Returns the stats dict.
+    T109: at redshift z every wavelength used is the rest one times (1 + z)."""
     from PIL import Image
 
     from . import build, photometry
-    name, lam0, half, kind, what = FEATURES[feature]
+    z = z_of(z)
+    key = map_key(feature, z)
+    name, lam_rest, half_rest, kind, what = FEATURES[feature]
+    lam0, half = lam_rest * (1 + z), half_rest * (1 + z)
+    if lam0 - half > SPHEREX_MAX_UM:
+        raise LookupError(f"{name} ({lam_rest} µm) arrives at {lam0:.2f} µm at z = {z:g}: beyond SPHEREx's 5 µm")
     out_dir = Path(target_dir) / "chemistry"
-    png, meta = out_dir / f"{feature}.png", out_dir / f"{feature}.json"
+    png, meta = out_dir / f"{key}.png", out_dir / f"{key}.json"
     target = json.loads((Path(target_dir) / "target.json").read_text(encoding="utf-8"))
     if not refresh and png.is_file() and meta.is_file():
         old = json.loads(meta.read_text(encoding="utf-8"))
@@ -221,28 +262,72 @@ def compute(target_dir: Path, feature: str, progress=None, refresh: bool = False
             if progress:
                 progress(done, len(todo))
     if not samples:
-        raise LookupError(f"no SPHEREx exposure reaches {name} ({lam0} µm) here")
-    m = combine(samples, lam0, half)
+        raise LookupError(f"no SPHEREx exposure reaches {name} ({lam0:.3f} µm) here")
+    m = combine(samples, lam0, half, z)
     grey, cov, sigma = to_grey(m["diff"])
     out_dir.mkdir(parents=True, exist_ok=True)
     Image.fromarray(np.dstack([grey.round().astype(np.uint8), np.where(cov, 255, 0).astype(np.uint8)]), "LA").save(png)
     epochs = sorted({e.epoch for e in used})
     stats = {
-        "version": VERSION, "feature": feature, "name": name, "um": lam0, "half_width_um": half, "kind": kind,
+        "version": VERSION, "feature": feature, "key": key, "z": z, "um_observed": round(lam0, 4),
+        "name": name, "um": lam_rest, "half_width_um": half_rest, "kind": kind,
         "what": what, "sigma_mjy_sr": round(sigma, 5) if math.isfinite(sigma) else None,
         "coverage": round(float(cov.mean()), 3), "exposures_read": len(todo), "exposures_used": len(used),
         "failed": failed, "epochs": epochs,
         "median_on": int(np.median(m["n_on"][cov])) if cov.any() else 0,
         "median_continuum": int(np.median((m["n_blue"] + m["n_red"])[cov])) if cov.any() else 0,
         "both_sides": round(float(((m["n_blue"] > 0) & (m["n_red"] > 0))[cov].mean()), 3) if cov.any() else 0.0,
-        "seconds": round(time.time() - t0, 1), "image": f"chemistry/{feature}.png",
+        "seconds": round(time.time() - t0, 1), "image": f"chemistry/{key}.png",
         "provenance": [prov, {"service": "SPHEREx level-2 images (field cutouts, AWS S3 / IRSA)",
-                              "query": f"{len(todo)} exposures whose detector reaches {lam0} µm; IMAGE − ZODI, "
+                              "query": f"{len(todo)} exposures whose detector reaches {lam0:.4f} µm"
+                                       f"{f' ({lam_rest} µm at z = {z:g})' if z else ''}; IMAGE − ZODI, "
                                        f"flags out, per-pixel wavelength (WCS-WAVE)",
                               "retrieved_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t0))}],
     }
     meta.write_text(json.dumps(stats, indent=1, ensure_ascii=False), encoding="utf-8")
     return stats
+
+
+# ---------- T109: redshift of the galaxies in a field (SIMBAD) ----------
+
+Z_MIN_GALAXY = 0.001         # below this (cz < 300 km/s) a redshift is a Milky Way velocity: no shift needed
+Z_LIST = 8
+
+
+def galaxy_redshifts(target: dict) -> dict:
+    """Galaxies with a measured redshift in the field, biggest first (they dominate the map), from SIMBAD
+    `basic.rvz_redshift`: {"galaxies": [{name, otype, z, cz_km_s, quality, major_arcmin, sep_arcmin, ra_deg,
+    dec_deg}], "provenance": {...} | None}. Network errors: empty list, provenance None."""
+    import numpy as np
+
+    from .labels import SIMBAD_TAP, _num, _now, _tap
+    c = target["center"]
+    r = target.get("size_arcmin", 15) / 60 / math.sqrt(2)
+    adql = (f"SELECT TOP 200 main_id, ra, dec, otype, rvz_redshift, rvz_qual, galdim_majaxis FROM basic WHERE "
+            f"CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', {c['ra_deg']}, {c['dec_deg']}, {r:.5f})) = 1 "
+            f"AND rvz_redshift >= {Z_MIN_GALAXY} AND rvz_redshift <= {Z_MAX}")
+    for url in SIMBAD_TAP:
+        try:
+            cols = _tap(url, adql)
+        except Exception:  # noqa: BLE001 - next mirror
+            continue
+        prov = {"service": "SIMBAD TAP " + url, "query": adql, "retrieved_utc": _now()}
+        n = len(cols.get("main_id", []))
+        if not n:
+            return {"galaxies": [], "provenance": prov}
+        ra, _ = _num(cols["ra"]); dec, _ = _num(cols["dec"])
+        z, _ = _num(cols["rvz_redshift"]); maj, has_maj = _num(cols["galdim_majaxis"])
+        qual = [str(q) for q in cols["rvz_qual"].filled("")]
+        dra = (ra - c["ra_deg"] + 180) % 360 - 180
+        sep = 60 * np.hypot(dra * np.cos(np.radians(c["dec_deg"])), dec - c["dec_deg"])
+        order = sorted(range(n), key=lambda i: (-(maj[i] if has_maj[i] else 0.0), sep[i]))[:Z_LIST]
+        gal = [{"name": " ".join(str(cols["main_id"][i]).replace("NAME ", "").split()), "otype": str(cols["otype"][i]),
+                "z": round(float(z[i]), 5), "cz_km_s": round(float(z[i]) * 299792.458),
+                "quality": qual[i] or None, "major_arcmin": round(float(maj[i]), 2) if has_maj[i] else None,
+                "sep_arcmin": round(float(sep[i]), 2), "ra_deg": round(float(ra[i]), 5),
+                "dec_deg": round(float(dec[i]), 5)} for i in order]
+        return {"galaxies": gal, "provenance": prov}
+    return {"galaxies": [], "provenance": None}
 
 
 # ---------- T96: several features as one colour picture ----------
@@ -269,11 +354,15 @@ _FLOOR = math.asinh(1.0) / math.asinh(SIGMA_SPAN)    # 1 noise level in the grey
 
 
 def combo(features) -> list[str]:
-    """2 or more distinct known features in wavelength order (the order of their colours); ValueError otherwise."""
+    """2 or more distinct known map keys (features, T109: at one redshift) in wavelength order (the order of their
+    colours); ValueError otherwise."""
     fs = list(dict.fromkeys(features))
-    if not 2 <= len(fs) <= COMBINE_MAX or any(f not in FEATURES for f in fs):
+    parsed = [parse_key(f) for f in fs]                   # ValueError for unknown names
+    if not 2 <= len(fs) <= COMBINE_MAX or len({p[0] for p in parsed}) != len(fs):
         raise ValueError(f"combine 2 to {COMBINE_MAX} different features of: {', '.join(FEATURES)}")
-    return sorted(fs, key=lambda f: FEATURES[f][1])
+    if len({p[1] for p in parsed}) != 1:
+        raise ValueError("one picture, one redshift: all its maps must be made at the same z")
+    return sorted(fs, key=lambda f: FEATURES[parse_key(f)[0]][1])
 
 
 def strength(grey: np.ndarray, shows: str) -> np.ndarray:
@@ -292,10 +381,11 @@ def combined_map(target_dir: Path, features) -> tuple[np.ndarray, np.ndarray]:
     rgb = cov = None
     for f, colour in zip(fs, COMBINE_COLOURS[len(fs)]):
         p = Path(target_dir) / "chemistry" / f"{f}.png"
+        feat = parse_key(f)[0]
         if not p.is_file():
-            raise LookupError(f"no {FEATURES[f][0]} map made yet")
+            raise LookupError(f"no {FEATURES[feat][0]} map made yet")
         a = np.asarray(Image.open(p).convert("LA"), np.float32)
-        s = strength(a[..., 0], SHOWS[f])
+        s = strength(a[..., 0], SHOWS[feat])
         if rgb is None:
             rgb, cov = np.zeros(s.shape + (3,), np.float32), np.ones(s.shape, bool)
         if s.shape != cov.shape:

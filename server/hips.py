@@ -83,10 +83,13 @@ def has_layer(target: dict, key: str) -> bool:
         _, a, b = key.split("-")
         return a in ids and b in ids
     if key.startswith("x-"):                           # T93: made by GET /api/targets/<id>/chemistry first
-        from pipeline.chemistry import FEATURES, combo
+        from pipeline.chemistry import combo, parse_key
         parts = key[2:].split("-")
-        if len(parts) == 1:
-            return parts[0] in FEATURES
+        if len(parts) == 1:                            # T109: <feature>[_z<z·10⁴>]
+            try:
+                return bool(parse_key(parts[0]))
+            except ValueError:
+                return False
         try:                                           # T96: one name per combination, in wavelength order
             return combo(parts) == parts
         except ValueError:
