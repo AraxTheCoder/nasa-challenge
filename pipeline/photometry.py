@@ -35,7 +35,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import build, s3
+from . import build, flags, s3
 from .s3 import IBE_PREFIX, S3_ROOT
 
 APERTURE_PX = 3.0
@@ -73,7 +73,8 @@ def measure_cutout_many(path: Path, positions) -> list[dict | None]:
         if "ZODI" in hd:
             img = img - hd["ZODI"].data
         var = hd["VARIANCE"].data.astype(float) if "VARIANCE" in hd else None
-        bad = ((hd["FLAGS"].data.astype(np.int64) & build.HW_MASK) != 0) | ~np.isfinite(img)
+        flg = hd["FLAGS"].data.astype(np.int64)
+        bad = ((flg & build.HW_MASK) != 0) | ~np.isfinite(img)
         w = WCS(hd["IMAGE"].header)
         if not positions:
             return []
@@ -88,12 +89,12 @@ def measure_cutout_many(path: Path, positions) -> list[dict | None]:
         if not inside[i]:
             out.append(None)
             continue
-        out.append(_aperture(img, var, bad, float(xs[i]), float(ys[i]), float(waves[0][k]), float(waves[1][k]), pix_sr))
+        out.append(_aperture(img, var, bad, float(xs[i]), float(ys[i]), float(waves[0][k]), float(waves[1][k]), pix_sr, flg))
         k += 1
     return out
 
 
-def _aperture(img, var, bad, x: float, y: float, wave: float, bw: float, pix_sr: float) -> dict | None:
+def _aperture(img, var, bad, x: float, y: float, wave: float, bw: float, pix_sr: float, flg=None) -> dict | None:
     r_out = ANNULUS_PX[1]
     x0, x1 = int(x - r_out) - 1, int(x + r_out) + 2
     y0, y1 = int(y - r_out) - 1, int(y + r_out) + 2
@@ -125,6 +126,8 @@ def _aperture(img, var, bad, x: float, y: float, wave: float, bw: float, pix_sr:
         "err_ujy": None if math.isnan(var_sum) else round(math.sqrt(max(var_sum, 0.0)) * to_ujy, 3),
         "wavelength_um": round(wave, 4), "bandwidth_um": round(bw, 4),
         "masked_fraction": round(masked_fraction, 3), "masked": masked_fraction > MAX_MASKED or n_good == 0,
+        # T60: every quality flag set anywhere in the aperture, by name (pipeline/flags.py says what each means)
+        **({"flags": flags.in_pixels(flg[y0:y1, x0:x1][ap])} if flg is not None else {}),
     }
 
 
@@ -145,7 +148,7 @@ def measure(target: dict, ra: float, dec: float, raw_root: Path | None = None) -
     return {
         "id": target.get("id"), "ra_deg": round(ra, 6), "dec_deg": round(dec, 6),
         "aperture_px": APERTURE_PX, "annulus_px": list(ANNULUS_PX), "unit": "uJy",
-        "frames": rows, "missing": missing, "note": NOTE,
+        "frames": rows, "missing": missing, "note": NOTE, "flag_meanings": flags.meanings(rows),
     }
 
 
@@ -241,8 +244,8 @@ def measure_all(ra: float, dec: float, progress=None, threads: int = SPECTRUM_TH
     processes: 0 = threads only in this process (tests); default SPECTRUM_PROCESSES worker processes (T83)."""
     ra, dec = round(ra % 360, 4), round(dec, 4)
     cached = spectrum_cache(ra, dec)
-    if cached.is_file():
-        out = json.loads(cached.read_text(encoding="utf-8"))
+    out = json.loads(cached.read_text(encoding="utf-8")) if cached.is_file() else None
+    if out is not None and "flag_meanings" in out:       # T60: older entries have no flags: measured again below
         from .anomaly import VERSION
         if (out.get("anomalies") or {}).get("version") != VERSION:   # cached before T84 or with an older method
             out["anomalies"] = _anomalies(out)
@@ -296,7 +299,7 @@ def measure_all(ra: float, dec: float, progress=None, threads: int = SPECTRUM_TH
     rows.sort(key=lambda r: (r["mjd"], r["detector"]))
     out = {"ra_deg": ra, "dec_deg": dec, "aperture_px": APERTURE_PX, "annulus_px": list(ANNULUS_PX),
            "unit": "uJy", "frames": rows, "missing": missing, "all_exposures": True, "n_exposures": total,
-           "seconds": round(time.time() - t0, 1), "note": NOTE}
+           "seconds": round(time.time() - t0, 1), "note": NOTE, "flag_meanings": flags.meanings(rows)}
     out["anomalies"] = _anomalies(out)                 # T84
     _write_spectrum(cached, out)
     return out
