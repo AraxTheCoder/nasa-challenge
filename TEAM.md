@@ -42,6 +42,7 @@ Mati). When you finish a task, move its row to Done in the same commit.
 
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
+| T140 | C: Explain and simplify source brightness: separate spectrum and between-visit comparisons, readable charts and optional details | Codex (brightness) | doing | `codex/T140-brightness-panel` | [tasks/T140](tasks/T140-brightness-panel.md). User requested explanation + clearer analysis UI |
 | T139 | C: Field blink freezes once the labels or known asteroids/comets arrive (a fresh copy of the field replaces the old one without a hand-over; T134's checks compare the exact copy): hand the fresh copy over everywhere the field is remembered | Mati | review | `mati/T139-blink-refresh` | [tasks/T139](tasks/T139-blink-refresh.md). Found by Mati; keeps T134's checks |
 | T137 | C: Chemistry list scrolls inside the window (it ran past the bottom since T124); the floating panels fold to one line (– next to the grip, remembered); a moved panel stays fully on screen | Mati | review | `mati/T137-fold-panels` | [tasks/T137](tasks/T137-fold-panels.md). Asked by Mati; touches Jonathan's web/hud.js (note in tasks/T124) |
 | T94 | C: Missing tiles on the map: failed tiles never asked again (holes until reload), false-colour field epochs 422, holes near the poles when zooming in | Jonathan | doing | `main` | [tasks/T94](tasks/T94-missing-tiles.md) |
