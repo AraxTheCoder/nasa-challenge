@@ -1,7 +1,7 @@
-# T99: Map blink switch; chemistry picture survives zooming
+# T100: Map blink switch; chemistry picture survives zooming
 
 - **Owner:** Mati  ·  **Status:** doing
-- **Branch:** `mati/T99-blink-toggle`
+- **Branch:** `mati/T100-blink-toggle`
 - **Depends on / feeds:** T90 (automatic blink), T93/T96 (chemistry maps)
 
 ## Goal
