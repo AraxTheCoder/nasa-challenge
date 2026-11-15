@@ -1,21 +1,28 @@
-# Submission: text for the Space Apps project page
+# Submission: text for the Space Apps project form
 
-One section per field of the project form, ready to paste. Task: `tasks/T15-submission.md`.
-Every claim was checked against the code on main and the task files on 2026-11-15 (about 18:30 UTC), and every
-Objective and Potential Consideration of the challenge (`docs/CHALLENGE.md`) is answered under "How it answers the
-challenge". Deadline: **Sunday, November 15, 2026, 23:59 local time** (CET, 22:59 UTC).
+One section per field of the live form (seen 2026-11-15 evening), ready to paste. Task: `tasks/T15-submission.md`.
+Every claim was checked against the code on main and the task files; every Objective and Potential Consideration of
+the challenge (`docs/CHALLENGE.md`) is answered under "How it answers the challenge"; every link below was opened on
+2026-11-15. Deadline: **Sunday, November 15, 2026, 23:59 local time** (CET, 22:59 UTC).
 
 ## Still open before submitting (humans)
 
-1. **Live tool URL** (T14 is still open). Without one, judges can only run the tool from the README. Judges who
-   cannot open a link cannot judge the project, so a public URL matters most.
-2. **On the live form:** required fields, character limits, and the exact name of the AI field.
+1. **Project link = the deployed tool** (T14): its public URL goes into the form's "Project" field and into the
+   first line of "Project Details".
+2. **The AI tool that made the demo video and its sound**: its name and link go into the last row of "Space Agency
+   Partner & Other Data".
 
-## Project name
+# Form section "Project Summary"
+
+## Project Name
 
 SPHEREx Blink
 
-## High-level project summary
+(Spelled like the mission: "SPHEREx", as in the video and the tool.)
+
+## Summary
+
+Plain text field, limit 1500 characters, 50–200 words suggested. This text: 1,133 characters, 200 words (pasted as one paragraph).
 
 SPHEREx Blink is a free, open-source web tool that lets anyone see how the sky changes in NASA's SPHEREx data. Type the
 coordinates of any patch of sky, or pick one of the five test targets. The tool fetches the real SPHEREx images of
@@ -28,22 +35,30 @@ lets volunteers discuss what they find and ask others for a second look. New dat
 code changes. This matters because SPHEREx returns images of more than a billion objects, far more than any team
 can inspect. Volunteers comparing images in this way have already found most known comets and brown dwarfs.
 
-## Link to project demo
+# Form section "Project Links"
 
-<https://cdn.jsdelivr.net/gh/AraxTheCoder/nasa-challenge@725e92de1f5096d53af127496fad0ee5df47f2c9/docs/demo/spherex-blink-demo-30s.mp4>
+## Project Demonstration
 
-The 30-second video (1920×1080; picture and sound AI-generated, marked "AI-generated video and audio" for its
-whole length) plays in the browser. It is
-`docs/demo/spherex-blink-demo-30s.mp4` in the repository, served by jsDelivr from the public GitHub repository and
-pinned to one commit, so the link never changes. Checked 2026-11-15: HTTP 200, `video/mp4`, identical bytes.
+https://cdn.jsdelivr.net/gh/AraxTheCoder/nasa-challenge@725e92de1f5096d53af127496fad0ee5df47f2c9/docs/demo/spherex-blink-demo-30s.mp4
 
-## Link to final project
+The 30-second video (1920×1080; picture and sound AI-generated, marked "AI-generated video and audio" for its whole
+length) plays in the browser, no login. It is `docs/demo/spherex-blink-demo-30s.mp4` in the public repository,
+served by jsDelivr and pinned to one commit, so the link never changes. Checked 2026-11-15: HTTP 200, `video/mp4`,
+identical bytes.
 
-- Code: <https://github.com/AraxTheCoder/nasa-challenge> (public, open source under the GNU GPL v3 or
-  later; the old address `jabra11/nasa-challenge` redirects there). How to run it: README, "How to run" (Python 3.12+, one command).
-- Live tool: **OPEN** (T14).
+## Project
 
-## Detailed project description
+**OPEN:** the public URL of the deployed tool (T14).
+
+# Form section "Project Information"
+
+## Project Details
+
+Rich-text field. Paste from the rendered page (see Handoff in `tasks/T15-submission.md`) so headings, lists and bold
+survive.
+
+**Try it:** OPEN (the deployed tool's URL) · **Source code** (GNU GPL v3 or later):
+https://github.com/AraxTheCoder/nasa-challenge
 
 ### What it does
 
@@ -127,6 +142,45 @@ wavelength and `?tour=1` starts the tour. So the tool can be linked from or embe
   quality flags and measured motion.
 - The community space turns single looks into shared, checkable findings.
 
+### Intended impact
+
+SPHEREx maps the whole sky every six months in 102 colours: far more images than any team can inspect. WiseView, a
+blink tool for NASA's WISE mission, let the public make hundreds of discoveries. SPHEREx Blink aims to do the same for
+SPHEREx: anyone with a browser can check a patch of sky for things that move, change or have an unusual spectrum, and
+ask others for a second look. Teachers and the public can watch a star move and see its distance measured from
+SPHEREx data. Every new release makes the time span longer, so more motions become visible, and the tool picks up new
+releases by itself.
+
+### What is creative about it
+
+- **Blinking at matching wavelengths.** SPHEREx never sees a spot twice at exactly the same wavelength, so a plain
+  blink shows stars "changing" that didn't change. The tool pairs images by wavelength, a problem blink tools for
+  earlier surveys never had to solve.
+- **102 colours made readable.** A spectrum on any click, with plain-word hints, and chemistry maps that show where
+  water ice or glowing hydrogen are.
+- **Motion and distance from SPHEREx alone**, shown next to Gaia's values, so anyone can check the tool against a
+  trusted reference.
+- **A map of the community's attention.** It shows how many different people looked at each patch of sky, so
+  volunteers go where nobody has looked yet.
+- **The whole sky down to single pixels**, with deep zoom levels computed on demand from the original images
+  instead of a huge pre-processed copy.
+
+### Factors we considered
+
+- **Honesty about the data.** Real SPHEREx data only; the two simulated test fields are labelled. Quality flags are
+  shown, saturated or too-faint stars are named as such, measurements come with their uncertainties, and nothing is
+  called a discovery: a second look asks for another opinion, it does not confirm one.
+- **Fair comparisons.** Images are compared at matching wavelengths, so a colour difference is not mistaken for a
+  change.
+- **Care for NASA's archives.** The tool reads only the pixels it needs and caches them; the server has a public
+  mode with rate limits and a cache size cap.
+- **Speed.** A local copy of the image index, a cloud machine close to the data, and visible progress while a field
+  is built.
+- **Ease of use.** A guided tour, quick picks, short hints with details on demand, keyboard shortcuts, and layouts
+  that work on phone and tablet screens.
+- **Data that keeps arriving.** New releases are found by themselves, and every image records where it came from.
+- **Openness.** Free software under the GNU GPL, and a link for every view so findings can be shared and checked.
+
 ### How it answers the challenge
 
 - **Public web tool where users enter RA and Dec:** field form with decimal or sexagesimal coordinates, for any
@@ -175,47 +229,70 @@ wavelength and `?tour=1` starts the tour. So the tool can be linked from or embe
   ready for the longer time span of coming releases.
 - Bright stars saturate SPHEREx (flagged, not measured).
 - The tool shows and measures; it does not claim discoveries. Finding things is left to the people using it.
+- Community posts are anonymous (a chosen display name) and not moderated yet.
 
-### Tools and languages
+### Tools, languages and hardware
 
-Python 3.12 (astropy, astropy-healpix, reproject, pyvo, numpy, scipy, Pillow, requests, FastAPI, uvicorn, SQLite),
-JavaScript, HTML, CSS and WebGL without a framework, pytest, Playwright, Node.js, GitHub Actions, a small cloud VM
-for map tiles and image cutouts.
+Python 3.12 (astropy, astropy-healpix, reproject, pyvo, numpy, scipy, Pillow, requests, FastAPI, uvicorn, SQLite);
+JavaScript, HTML, CSS and WebGL without a framework; pytest, Playwright, Node.js and GitHub Actions for tests.
+Hardware: our own laptops and one small cloud virtual machine close to the data (map tiles, image cutouts). The code
+was written with AI coding assistants (see "Use of AI").
 
-## NASA data
+# Form section "NASA Data" (Link Text → Link Url)
 
-- **SPHEREx Data Release 1 (DR1), spectral images**, NASA/IPAC Infrared Science Archive (IRSA), DOI
-  [10.26131/IRSA678](https://www.ipac.caltech.edu/doi/10.26131/IRSA678): the images of every field and every
-  spectrum.
-- **SPHEREx DR1 Spectral All-Sky Cube**, IRSA, DOI
-  [10.26131/IRSA679](https://www.ipac.caltech.edu/doi/10.26131/IRSA679): the all-sky map and its false colour.
-- **SPHEREx Quick Release 3 (QR3)**, IRSA, DOI [10.26131/IRSA662](https://www.ipac.caltech.edu/doi/10.26131/IRSA662):
-  the newest images, used next to DR1.
-- The same SPHEREx images on **AWS Open Data**, bucket `nasa-irsa-spherex`
-  (<https://registry.opendata.aws/spherex-qr/>).
-- **IRSA services:** the SPHEREx image index (TAP), image cutouts, and the HiPS maps of SPHEREx, 2MASS and AllWISE.
-- **JPL Solar System Dynamics:** Horizons (where SPHEREx was at each image, and asteroid and comet positions as
-  seen from SPHEREx) and the Small-Body Identification API.
-- **2MASS** and **AllWISE** (NASA / IPAC): comparison maps, and catalogues for looking up chemistry spots.
-- **CatWISE2020** (from NASA's WISE and NEOWISE data; Marocco et al. 2021): brown dwarf labels and catalogue
-  look-ups.
-- **WiseView** (from the challenge resources): our model for the blink.
+| Link Text | Link Url |
+|---|---|
+| SPHEREx Data Release 1: Spectral Images (IRSA) | https://doi.org/10.26131/IRSA678 |
+| SPHEREx Data Release 1: Spectral All-Sky Cube (IRSA) | https://doi.org/10.26131/IRSA679 |
+| SPHEREx Quick Release 3 (IRSA) | https://doi.org/10.26131/IRSA662 |
+| SPHEREx at the NASA/IPAC Infrared Science Archive (IRSA) | https://irsa.ipac.caltech.edu/Missions/spherex.html |
+| SPHEREx on the Registry of Open Data on AWS | https://registry.opendata.aws/spherex-qr/ |
+| IRSA Table Access Protocol (TAP) service | https://irsa.ipac.caltech.edu/docs/program_interface/TAP.html |
+| IRSA HiPS sky maps (SPHEREx, 2MASS, AllWISE) | https://irsa.ipac.caltech.edu/data/hips/list |
+| JPL Horizons | https://ssd.jpl.nasa.gov/horizons/ |
+| JPL Small-Body Identification API | https://ssd-api.jpl.nasa.gov/doc/sb_ident.html |
+| 2MASS (IRSA) | https://irsa.ipac.caltech.edu/Missions/2mass.html |
+| AllWISE (IRSA) | https://irsa.ipac.caltech.edu/data/WISE/docs/release/AllWISE/ |
+| CatWISE2020 catalogue (from WISE and NEOWISE data) | https://catwise.github.io/ |
+| WiseView (our model for the blink) | http://byw.tools/wiseview |
 
-## Space agency partner data and other references
+What each is used for: "Project Details" and `README.md`, "Data credits" (acknowledgement texts).
 
-- **Gaia DR3** (ESA): star positions, proper motions and parallaxes for the labels, and the distance we compare
-  with.
-- **SIMBAD** and **VizieR** (CDS, Strasbourg; also their Harvard and IDIA mirrors): object names, types and
-  galaxy redshifts. **AAVSO VSX**, through VizieR: types, periods and ranges of variable stars.
-- **CDS HiPS** maps of SPHEREx per detector (Quick Release 2), and the HiPS standard (Fernique et al. 2015).
-- **Minor Planet Center** orbit catalogue MPCORB; **IMCCE SkyBoT** (Berthier et al. 2006).
-- Open-source software: astropy, astropy-healpix, reproject, pyvo, numpy, scipy, Pillow, requests, FastAPI,
-  uvicorn; Playwright for tests.
-- The code in the repository was written for this project, by AI coding assistants under the team's direction
-  (see "Use of AI"). Beyond the libraries above, we have not knowingly included code, text or images from other
-  projects.
+# Form section "Space Agency Partner & Other Data" (Link Text → Link Url)
 
-The acknowledgement texts the archives ask for are in `README.md`, "Data credits".
+| Link Text | Link Url |
+|---|---|
+| Gaia Data Release 3 (ESA) | https://www.cosmos.esa.int/web/gaia/dr3 |
+| SIMBAD astronomical database (CDS) | https://simbad.cds.unistra.fr/ |
+| VizieR catalogue service (CDS) | https://vizier.cds.unistra.fr/ |
+| AAVSO International Variable Star Index (VSX) | https://vsx.aavso.org/ |
+| HiPS sky-map standard (IVOA; CDS SPHEREx maps per detector) | https://www.ivoa.net/documents/HiPS/ |
+| Minor Planet Center orbit catalogue (MPCORB) | https://minorplanetcenter.net/iau/MPCORB.html |
+| IMCCE SkyBoT | https://ssp.imcce.fr/webservices/skybot/ |
+| Astropy | https://www.astropy.org/ |
+| astropy-healpix | https://github.com/astropy/astropy-healpix |
+| reproject | https://reproject.readthedocs.io/ |
+| PyVO | https://pyvo.readthedocs.io/ |
+| NumPy | https://numpy.org/ |
+| SciPy | https://scipy.org/ |
+| Pillow | https://python-pillow.org/ |
+| Requests | https://requests.readthedocs.io/ |
+| FastAPI | https://fastapi.tiangolo.com/ |
+| Uvicorn | https://uvicorn.dev/ |
+| SQLite | https://www.sqlite.org/ |
+| pytest | https://pytest.org/ |
+| Playwright | https://playwright.dev/ |
+| Node.js | https://nodejs.org/ |
+| GitHub Actions | https://github.com/features/actions |
+| FFmpeg (AI label on the demo video) | https://ffmpeg.org/ |
+| jsDelivr (serves the demo video) | https://www.jsdelivr.com/ |
+| Claude Code (Anthropic), AI coding assistant | https://claude.com/product/claude-code |
+| OpenAI Codex, AI coding assistant | https://openai.com/codex/ |
+| **OPEN:** the AI tool that generated the demo video and its sound | **OPEN** |
+
+All links opened on 2026-11-15 (openai.com shows scripts a bot check; it opens in a browser). The code in the
+repository was written for this project, by AI coding assistants under the team's direction; beyond the tools above
+we have not knowingly included code, text or images from other projects.
 
 ## Use of AI
 
