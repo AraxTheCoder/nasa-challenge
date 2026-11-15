@@ -34,8 +34,9 @@ def main() -> None:
     ap.add_argument("--public", action="store_true", default=os.environ.get("SPHEREX_PUBLIC") == "1",
                     help="T58: limits for a public server (per-IP rates, job cap, admin token for refresh/settings, "
                          "cache cap); also $SPHEREX_PUBLIC=1. Admin token: $SPHEREX_ADMIN_TOKEN")
-    ap.add_argument("--cache-gb", type=float, default=float(os.environ.get("SPHEREX_CACHE_GB", 20)),
-                    help="with --public: keep the field / cutout / spectra caches under this size (default 20)")
+    ap.add_argument("--cache-gb", type=float, default=None,
+                    help="keep the field / cutout / tile-chunk / spectra caches under this size by evicting the least "
+                         "recently used (T58, T97). Default: $SPHEREX_CACHE_GB, else 20 with --public, else no cap")
     ap.add_argument("--max-jobs", type=int, default=int(os.environ.get("SPHEREX_MAX_JOBS", 4)),
                     help="with --public: expensive jobs (builds, spectra) running at once on the server (default 4)")
     ap.add_argument("--trust-proxy", action="store_true",
@@ -48,7 +49,12 @@ def main() -> None:
     if str(args.cutouts_remote).lower() in ("none", ""):
         args.cutouts_remote = None
     from . import limits
+    if args.cache_gb is None:
+        env = os.environ.get("SPHEREX_CACHE_GB")
+        args.cache_gb = float(env) if env else (20.0 if args.public else 0.0)
     limits.configure(args.public, cache_gb=args.cache_gb, max_active=args.max_jobs, trust_proxy=args.trust_proxy)
+    if args.cache_gb and not args.public:
+        print(f"cache cap {args.cache_gb:g} GB (least recently used evicted)", flush=True)
     if args.public:
         print(f"public mode: per-IP limits, {args.max_jobs} jobs at once, cache cap {args.cache_gb:g} GB, "
               f"admin token {'set' if limits.CFG.token else 'NOT set (refresh and settings disabled)'}", flush=True)
