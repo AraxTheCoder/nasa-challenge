@@ -15,7 +15,7 @@ Detection also reports objects that appear, vanish or change brightness between 
       detections: the field spectra are measured on request, after the build that writes detections
 - [x] Viewer: "Changes brightness" list in the unusual-spectra panel (`web/outliers.js`); a name opens its spectrum
       and light curve
-- [ ] Mark them on the map (like T88's rings): not done
+- [x] Mark them on the map: dashed yellow "V" rings with the T88 "Unusual spectra" map toggle
 
 ## Findings
 - Method in the module docstring. Pairs per source position (the wavelength changes across a field), same
