@@ -1,4 +1,8 @@
-# Contracts (v0.44)
+# Contracts (v0.45)
+
+v0.45 (T145, T146): `GET /api/health` adds `commit` / `api_commit` (the git commit the server runs). Community:
+posting is closed (`POST .../comments` → 403, tile answers carry `posting_closed`), and the comments written before
+are removed once per database (backup kept).
 
 v0.44 (T135, T141): spectral-outliers also measures sources found in SPHEREx's own images: ids `g…` are Gaia DR3
 stars found there (`source: "gaia_dr3"`), ids `x…` SPHEREx-only ones (`source: "spherex"`, `red`); items of `x…`
@@ -463,7 +467,8 @@ GET /api/jobs/<id>          → same body as /api/target (ready / building / no_
 GET /api/targets/<id>/target.json
 GET /api/targets/<id>/frames/<frame_id>.png|webp
 GET /api/targets            → index.json of everything in the cache (same format as above)
-GET /api/health             → {"ok": true, "mode": "live" | "fixture"}
+GET /api/health             → {"ok": true, "mode": "live" | "fixture", "commit": "<40 hex>" | null,
+                               "api_commit": "<40 hex>" | null}   (v0.45, T145: the checkout now / at API start)
 ```
 
 Image paths inside `target.json` stay relative to the target folder, so the frontend resolves
@@ -643,6 +648,12 @@ GET  /api/community/counts?pix=1,2,3       {"tiles": {"<pix>": {"views", "commen
 - 400 for a bad tile, empty / too long text, a non-finite or out-of-range position, a `parent_id` from another tile.
   429 + Retry-After after 10 comments in 10 minutes from one address.
 - Stored in SQLite `data/community/community.db`; not a cache (the T58/T97 sweep never touches it).
+- **v0.45 (T146): posting is closed.** `POST .../comments` answers 403 `{"status": "error", "message": "posting is
+  closed for now; …"}` unless the server runs with `SPHEREX_COMMUNITY_POSTING=open` (read at start); `GET
+  .../tiles/<pix>` adds `posting_closed: true|false`. The comments written before (trolling on the public site,
+  2026-11-15) are deleted once per database on the first start with this code, after a copy is saved as
+  `data/community/community-before-T146-<UTC>.db`; the table `meta` remembers it (`comments_cleared_t146`). Views
+  and coverage stay.
 
 #### T129: Second-look requests and saved evidence
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import sqlite3
 import threading
@@ -51,7 +52,9 @@ CREATE TABLE IF NOT EXISTS comments (
 CREATE INDEX IF NOT EXISTS comments_pix ON comments(pix);
 CREATE TABLE IF NOT EXISTS views (pix INTEGER PRIMARY KEY, n INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS seen (pix INTEGER NOT NULL, who TEXT NOT NULL, at REAL NOT NULL, PRIMARY KEY (pix, who));
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
+CLEAR_ONCE = True     # T146: remove the comments written before posting was closed, once per database
 
 
 def _conn() -> sqlite3.Connection:
@@ -72,8 +75,27 @@ def _conn() -> sqlite3.Connection:
                 _db.execute(f"ALTER TABLE comments ADD COLUMN {name} {definition}")
         _db.execute("CREATE INDEX IF NOT EXISTS comments_parent ON comments(parent_id)")
         _db.commit()
+        _clear_once(_db, path)
         _db_path = path
     return _db
+
+
+def _clear_once(db: sqlite3.Connection, path: Path) -> None:
+    """T146: people trolled the public discussion (2026-11-15), so posting is closed and the comments written so far
+    are removed, once per database. A copy of the whole database is saved next to it first
+    (community-before-T146-<UTC time>.db). Visit counts and coverage stay."""
+    if not CLEAR_ONCE or db.execute("SELECT 1 FROM meta WHERE key = 'comments_cleared_t146'").fetchone():
+        return
+    if db.execute("SELECT COUNT(*) FROM comments").fetchone()[0]:
+        backup = path.with_name(f"community-before-T146-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}.db")
+        dst = sqlite3.connect(backup)
+        try:
+            db.backup(dst)
+        finally:
+            dst.close()
+        db.execute("DELETE FROM comments")
+    db.execute("INSERT INTO meta (key, value) VALUES ('comments_cleared_t146', ?)", (_now(),))
+    db.commit()
 
 
 def _now() -> str:
@@ -93,6 +115,11 @@ def tile_center(pix: int) -> dict:
 
 def _bad(msg: str, code: int = 400) -> JSONResponse:
     return JSONResponse({"status": "error", "message": msg}, status_code=code)
+
+
+# T146: posting is closed (people trolled the public site, 2026-11-15); the discussion stays readable.
+# SPHEREX_COMMUNITY_POSTING=open in the server's environment opens it again (read at start).
+POSTING_OPEN = os.environ.get("SPHEREX_COMMUNITY_POSTING", "closed").strip().lower() == "open"
 
 
 def _valid_pix(pix: int) -> bool:
@@ -177,7 +204,7 @@ def tile(pix: int):
         comments, views, coverage = _thread(pix), _views(pix), _coverage(_browsers(pix))
     n = sum(1 + len(c["replies"]) for c in comments)
     return {"status": "ready", "tile": {"order": ORDER, "pix": pix}, "center": tile_center(pix), "views": views,
-            "n_comments": n, "comments": comments, "coverage": coverage}
+            "n_comments": n, "comments": comments, "coverage": coverage, "posting_closed": not POSTING_OPEN}
 
 
 @router.post("/api/community/tiles/{pix}/view")
@@ -206,6 +233,8 @@ async def view(pix: int, request: Request):
 
 @router.post("/api/community/tiles/{pix}/comments")
 async def comment(pix: int, request: Request):
+    if not POSTING_OPEN:                         # T146
+        return _bad("posting is closed for now; the discussion stays readable", 403)
     if not _valid_pix(pix):
         return _bad(f"tile must be 0..{NPIX - 1}")
     try:

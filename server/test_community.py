@@ -1,6 +1,8 @@
 """T120: views and discussion threads per map tile."""
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -12,6 +14,8 @@ from server.app import create_app
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(community, "ROOT", tmp_path / "community")
     monkeypatch.setattr(community, "_posts", {})
+    monkeypatch.setattr(community, "POSTING_OPEN", True)          # T146: closed by default
+    monkeypatch.setattr(community, "CLEAR_ONCE", False)           # T146: tested on its own below
     limits.configure(False)
     return TestClient(create_app(tmp_path / "targets", fixture=True))
 
@@ -169,3 +173,34 @@ def test_coverage_overview_summary_and_exploration_order(client):
     assert all(-90 <= t["center"]["dec_deg"] <= 90 for t in least)
     assert len(client.get("/api/community/coverage?limit=1000").json()["tiles"]) == 100
     assert client.get("/api/community/coverage?sort=unknown").status_code == 400
+
+
+def test_posting_closed_by_default(client, monkeypatch):
+    """T146: with posting closed, comments answer 403 and the thread says so; reading still works."""
+    monkeypatch.setattr(community, "POSTING_OPEN", False)
+    r = client.post("/api/community/tiles/100/comments", json={"author": "a", "text": "x"})
+    assert r.status_code == 403 and "closed" in r.json()["message"]
+    thread = client.get("/api/community/tiles/100").json()
+    assert thread["posting_closed"] is True and thread["comments"] == []
+
+
+def test_existing_comments_cleared_once_with_a_backup(client, monkeypatch):
+    """T146: comments written before posting was closed are removed once (backup first); visits stay."""
+    monkeypatch.setattr(community, "CLEAR_ONCE", True)
+    community.ROOT.mkdir(parents=True)
+    with sqlite3.connect(community.ROOT / "community.db") as db:
+        db.executescript(community.SCHEMA)
+        db.execute("INSERT INTO comments (pix, author, text, created_utc) VALUES (777, 'troll', 'bad', '2026-11-15T20:00:00Z')")
+        db.execute("INSERT INTO views (pix, n) VALUES (777, 42)")
+    tile = client.get("/api/community/tiles/777").json()
+    assert tile["comments"] == [] and tile["views"] == 42
+    backups = list(community.ROOT.glob("community-before-T146-*.db"))
+    assert len(backups) == 1
+    with sqlite3.connect(backups[0]) as db:
+        assert db.execute("SELECT text FROM comments").fetchall() == [("bad",)]
+    # once only: a comment written later (posting opened again) survives restarts
+    assert client.post("/api/community/tiles/777/comments", json={"text": "later"}).status_code == 201
+    community._db.close()
+    community._db = None
+    assert [c["text"] for c in client.get("/api/community/tiles/777").json()["comments"]] == ["later"]
+    assert len(list(community.ROOT.glob("community-before-T146-*.db"))) == 1

@@ -24,3 +24,4 @@ map can be commented on, shows how often it has been viewed, and has a discussio
   both; `<b>` in a comment shown as text; no page errors, no phone overflow. Test comments deleted afterwards.
 
 ## Notes from others
+- 2026-11-15 [Mati (Claude)] T146 in your community code (asked by Mati after trolling on the public site): posting closed by default (`POSTING_OPEN`, env `SPHEREX_COMMUNITY_POSTING=open` reopens), `posting_closed` in tile answers, existing comments deleted once per database after a backup (`_clear_once`); viewer: muted form + toast. Details in tasks/T146.

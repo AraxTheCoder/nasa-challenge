@@ -812,3 +812,17 @@ body:not(.community-workspace) .cm-coverage-summary { grid-template-columns: rep
 @media (max-width: 400px) {
   .ph-view-tabs button { padding: 7px 6px; font-size: 12px; }
 }
+
+/* T146: comments turned off: the controls stay, muted; a click shows a short toast */
+.cm-closed textarea, .cm-closed button, .cm-actions button[aria-disabled=true] { opacity: 0.45; cursor: not-allowed; }
+.cm-closed textarea { resize: none; }
+.cm-toast { position: fixed; left: 50%; bottom: 24px; z-index: 300; max-width: calc(100vw - 32px); padding: 9px 16px;
+  border-radius: 8px; background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.45); opacity: 0; pointer-events: none; transform: translate(-50%, 10px);
+  transition: opacity 0.2s, transform 0.2s; }
+.cm-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* T145: the commit this page runs, next to the title */
+.build-info { font-size: 11px; font-weight: 400; color: var(--muted); text-decoration: none; }
+.build-info:hover { text-decoration: underline; }
+@media (max-width: 480px) { .build-info { display: none; } }

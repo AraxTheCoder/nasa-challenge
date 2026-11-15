@@ -21,7 +21,7 @@ import threading
 import scipy.interpolate  # noqa: F401
 import scipy.ndimage  # noqa: F401
 
-from . import hips, limits
+from . import hips, limits, version
 from .skycache import SkyCache
 from .builder import REPO, Builder
 from .photometry import router as photometry_router  # T49
@@ -46,7 +46,7 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
         s3.REMOTE = cutouts_remote.rstrip("/") if cutouts_remote else None
     builder = Builder(cache_root, fixture=fixture)
     app = FastAPI(title="SPHEREx blink Live API", version="0.3")
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"],
+    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST", "DELETE"],
                        allow_headers=["*"])
     app.state.builder = builder
     app.middleware("http")(limits.middleware)   # T58: per-IP request rate (only with --public)
@@ -312,6 +312,8 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "mode": "fixture" if fixture else "live"}
+        # T145: the checkout's commit (what web/ serves) and the one this API process started with
+        return {"ok": True, "mode": "fixture" if fixture else "live",
+                "commit": version.commit(), "api_commit": version.STARTED}
 
     return app

@@ -319,8 +319,11 @@ function shareButton(c) {
   return b;
 }
 function commentEl(c, isReply = false) {
-  const reply = isReply ? null : el("button", { type: "button", class: "link small" }, "Reply");
-  reply?.addEventListener("click", () => { st.replyTo = c; render(); $("#community-text")?.focus(); });
+  const reply = isReply ? null : el("button", { type: "button", class: "link small", "aria-disabled": postingClosed() ? "true" : null }, "Reply");
+  reply?.addEventListener("click", () => {
+    if (postingClosed()) { toast(CLOSED_MSG); return; }   // T146
+    st.replyTo = c; render(); $("#community-text")?.focus();
+  });
   const look = c.ra_deg == null ? null : el("button", { type: "button", class: "link small" }, c.evidence?.target_id ? "Open saved evidence" : "📍 Look here");
   look?.addEventListener("click", async () => {
     const pix = st.pix;
@@ -334,7 +337,29 @@ function commentEl(c, isReply = false) {
     el("div", { class: "cm-actions" }, look, reply, shareButton(c)),
     !isReply && c.replies?.length ? el("ul", { class: "cm-replies" }, ...c.replies.map((r) => commentEl(r, true))) : null);
 }
+// T146: comments are turned off on the server for now (trolling on the public site). The controls stay where they
+// are, muted; a click says why. Reading the discussion is unchanged.
+const CLOSED_MSG = "Comments are turned off for now.";
+const postingClosed = () => Boolean(st.thread?.posting_closed);
+function toast(msg) {
+  let t = document.getElementById("cm-toast");
+  if (!t) { t = el("div", { id: "cm-toast", class: "cm-toast", role: "status", "aria-live": "polite" }); document.body.append(t); }
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove("show"), 3000);
+}
+function closedForm() {
+  const box = el("div", { class: "cm-form cm-closed", id: "community-closed", "aria-disabled": "true" },
+    el("h4", {}, "Join the discussion"),
+    el("textarea", { rows: "3", readonly: true, tabindex: "-1", placeholder: CLOSED_MSG, "aria-label": CLOSED_MSG }),
+    el("div", { class: "cm-actions" }, el("button", { type: "button", class: "primary", "aria-disabled": "true" }, "Post")));
+  box.addEventListener("click", () => toast(CLOSED_MSG));
+  return box;
+}
+
 function form() {
+  if (postingClosed()) return closedForm();
   const pix = st.pix, parent = st.replyTo?.id ?? null, draft = drafts.get(pix, parent), postingKey = `${pix}:${parent}`;
   const name = el("input", { id: "community-name", type: "text", maxlength: "40", autocomplete: "nickname", value: store.get(NAME_KEY) ?? "" });
   const kind = el("select", { id: "community-kind" }, el("option", { value: "discussion" }, "Discussion"), el("option", { value: "second_look" }, "Request a second look"));

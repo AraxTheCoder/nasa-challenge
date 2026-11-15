@@ -55,7 +55,7 @@ def run():
         web = ThreadingHTTPServer(("127.0.0.1", 0), partial(QuietHandler, directory=str(REPO)))
         threading.Thread(target=web.serve_forever, daemon=True).start()
         origin = f"http://127.0.0.1:{web.server_port}"
-        env = dict(os.environ, PYTHONPATH=str(REPO))
+        env = dict(os.environ, PYTHONPATH=str(REPO), SPHEREX_COMMUNITY_POSTING="open")   # T146: closed by default
         with open(Path(tmp) / "api.log", "w") as log:
             proc = subprocess.Popen([sys.executable, "-m", "server", "--fixture", "--port", str(api_port),
                                      "--cache", str(Path(tmp) / "targets"), "--tiles-remote", "none"],
