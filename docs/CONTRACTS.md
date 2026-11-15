@@ -1,4 +1,7 @@
-# Contracts (v0.32)
+# Contracts (v0.33)
+
+v0.33 (T61): the spectral-outliers answer gains `variability`: sources whose brightness changes between
+exposures at the same wavelength (`detect.variability`). New field only. See "Spectral outliers".
 
 v0.32 (T67): detection `evidence` may carry `same_pixel` `{looked, lit, persist}` (does it follow the detector
 instead of the sky); `detect.classify` calls such detections `artifact`. Additive.
@@ -487,6 +490,14 @@ answers at once. T86 (`pipeline.spectral_outliers`) ranks them. Answer (200):
   `points`: every judged source `{id, name, otype, ra_deg, dec_deg, x, y, outlier, reference, score, shape,
   model}` with `x` = short − mid and `y` = mid − long colour in magnitudes (+ = redder), `shape` its band
   shape and `model` what an ordinary source of its kind would show (log10, null = no band).
+- `variability` (v0.33, T61, `detect.variability.find_variables`): from the same measurement, the level instead of
+  the shape. `{version, n_judged, field_amplitude_mag, method, variables: [...], blended: [...]}`; each entry
+  `{id, name, otype, ra_deg, dec_deg, amplitude_mag, n_pairs, catalogued_variable, epochs: [{from_epoch,
+  to_epoch, change_mag, n_pairs}], reason}` (`blended` entries have `why` instead of `reason`: a bright
+  neighbour or an extended source, not judged). `amplitude_mag` = 90th percentile of |change| over the
+  source's pairs (same detector, wavelengths within half a bandwidth, >= 0.5 d apart, field-calibrated);
+  `change_mag` > 0 = fainter later. `variables` lists uncatalogued ones first. On an internal error:
+  `{status: "error", message, variables: [], blended: []}`; the rest of the answer is unaffected.
 - Synthetic targets: 200 `{"status": "no_data"}`. Unknown target: 404.
 
 ### Public limits (v0.22, T58)

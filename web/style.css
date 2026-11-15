@@ -442,6 +442,11 @@ body.map-only #ph-measure { display: none !important; }
 .ol-down { fill: var(--accent); }
 .ol-tick { fill: var(--muted); font-size: 8px; }
 .ol-caveat { margin: 4px 0 0; }
+/* T61: changes brightness */
+.ol-var { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 8px; }
+.ol-subhead { margin: 0 0 4px; }
+.ol-new { color: var(--warn); font-weight: 600; }
+.ol-var .ol-item p { margin: 4px 0 0; }
 @media (max-width: 600px) { .ol-detail { flex-wrap: wrap; } .ol-chart { width: 100%; } }
 /* T86 view: colour–colour diagram + selected source's bands */
 .ol-viz { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0 4px; }
