@@ -1,4 +1,7 @@
-# Contracts (v0.28)
+# Contracts (v0.29)
+
+v0.29 (T60): `GET /api/targets/<id>/flags` and `flags.png`: where in a field SPHEREx's quality flags make the
+data unreliable, as a summary and an RGBA overlay on the field grid. New endpoints only. See "Quality flags".
 
 v0.28 (T60): photometry answers name SPHEREx's quality flags: `frames[].flags` (names of every FLAGS bit set
 in the aperture) and `flag_meanings` (kind + plain words per name that occurs). New fields only.
@@ -515,6 +518,21 @@ GET /api/targets/<id>/motion?ra=<deg>&dec=<deg>[&start=0]            the catalog
   around the same star (e.g. the map's automatic tile fields) answers from it.
 - Unknown label: 404 `{"status": "error"}`. Synthetic target: 200 `{"status": "no_data"}`. Public servers (T58):
   a new measurement costs one job.
+
+### Quality flags (v0.29, T60)
+
+```
+GET /api/targets/<id>/flags        {"status": "ready", "n_frames": 36, "bad_fraction": 0.022, "min_share": 0.15,
+                                    "counts": {"HALO": 11855, ...}, "meanings": {"HALO": {"kind": "bad", "meaning": "..."}},
+                                    "image": "flags.png"}
+GET /api/targets/<id>/flags.png    RGBA, same size and orientation as the frames (grid conventions above)
+```
+
+- From the FLAGS plane of every frame of the field (`pipeline/flags.py`: 22 named mask planes, kind bad / warn / info).
+- Overlay: red where a pixel is flagged `bad` in ≥ `min_share` of the frames covering it, amber where only `warn`
+  flags reach that share; opacity grows with the share. One-off flags (a cosmic ray in one frame) are not drawn.
+- `counts`: pixel-frames per flag name (bad and warn kinds). Synthetic targets: `{"status": "no_data"}`; unknown: 404.
+- Computed on first request (~1-12 s), cached next to target.json until the target changes.
 
 ### Target id and cache
 

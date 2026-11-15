@@ -242,3 +242,25 @@ def test_idle_pool_is_retired_but_not_while_it_works(monkeypatch):
     monkeypatch.setattr(photometry, "_proc_pool", other)
     photometry._retire_when_idle(pool, 0.0, 0.01)
     assert photometry._proc_pool is other and not other.down.is_set()
+
+
+def test_field_flag_mask_marks_persistent_flags_only(monkeypatch):
+    """T60 step 2: red where a pixel is flagged bad in many frames, amber for warn flags, nothing for a one-off."""
+    import numpy as np
+    from pipeline import flags
+    target = {"image": {"width": 4, "height": 3, "pixel_scale_arcsec": 6.15}, "center": {"ra_deg": 0, "dec_deg": 0},
+              "frames": [{"id": f"f{k}"} for k in range(10)]}
+    def fake(t, f, raw_root=None):
+        a = np.zeros((3, 4), np.int64)
+        a[0, 0] = 1 << 1                                  # OVERFLOW in every frame: saturated star
+        a[1, 1] = (1 << 22) if f["id"] in ("f0", "f1", "f2") else 0      # GHOST in 3 of 10
+        a[2, 2] = (1 << 0) if f["id"] == "f5" else 0      # one cosmic ray: not a property of the place
+        a[2, 3] = -1                                      # not covered by any frame
+        return a
+    monkeypatch.setattr(flags, "frame_flags", fake)
+    m = flags.field_mask(target)
+    r = m["rgba"]
+    assert m["n_frames"] == 10 and tuple(r[0, 0, :3]) == (255, 70, 70) and r[0, 0, 3] > 200
+    assert tuple(r[1, 1, :3]) == (245, 190, 60) and 0 < r[1, 1, 3] < r[0, 0, 3]
+    assert r[2, 2, 3] == 0 and r[2, 3, 3] == 0 and r[0, 1, 3] == 0
+    assert m["counts"]["OVERFLOW"] == 10 and m["counts"]["GHOST"] == 3 and m["counts"]["TRANSIENT"] == 1
