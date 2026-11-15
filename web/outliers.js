@@ -7,6 +7,9 @@
 // Events: listens to viewer:target {target}; fires outliers:list {targetId, items} when a list is shown,
 // for anyone who wants to mark the sources (e.g. the map).
 //
+// T61: below the list, "Changes brightness": sources whose flux changes between exposures at the same wavelength
+// (variable stars, new ones first), from the same measurement (`variability` in the answer).
+//
 // T88: the same on the map. "Unusual spectra" in the map bar (next to Labels; remembered per browser) rings
 // the field's outliers where they are (orange, rank number, the selected one blue), measuring the field first
 // if needed (progress in the bar). Clicking a ring opens a card on the map with the reason, the band chart and
@@ -23,7 +26,7 @@ const SHOW = 10;
 // Validated pair on the dark panel (same as the spectrum panel's first two slots; validate_palette.js, dark):
 // "stands out" and "selected / expected shape". Ordinary sources stay neutral grey: context, not a category.
 const C_ODD = "#d95926", C_SEL = "#3987e5";
-const st = { target: null, token: 0, data: null, all: false, sel: null, lastW: 0,
+const st = { target: null, token: 0, data: null, all: false, allVar: false, sel: null, lastW: 0,
   mapOn: readPref(), card: null, placed: [], hooked: false };
 const PREF = "spherex.outliers";
 
@@ -236,6 +239,40 @@ function item(it) {
   return li;
 }
 
+/** T61: sources that change brightness between exposures at the same wavelength (detect/variability.py). */
+function varBlock(d) {
+  const v = d.variability;
+  if (!v || v.status === "error") return null;
+  const vars = v.variables ?? [];
+  const fresh = vars.filter((r) => !r.catalogued_variable).length;
+  const head = el("h4", { class: "ol-subhead" }, "Changes brightness");
+  const note = el("p", { class: vars.length ? "small" : "small muted" }, vars.length
+    ? `${vars.length} source${vars.length === 1 ? "" : "s"} change brightness between exposures at the same wavelength` +
+      (fresh ? `; ${fresh} not catalogued as variable (listed first).` : ", all catalogued variables.")
+    : "No source changes brightness clearly between exposures at the same wavelength.");
+  if (!vars.length) return el("div", { class: "ol-var" }, head, note);
+  const shown = st.allVar ? vars : vars.slice(0, SHOW);
+  const list = el("ol", { class: "ol-list" }, ...shown.map((r) => {
+    const name = el("button", { type: "button", class: "link ol-name", title: "Open its spectrum and light curve" }, r.name);
+    name.addEventListener("click", () => openSpectrum(r.ra_deg, r.dec_deg, r.name));
+    return el("li", { class: "ol-item" },
+      el("div", { class: "ol-row" }, name,
+        el("span", { class: `small ${r.catalogued_variable ? "muted" : "ol-new"}` }, r.catalogued_variable ? `known variable (${r.otype})` : "not catalogued"),
+        el("span", { class: "ol-score small", title: "90 % of its same-wavelength pairs change less than this" }, `±${fmtNum(r.amplitude_mag, 2)} mag`)),
+      el("p", { class: "small" }, r.reason));
+  }));
+  const parts = [head, note, list];
+  if (vars.length > SHOW) {
+    const more = el("button", { type: "button", class: "link small" }, st.allVar ? "Show fewer" : `Show all ${vars.length}`);
+    more.addEventListener("click", () => { st.allVar = !st.allVar; render(); });
+    parts.push(more);
+  }
+  parts.push(el("p", { class: "muted small" }, `${v.n_judged ?? 0} sources judged` +
+    (v.blended?.length ? `; ${v.blended.length} that change but have a bright neighbour or are extended are left out` : "") +
+    ". " + (v.method ?? "")));
+  return el("div", { class: "ol-var" }, ...parts);
+}
+
 function render() {
   const d = st.data;
   const body = $("#ol-body");
@@ -245,7 +282,8 @@ function render() {
     const go = el("button", { type: "button" }, "Find sources with unusual spectra");
     go.addEventListener("click", () => load(true));
     parts.push(el("p", { class: "small" }, "Measures every catalogue source of this field in every SPHEREx exposure " +
-      "(~20 s the first time) and lists the ones whose spectral shape doesn't fit what ordinary sources here look like."), go);
+      "(~20 s the first time) and lists the ones whose spectral shape doesn't fit what ordinary sources here look like, " +
+      "and the ones that change brightness."), go);
   } else if (d.status === "building") {
     parts.push(el("p", { class: "small" }, d.total ? `Reading exposures… ${d.done}/${d.total}` : "Reading exposures…"));
   } else if (d.status === "ready") {
@@ -267,6 +305,8 @@ function render() {
       `${d.field?.n_sources ?? "?"} sources in ${d.field?.n_exposures ?? "?"} exposures; ${d.n_judged ?? 0} had enough clean bands` +
       (nj.length ? ` (not judged: ${sat} saturated, ${nj.length - sat} too faint)` : "") + ". " +
       "Bars: how far each band is from the field's ordinary shape (solid = the consistent deviations). " + (d.method ?? "")));
+    const vb = varBlock(d);
+    if (vb) parts.push(vb);
   } else {
     parts.push(el("p", { class: "msg msg-warn" }, `Couldn't measure the field: ${d.message ?? d.status}`));
   }
@@ -306,6 +346,7 @@ document.addEventListener("viewer:target", (e) => {
   st.target = e.detail?.target ?? null;
   st.data = null;
   st.all = false;
+  st.allVar = false;
   st.sel = null;
   st.card = null;
   st.token++;

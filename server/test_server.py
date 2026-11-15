@@ -448,6 +448,7 @@ def test_spectral_outliers_job(tmp_path, monkeypatch):
     body = r.json()
     assert r.status_code == 200 and body["status"] == "ready" and body["items"][0]["name"] == "star 5"
     assert body["field"]["n_sources"] == 60 and "flux_ujy" not in body
+    assert "variables" in body["variability"] and "status" not in body["variability"]   # T61 ran, no error
     assert len(list((tmp_path / "spectra").glob("*.json"))) == 60          # clicks on these sources are instant
 
 
