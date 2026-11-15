@@ -8,7 +8,8 @@
 // for anyone who wants to mark the sources (e.g. the map).
 //
 // T61: below the list, "Changes brightness": sources whose flux changes between exposures at the same wavelength
-// (variable stars, new ones first), from the same measurement (`variability` in the answer).
+// (variable stars, new ones first), from the same measurement (`variability` in the answer). On the map they get
+// dashed yellow rings marked "V"; a click there opens the spectrum and light curve (the map's own click, T79).
 //
 // T88: the same on the map. "Unusual spectra" in the map bar (next to Labels; remembered per browser) rings
 // the field's outliers where they are (orange, rank number, the selected one blue), measuring the field first
@@ -26,6 +27,7 @@ const SHOW = 10;
 // Validated pair on the dark panel (same as the spectrum panel's first two slots; validate_palette.js, dark):
 // "stands out" and "selected / expected shape". Ordinary sources stay neutral grey: context, not a category.
 const C_ODD = "#d95926", C_SEL = "#3987e5";
+const C_VAR = "#f5c04a";      // T61: changes brightness (the theme's --warn; dashed, so not a colour-only cue)
 const st = { target: null, token: 0, data: null, all: false, allVar: false, sel: null, lastW: 0,
   mapOn: readPref(), card: null, placed: [], hooked: false };
 const PREF = "spherex.outliers";
@@ -369,7 +371,8 @@ function mapNote() {
     !st.target ? "open a field first" :
     !d ? "" :
     d.status === "building" ? (d.total ? `measuring ${d.done}/${d.total}…` : "measuring…") :
-    d.status === "ready" ? (d.items?.length ? `${d.items.length} ringed` : "none here") :
+    d.status === "ready" ? [d.items?.length ? `${d.items.length} ringed` : "none here",
+      d.variability?.variables?.length ? `${d.variability.variables.length} changing (dashed, V)` : ""].filter(Boolean).join(", ") :
     d.status === "not_started" ? "" : "failed";
 }
 
@@ -385,9 +388,35 @@ function setMap(on) {
   getSky()?.redraw();
 }
 
+/** T61: sources that change brightness, dashed rings marked "V" (the map's own click opens the light curve). */
+function paintVariables(ctx, proj) {
+  const vars = st.data?.variability?.variables ?? [];
+  if (!vars.length) return;
+  const v = proj.view();
+  ctx.save();
+  ctx.font = "bold 10px sans-serif";
+  for (const r of vars) {
+    const s = proj.toScreen(r.ra_deg, r.dec_deg);
+    if (!s.front || s.x < -30 || s.y < -30 || s.x > v.width + 30 || s.y > v.height + 30) continue;
+    const rad = 9;
+    ctx.setLineDash([]);
+    ctx.lineWidth = 4.5; ctx.strokeStyle = "rgba(0,0,0,0.7)";
+    ctx.beginPath(); ctx.arc(s.x, s.y, rad, 0, 2 * Math.PI); ctx.stroke();
+    ctx.setLineDash([4, 3]);
+    ctx.lineWidth = 2; ctx.strokeStyle = C_VAR;
+    ctx.beginPath(); ctx.arc(s.x, s.y, rad, 0, 2 * Math.PI); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.8)"; ctx.fillStyle = C_VAR;
+    ctx.strokeText("V", s.x - rad - 9, s.y - rad * 0.6);
+    ctx.fillText("V", s.x - rad - 9, s.y - rad * 0.6);
+  }
+  ctx.restore();
+}
+
 function paintMap(ctx, proj) {
   st.placed = [];
   const d = st.data;
+  if (st.mapOn && d?.status === "ready") paintVariables(ctx, proj);
   if (!st.mapOn || d?.status !== "ready" || !d.items?.length) { placeCard(null); return; }
   const v = proj.view();
   ctx.save();
@@ -487,7 +516,7 @@ function addToggle() {
   const labels = $("#labels-toggle")?.closest("label");
   if (!labels) return;
   const box = el("label", { title: "Ring the sources of the open field whose spectrum doesn't look like the field's ordinary " +
-    "sources (T86). Measures the field the first time (~20 s)." },
+    "sources (T86), and dashed V rings on the ones that change brightness (T61). Measures the field the first time (~20 s)." },
   el("input", { id: "outliers-toggle", type: "checkbox" }), " Unusual spectra ", el("span", { id: "outliers-note", class: "muted small" }));
   labels.after(box);
   const input = box.querySelector("input");
