@@ -45,6 +45,8 @@ class Config:
     max_active: int = 4                 # expensive jobs running on the whole server
     cache_gb: float = 0.0               # 0 = no cache sweep (T97: its own switch, also without --public)
     sweep_s: float = 600.0
+    min_free_gb: float = 5.0            # T125: free disk space kept on top of the size cap (0 = off)
+    disk_check_s: float = 60.0          # T125: how often free space is checked (cheap)
     trust_proxy: bool = False           # take the client IP from X-Forwarded-For (behind a reverse proxy)
 
 
@@ -174,8 +176,9 @@ def _last_used(p: Path) -> float:
     return t
 
 
-def sweep(data_root: Path, cap_bytes: int, busy_ids=frozenset()) -> dict:
-    """Evict least-recently-used cache entries until the total is under cap_bytes. Returns what it did."""
+def sweep(data_root: Path, cap_bytes: int, busy_ids=frozenset(), free_bytes_needed: int = 0) -> dict:
+    """Evict least-recently-used cache entries until the total is under cap_bytes and (T125) at least
+    free_bytes_needed more bytes are freed. Returns what it did."""
     entries = []
     for p in _entries(data_root):
         try:
@@ -185,7 +188,7 @@ def sweep(data_root: Path, cap_bytes: int, busy_ids=frozenset()) -> dict:
     total = sum(s for _, s, _ in entries)          # a field being built counts, but is never evicted
     removed, freed = 0, 0
     for _, s, p in sorted(entries, key=lambda e: e[0]):
-        if total <= cap_bytes:
+        if total <= cap_bytes and freed >= free_bytes_needed:
             break
         if p.parent.name == "targets" and p.name in busy_ids:
             continue
@@ -199,20 +202,36 @@ def sweep(data_root: Path, cap_bytes: int, busy_ids=frozenset()) -> dict:
     return {"total_bytes": total, "removed": removed, "freed_bytes": freed}
 
 
+def free_shortfall(data_root: Path) -> int:
+    """T125: bytes missing to keep min_free_gb free on the disk holding data_root (0 = enough, or the guard is off)."""
+    if CFG.min_free_gb <= 0:
+        return 0
+    try:
+        free = shutil.disk_usage(data_root if data_root.exists() else data_root.parent).free
+    except OSError:
+        return 0
+    return max(0, int(CFG.min_free_gb * 1e9) - free)
+
+
 def start_sweeper(data_root: Path, busy_ids_fn=lambda: frozenset()) -> threading.Thread | None:
     if CFG.cache_gb <= 0:               # T97: runs whenever a size is set, with or without --public
         return None
 
     def loop():
+        last = 0.0
         while True:
             try:
-                r = sweep(data_root, int(CFG.cache_gb * 1e9), busy_ids_fn())
-                if r["removed"]:
-                    print(f"cache sweep: removed {r['removed']} entries, {r['freed_bytes'] / 1e9:.2f} GB; "
-                          f"now {r['total_bytes'] / 1e9:.2f} GB", flush=True)
+                short = free_shortfall(data_root)
+                if short > 0 or time.monotonic() - last >= CFG.sweep_s:
+                    r = sweep(data_root, int(CFG.cache_gb * 1e9), busy_ids_fn(), short)
+                    last = time.monotonic()
+                    if r["removed"]:
+                        why = f" (disk had {short / 1e9:.2f} GB too little free)" if short > 0 else ""
+                        print(f"cache sweep: removed {r['removed']} entries, {r['freed_bytes'] / 1e9:.2f} GB; "
+                              f"now {r['total_bytes'] / 1e9:.2f} GB{why}", flush=True)
             except Exception as e:  # noqa: BLE001
                 print(f"cache sweep failed: {e}", flush=True)
-            time.sleep(CFG.sweep_s)
+            time.sleep(min(CFG.sweep_s, CFG.disk_check_s) if CFG.min_free_gb > 0 else CFG.sweep_s)
 
     t = threading.Thread(target=loop, daemon=True, name="cache-sweep")
     t.start()
