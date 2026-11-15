@@ -39,7 +39,7 @@ REF_MIN = 5
 REF_ISOLATION_ARCSEC = 30.0
 MIN_SNR = 5.0
 STAR_CUT_DEG = 0.3       # cutout around the star when the field is a big one (reference stars within it)
-VERSION = 2                  # 2: deep-stack fallback (T119); cached "not_found" answers are measured again
+VERSION = 3                  # 2: deep-stack fallback (T119); 3: `measured_field` (was a clash with `measured_in`)
 ROOT = Path("data/motion")
 
 
@@ -288,7 +288,7 @@ def measure_motion(target: dict, name: str, processes: int | None = None, progre
         star = find_star(target, name)
         p = cache_path(star["name"])
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps({**r, "measured_in": target["id"]}), encoding="utf-8")
+        p.write_text(json.dumps({**r, "measured_field": target["id"]}), encoding="utf-8")
     return r
 
 
