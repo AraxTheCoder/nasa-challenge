@@ -5,7 +5,9 @@
     GET /api/targets/<id>/chemistry?feature=<f>&start=1         start; 202 {"status": "building", done, total},
                                                                 then 200 {"status": "ready", ...stats, "layer"}
     GET /api/targets/<id>/chemistry/<f>.png                     the map (grey + alpha) on the field grid
-    Map layer: /api/hips/<id>/x-<f>/...                         (server/hips.py), like the A − B difference
+    GET /api/targets/<id>/chemistry/<a>-<b>[-<c>].png           T96: 2-3 maps as one colour picture (RGBA)
+    Map layer: /api/hips/<id>/x-<f>/...                         (server/hips.py), like the A − B difference;
+               /api/hips/<id>/x-<a>-<b>[-<c>]/...               T96: the colour picture (features in wavelength order)
 
 `pipeline.chemistry` makes the map from the field's SPHEREx exposures (a few seconds with cached cutouts).
 """
@@ -15,8 +17,9 @@ import re
 import threading
 import traceback
 
+import numpy as np
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 router = APIRouter()
 _ID = re.compile(r"^[a-z0-9-]+$")
@@ -31,8 +34,12 @@ def _features():
 
 @router.get("/api/chemistry/features")
 def features():
-    return {"features": [{"id": k, "name": n, "um": um, "half_width_um": hw, "kind": kind, "what": what}
-                         for k, (n, um, hw, kind, what) in _features().items()]}
+    from pipeline.chemistry import COMBINE_COLOURS, COMBINE_MAX, SHOWS
+    hexes = lambda cs: ["#" + "".join(f"{round(255 * v):02x}" for v in c) for c in cs]
+    return {"features": [{"id": k, "name": n, "um": um, "half_width_um": hw, "kind": kind, "what": what,
+                          "shows": SHOWS[k]}                                  # T96: its direction in a combination
+                         for k, (n, um, hw, kind, what) in _features().items()],
+            "combine": {"max": COMBINE_MAX, "colours": {str(k): hexes(v) for k, v in COMBINE_COLOURS.items()}}}
 
 
 def _run(target_dir, tid: str, feature: str, job: dict) -> None:
@@ -86,8 +93,23 @@ def chemistry(tid: str, request: Request, feature: str, start: int = 0):
 
 @router.get("/api/targets/{tid}/chemistry/{name}")
 def chemistry_png(tid: str, name: str, request: Request):
-    m = re.match(r"^([a-z0-9_]+)\.png$", name)
+    m = re.match(r"^([a-z0-9_]+(?:-[a-z0-9_]+)*)\.png$", name)
     d = request.app.state.builder.target_dir(tid) if _ID.match(tid) else None
-    if not m or d is None or m.group(1) not in _features() or not (d / "chemistry" / name).is_file():
-        return JSONResponse({"status": "error", "message": "no such map"}, status_code=404)
+    missing = JSONResponse({"status": "error", "message": "no such map"}, status_code=404)
+    if not m or d is None:
+        return missing
+    parts = m.group(1).split("-")
+    if len(parts) > 1:                                   # T96: the colour picture of 2-3 maps made earlier
+        import io
+        from PIL import Image
+        from pipeline.chemistry import combined_map
+        try:
+            rgb, cov = combined_map(d, parts)
+        except (ValueError, LookupError):
+            return missing
+        buf = io.BytesIO()
+        Image.fromarray(np.dstack([rgb, np.where(cov, 255, 0).astype(np.uint8)]), "RGBA").save(buf, "PNG")
+        return Response(buf.getvalue(), media_type="image/png", headers={"Cache-Control": "no-cache"})
+    if parts[0] not in _features() or not (d / "chemistry" / name).is_file():
+        return missing
     return FileResponse(d / "chemistry" / name, media_type="image/png", headers={"Cache-Control": "no-cache"})

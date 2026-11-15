@@ -1,5 +1,8 @@
-# Contracts (v0.26)
+# Contracts (v0.27)
 
+v0.27 (T96): chemistry maps combined: `/api/chemistry/features` adds `shows` (emission / absorption) per feature
+and `combine` {max, colours}; 2-3 maps as one colour picture: `.../chemistry/<a>-<b>[-<c>].png` and the map layer
+`x-<a>-<b>[-<c>]` (features in wavelength order). Additive.
 v0.26 (T93): chemistry maps: `GET /api/targets/<id>/chemistry?feature=<f>[&start=1]`, the map as PNG and as the
 map layer `x-<feature>`, the feature list at `GET /api/chemistry/features` (see "Chemistry maps"). New endpoints
 only; target.json unchanged.
@@ -676,6 +679,19 @@ emission, ±5 robust noise levels = black / white (asinh). Answer (200):
 
 Cached as `<target>/chemistry/<f>.png` + `.json`. Unknown feature: 400. Unknown target: 404. Synthetic: 200
 `{"status": "no_data"}`; no exposure reaches the feature: `no_data` with a message.
+
+**Combined (v0.27, T96).** Features list: each feature also has `"shows": "emission" | "absorption"` (hydrogen
+lines and PAH emit, ices and water bands absorb); top level `"combine": {"max": 3, "colours": {"2": ["#00ffff",
+"#ff0000"], "3": ["#0000ff", "#00ff00", "#ff0000"]}}`. With 2-3 maps made first (as above):
+
+```
+GET /api/targets/<id>/chemistry/<a>-<b>[-<c>].png    one colour picture (RGBA), features in wavelength order
+GET /api/hips/<id>/x-<a>-<b>[-<c>]/...               the same as a map layer (other order or > 3: 404)
+```
+
+Each feature adds its colour (shortest wavelength first in the list above) times its strength: how far it emits
+(or absorbs) beyond 1 noise level in the grey map's stretch, full at 5. Alpha = where all the maps have data. A
+picture of maps not all made yet: PNG 404, layer tiles empty.
 
 ### Frontend URL
 

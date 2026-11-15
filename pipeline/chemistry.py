@@ -215,6 +215,55 @@ def compute(target_dir: Path, feature: str, progress=None, refresh: bool = False
     return stats
 
 
+# ---------- T96: several features as one colour picture ----------
+
+# The direction that matters for each feature in a combined picture: the hydrogen lines and PAH glow (emission),
+# the ices and the water bands absorb.
+SHOWS = {k: "emission" if v[3] == "line" or k == "pah" else "absorption" for k, v in FEATURES.items()}
+COMBINE_MAX = 3
+# Colours by wavelength, shortest first, as in narrow-band images (and T89's false colour: blue short, red long):
+# two = cyan + red, three = blue + green + red. Overlaps mix: red + green = yellow, all three = white.
+COMBINE_COLOURS = {2: ((0, 1, 1), (1, 0, 0)), 3: ((0, 0, 1), (0, 1, 0), (1, 0, 0))}
+_FLOOR = math.asinh(1.0) / math.asinh(SIGMA_SPAN)    # 1 noise level in the grey maps' stretch: weaker = black
+
+
+def combo(features) -> list[str]:
+    """2-3 distinct known features in wavelength order (the order of their colours); ValueError otherwise."""
+    fs = list(dict.fromkeys(features))
+    if not 2 <= len(fs) <= COMBINE_MAX or any(f not in FEATURES for f in fs):
+        raise ValueError(f"combine 2 to {COMBINE_MAX} different features of: {', '.join(FEATURES)}")
+    return sorted(fs, key=lambda f: FEATURES[f][1])
+
+
+def strength(grey: np.ndarray, shows: str) -> np.ndarray:
+    """0-1 from a grey map (128 = like the continuum): how far the feature emits (shows = "emission") or absorbs
+    ("absorption") beyond 1 noise level, in the map's asinh stretch (1 = SIGMA_SPAN noise levels or more)."""
+    s = (grey - 128.0) / 127.0 if shows == "emission" else (128.0 - grey) / 128.0
+    return np.clip((s - _FLOOR) / (1.0 - _FLOOR), 0.0, 1.0)
+
+
+def combined_map(target_dir: Path, features) -> tuple[np.ndarray, np.ndarray]:
+    """(RGB uint8 (h, w, 3), coverage) of 2-3 features' maps, which compute() made first (LookupError if not).
+    Each feature adds its colour times its strength; coverage = where all of them have data."""
+    from PIL import Image
+
+    fs = combo(features)
+    rgb = cov = None
+    for f, colour in zip(fs, COMBINE_COLOURS[len(fs)]):
+        p = Path(target_dir) / "chemistry" / f"{f}.png"
+        if not p.is_file():
+            raise LookupError(f"no {FEATURES[f][0]} map made yet")
+        a = np.asarray(Image.open(p).convert("LA"), np.float32)
+        s = strength(a[..., 0], SHOWS[f])
+        if rgb is None:
+            rgb, cov = np.zeros(s.shape + (3,), np.float32), np.ones(s.shape, bool)
+        if s.shape != cov.shape:
+            raise LookupError("the maps were made on different grids (field rebuilt?): make them again")
+        rgb += s[..., None] * np.asarray(colour, np.float32)
+        cov &= a[..., 1] > 0
+    return np.clip(rgb * 255.0, 0, 255).round().astype(np.uint8), cov
+
+
 def main(argv=None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if len(args) != 2 or args[1] not in FEATURES:

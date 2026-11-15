@@ -79,9 +79,14 @@
         <div class="hud-row">
           <span id="blink-passes" class="explore-epochs" hidden></span>
           <span id="explore-epochs" class="explore-epochs" hidden></span>
-          <!-- T93: chemistry map of the shown field (feature minus continuum), chemistry.js -->
-          <label id="chem-box" hidden title="Where in this field a chemical feature absorbs (dark) or emits (bright): the image at its wavelength minus the neighbouring wavelengths">Chemistry
-            <select id="chem-feature"><option value="">off</option></select></label>
+          <!-- T93/T96: chemistry maps of the shown field (feature minus continuum), up to 3 as one colour picture, chemistry.js -->
+          <details id="chem-box" class="chem-pick" hidden>
+            <summary title="Where in this field chemical features absorb or emit: the image at their wavelength minus the neighbouring wavelengths. Tick one for a grey map, two or three for one colour picture">Chemistry: <span id="chem-summary">off</span></summary>
+            <div id="chem-list" class="chem-list" role="group" aria-label="Chemical features, up to 3 at once">
+              <p id="chem-hint" class="muted small"></p>
+              <button id="chem-clear" type="button" class="link small" hidden>Clear</button>
+            </div>
+          </details>
         </div>
       </div>
       <p id="chem-note" class="hud-panel small chem-note" role="status" aria-live="polite" hidden></p>

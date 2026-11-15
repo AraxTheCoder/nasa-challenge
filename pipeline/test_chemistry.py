@@ -47,3 +47,54 @@ def test_relevant_exposures_by_detector_range():
     es = [E(0.75, 1.1), E(2.4, 3.8), E(3.8, 4.4), E(4.4, 5.0)]
     r = C.relevant(es, 4.052, 0.0)        # generous: a neighbouring detector may reach the continuum
     assert es[2] in r and es[0] not in r
+
+
+# --- T96: several features as one colour picture ---
+
+def _map(tmp_path, feature, grey, cov=None):
+    from PIL import Image
+    (tmp_path / "chemistry").mkdir(exist_ok=True)
+    g = np.asarray(grey, np.uint8)
+    a = np.full(g.shape, 255, np.uint8) if cov is None else np.where(cov, 255, 0).astype(np.uint8)
+    Image.fromarray(np.dstack([g, a]), "LA").save(tmp_path / "chemistry" / f"{feature}.png")
+
+
+def test_shows_and_combo_order():
+    assert C.SHOWS["br_alpha"] == "emission" and C.SHOWS["pah"] == "emission" and C.SHOWS["pa_beta"] == "emission"
+    assert C.SHOWS["h2o_ice"] == "absorption" and C.SHOWS["co2_ice"] == "absorption" and C.SHOWS["h2o_19"] == "absorption"
+    assert C.combo(["br_alpha", "pah", "h2o_ice"]) == ["h2o_ice", "pah", "br_alpha"]      # by wavelength
+    for bad in (["pah"], ["pah", "pah"], ["pah", "gold"], ["pa_beta", "br_gamma", "pah", "br_alpha"]):
+        try:
+            C.combo(bad)
+        except ValueError:
+            continue
+        raise AssertionError(bad)
+
+
+def test_strength_floor_and_direction():
+    g = np.array([128.0, 128 + 127 * C._FLOOR, 255.0, 0.0])
+    em, ab = C.strength(g, "emission"), C.strength(g, "absorption")
+    assert em[0] == 0 and em[1] < 1e-6 and em[2] == 1 and em[3] == 0          # 1 noise level or less: black
+    assert ab[0] == 0 and ab[2] == 0 and ab[3] > 0.99                         # absorption = darker than 128
+
+
+def test_combined_map_colours_and_coverage(tmp_path):
+    n = 8
+    # Br-α (4.05 µm, emission): bright in the left half; H₂O ice (3.05 µm, absorption): dark in the top half
+    _map(tmp_path, "br_alpha", np.where(np.arange(n)[None, :] < n // 2, 255, 128).repeat(n, 0))
+    ice = np.full((n, n), 128); ice[: n // 2] = 0
+    cov = np.ones((n, n), bool); cov[-1, -1] = False
+    _map(tmp_path, "h2o_ice", ice, cov)
+    rgb, c = C.combined_map(tmp_path, ["br_alpha", "h2o_ice"])                # two: ice (shorter) cyan, Br-α red
+    assert rgb.shape == (n, n, 3) and rgb.dtype == np.uint8
+    assert tuple(rgb[0, 0]) == (255, 255, 255)                                 # both: red + cyan = white
+    assert tuple(rgb[0, -1]) == (0, 255, 255)                                  # ice only: cyan
+    assert tuple(rgb[-1, 0]) == (255, 0, 0)                                    # Br-α only: red
+    assert tuple(rgb[-1, -2]) == (0, 0, 0)                                     # neither: black
+    assert not c[-1, -1] and c.sum() == n * n - 1                              # where all of them have data
+    try:
+        C.combined_map(tmp_path, ["br_alpha", "pah"])
+    except LookupError as e:
+        assert "PAH" in str(e)
+    else:
+        raise AssertionError("missing map not reported")

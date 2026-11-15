@@ -68,3 +68,57 @@ def test_errors(setup):
     assert c.get("/api/targets/nope-1/chemistry", params={"feature": "pah"}).status_code == 404
     assert c.get("/api/targets/c1-p1-s5/chemistry/pah.png").status_code == 404
     assert c.get("/api/targets/c1-p1-s5/chemistry/..%2ftarget.json").status_code == 404
+
+
+# --- T96: 2-3 maps as one colour picture ---
+
+def _tile(c, layer):
+    from astropy_healpix import HEALPix
+    import astropy.units as u
+    n = int(HEALPix(nside=2 ** 7, order="nested").lonlat_to_healpix(10.0 * u.deg, 1.0 * u.deg))
+    return c.get(f"/api/hips/c1-p1-s5/{layer}/Norder7/Dir{(n // 10000) * 10000}/Npix{n}.png")
+
+
+def _grey(d, feature, value):
+    (d / "chemistry").mkdir(exist_ok=True)
+    Image.fromarray(np.dstack([np.full((49, 49), value, np.uint8), np.full((49, 49), 255, np.uint8)]), "LA").save(
+        d / "chemistry" / f"{feature}.png")
+
+
+def test_features_say_direction_and_colours(setup):
+    c, _ = setup
+    body = c.get("/api/chemistry/features").json()
+    shows = {f["id"]: f["shows"] for f in body["features"]}
+    assert shows["br_alpha"] == "emission" and shows["h2o_ice"] == "absorption"
+    assert body["combine"] == {"max": 3, "colours": {"2": ["#00ffff", "#ff0000"], "3": ["#0000ff", "#00ff00", "#ff0000"]}}
+
+
+def test_combined_png_and_layer(setup):
+    import io
+    c, d = setup
+    _grey(d, "br_alpha", 255)                       # Br-α (4.05 µm): strong emission -> red
+    _grey(d, "h2o_ice", 0)                          # H₂O ice (3.05 µm): deep absorption -> cyan (shorter)
+    png = c.get("/api/targets/c1-p1-s5/chemistry/h2o_ice-br_alpha.png")
+    assert png.status_code == 200 and png.headers["content-type"] == "image/png"
+    a = np.asarray(Image.open(io.BytesIO(png.content)).convert("RGBA"))
+    assert tuple(a[20, 20]) == (255, 255, 255, 255)                     # both: white
+    assert c.get("/api/hips/c1-p1-s5/x-h2o_ice-br_alpha/properties").status_code == 200
+    t = _tile(c, "x-h2o_ice-br_alpha")
+    assert t.status_code == 200
+    rgba = np.asarray(Image.open(io.BytesIO(t.content)).convert("RGBA"))
+    inside = rgba[..., 3] > 0
+    assert inside.any() and (rgba[inside][:, :3] == 255).all()
+    _grey(d, "br_alpha", 128)                       # remade (another version): the tiles follow, not cached
+    t = _tile(c, "x-h2o_ice-br_alpha")
+    rgba = np.asarray(Image.open(io.BytesIO(t.content)).convert("RGBA"))
+    assert (rgba[rgba[..., 3] > 0][:, :3] == (0, 255, 255)).all()       # ice only: cyan
+
+
+def test_combined_errors(setup):
+    c, d = setup
+    _grey(d, "br_alpha", 255)
+    assert c.get("/api/targets/c1-p1-s5/chemistry/h2o_ice-br_alpha.png").status_code == 404   # ice not made
+    _grey(d, "h2o_ice", 0)
+    assert c.get("/api/targets/c1-p1-s5/chemistry/br_alpha-gold.png").status_code == 404
+    assert c.get("/api/hips/c1-p1-s5/x-br_alpha-h2o_ice/properties").status_code == 404      # not in wavelength order
+    assert c.get("/api/hips/c1-p1-s5/x-pa_beta-br_gamma-pah-br_alpha/properties").status_code == 404   # max 3

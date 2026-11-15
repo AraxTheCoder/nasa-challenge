@@ -561,11 +561,12 @@ function bindPage() {
   // T90: the map tools and the frame viewer below drive the map (T81 mapframes.js, T82 pass buttons):
   // while they do, the automatic blink leaves the map alone, until the view moves to another tile.
   const takeOver = (e) => {
-    if (!e.target.closest?.(".layout, #map-tools, #chem-box") || e.target.closest?.("#field-form, #photometry")) return;
+    if (!e.target.closest?.(".layout, #map-tools") || e.target.closest?.("#field-form, #photometry")) return;
     setManual(true);
   };
   document.addEventListener("pointerdown", takeOver, true);
   document.addEventListener("map:take", () => setManual(true));   // T93: a tool on the map itself (Chemistry)
+  document.addEventListener("map:give", () => setManual(false));  // T96: Chemistry cleared: the automatic blink again
   document.addEventListener("keydown", (e) => {
     if (e.target.closest?.("input, select, textarea, .sky-stage")) return;
     if ([" ", "p", "P", "x", "X", "m", "M", "d", "D", "ArrowLeft", "ArrowRight"].includes(e.key) && app.shownTarget) setManual(true);
@@ -667,7 +668,8 @@ async function showEpochLayers(target) {
   const pick = (i) => {
     epochShown = i;
     explore.showEpoch(i);
-    document.dispatchEvent(new CustomEvent("explore:epoch-picked"));   // mapframes.js steps aside
+    // mapframes.js steps aside; auto: picked by the blink itself, not by hand (T96: chemistry stays on top)
+    document.dispatchEvent(new CustomEvent("explore:epoch-picked", { detail: { auto: true } }));
     labels.forEach((b, j) => b.classList.toggle("current", j === i));
   };
   // no caption for real data; synthetic layers stay visibly labelled (CLAUDE.md)

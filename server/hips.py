@@ -48,7 +48,8 @@ def epochs(target: dict) -> dict[int, list[dict]]:
     return dict(sorted(out.items()))
 
 
-LAYER_RE = r"^(e\d+(d[1-6]|c)?|f\d{3,}|d-f\d{3,}-f\d{3,}|x-[a-z0-9_]+)$"   # x-<feature>: T93 chemistry map
+LAYER_RE = r"^(e\d+(d[1-6]|c)?|f\d{3,}|d-f\d{3,}-f\d{3,}|x-[a-z0-9_]+(-[a-z0-9_]+){0,2})$"
+# x-<feature>: T93 chemistry map; x-<a>-<b>[-<c>]: T96 2-3 of them as one colour picture (wavelength order)
 # T89: e<ep>d<n> = the epoch's frames of detector n only (one band of the map); e<ep>c = false colour of
 # all of them: blue = D1+D2 (0.75-1.62 µm), green = D3+D4 (1.63-3.82 µm), red = D5+D6 (3.83-5.0 µm).
 COLOUR = ((5, 6), (3, 4), (1, 2))          # R, G, B detector pairs
@@ -82,8 +83,14 @@ def has_layer(target: dict, key: str) -> bool:
         _, a, b = key.split("-")
         return a in ids and b in ids
     if key.startswith("x-"):                           # T93: made by GET /api/targets/<id>/chemistry first
-        from pipeline.chemistry import FEATURES
-        return key[2:] in FEATURES
+        from pipeline.chemistry import FEATURES, combo
+        parts = key[2:].split("-")
+        if len(parts) == 1:
+            return parts[0] in FEATURES
+        try:                                           # T96: one name per combination, in wavelength order
+            return combo(parts) == parts
+        except ValueError:
+            return False
     return key in ids
 
 
@@ -102,7 +109,7 @@ def properties(tid: str, target: dict, ep) -> str:
     c = target["center"]
     key = ep if isinstance(ep, str) else f"e{ep}"
     what = {"e": f"epoch {key[1:]}", "f": f"frame {key}", "d": f"difference {key[2:].replace('-', ' − ')}",
-            "x": f"chemistry map {key[2:]} (feature minus continuum, T93)"}[key[0]]
+            "x": f"chemistry map {key[2:].replace('-', ' + ')} (feature minus continuum, T93/T96)"}[key[0]]
     if key[0] == "e":
         ep, det, colour = epoch_key(key)
         what = f"epoch {ep}" + (f", detector {det}" if det else ", false colour" if colour else "")
@@ -205,10 +212,23 @@ def layer_image(target_dir: str, mtime: float, key: str) -> tuple[np.ndarray, np
     return frame_image(target_dir, mtime, key)
 
 
+def _chem_mtime(target_dir: Path, key: str) -> float:
+    """T93/T96: chemistry maps change without target.json changing: the newest of their PNGs (0 = one missing)."""
+    ps = [Path(target_dir) / "chemistry" / f"{f}.png" for f in key[2:].split("-")]
+    return max(p.stat().st_mtime for p in ps) if all(p.is_file() for p in ps) else 0.0
+
+
 def chemistry_image(target_dir: str, feature: str) -> tuple[np.ndarray, np.ndarray]:
-    """T93: the chemistry map (grey 128 = like the continuum) and its coverage; empty if not made yet."""
+    """T93: the chemistry map (grey 128 = like the continuum) and its coverage; empty if not made yet.
+    T96: feature "a-b[-c]" = those maps as one colour picture (RGB)."""
     from PIL import Image
 
+    if "-" in feature:
+        from pipeline.chemistry import combined_map
+        try:
+            return combined_map(Path(target_dir), feature.split("-"))
+        except (LookupError, ValueError):
+            feature = "-"                              # not all made yet: empty, like a missing single map
     p = Path(target_dir) / "chemistry" / f"{feature}.png"
     if not p.is_file():
         t = json.loads((Path(target_dir) / "target.json").read_text(encoding="utf-8"))
@@ -243,8 +263,7 @@ def tile_png(target_dir: Path, ep, order: int, npix: int) -> bytes | None:
     mtime = (target_dir / "target.json").stat().st_mtime
     key = ep if isinstance(ep, str) else f"e{ep}"
     if key.startswith("x-"):                  # T93: a chemistry map changes without target.json changing
-        chem = target_dir / "chemistry" / f"{key[2:]}.png"
-        mtime = chem.stat().st_mtime if chem.is_file() else 0.0
+        mtime = _chem_mtime(target_dir, key)
     return _tile_cached(str(target_dir), mtime, key, order, npix)
 
 
@@ -304,8 +323,8 @@ def _render_tile(target_dir: Path, ep, order: int, npix: int) -> bytes | None:
     if not ok.any():
         return None
     lrgb = key.startswith("e") and epoch_key(key)[2] and CHROMA is not None
-    mean, cov = layer_image(str(target_dir), (target_dir / "target.json").stat().st_mtime,
-                            f"e{epoch_key(key)[0]}" if lrgb else key)
+    mtime = _chem_mtime(target_dir, key) if key.startswith("x-") else (target_dir / "target.json").stat().st_mtime
+    mean, cov = layer_image(str(target_dir), mtime, f"e{epoch_key(key)[0]}" if lrgb else key)
     if lrgb:                                           # T89: detail of the epoch x colour of the cube there
         ch = CHROMA(order, npix)
         if ch is not None:
