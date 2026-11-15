@@ -449,6 +449,8 @@ try:
                 rows = [r for r in rows if r["epoch"] == 1]
             elif ph_state["mode"] == "unmatched":
                 rows = [dict(rows[0]), dict(rows[4], wavelength_um=4.5)]
+            elif ph_state["mode"] == "uncertain":
+                rows = [dict(rows[0], err_ujy=None), dict(rows[4])]
             elif ph_state["mode"] == "masked":
                 rows = [dict(r, masked=True, flux_ujy=None) for r in rows]
             route.fulfill(json={"status": "ready", "id": "multi-epoch", "ra_deg": 150.0, "dec_deg": 2.2, "aperture_px": 3,
@@ -486,9 +488,16 @@ try:
         ph.locator("#ph-context").uncheck()
         check(ph.locator(".ph-context").count() == 0 and ph.locator(".ph-base").count() == 0, "T63: baseline + hints can be switched off")
         ph.locator("#ph-features").uncheck(); ph.locator("#ph-compare").uncheck()
+        ph.focus("#ph-epoch")
         ph.select_option("#ph-epoch", "2")
         check(ph.locator("#ph-spectrum-view .ph-dot").count() == 3 and ph.input_value("#ph-epoch") == "2" and ph.locator("#ph-epoch").evaluate("e=>e===document.activeElement"),
               "T140: spectrum selector changes the displayed visit and retains keyboard focus")
+        ph.get_by_role("tab", name="Spectrum", exact=True).focus()
+        ph.keyboard.press("ArrowRight")
+        check(ph.get_by_role("tab", name="Changes between visits", exact=True).get_attribute("aria-selected") == "true",
+              "T140: arrow keys navigate the brightness views")
+        ph.keyboard.press("ArrowLeft")
+        check(ph.input_value("#ph-epoch") == "2", "T140: visit selection survives switching views")
         ph.locator("#ph-overlays > summary").click()
         ph.screenshot(path=str(out / "brightness-spectrum.png"), full_page=True)
         ph.get_by_role("tab", name="Changes between visits", exact=True).click()
@@ -512,6 +521,10 @@ try:
         ph.click("#ph-centre")
         ph.wait_for_function("document.querySelector('#ph-changes-view').textContent.includes('no usable, positive-brightness')")
         check("Missing matches do not mean" in ph.text_content("#ph-changes-view"), "T140: unmatched wavelengths do not imply a constant source")
+        ph_state["mode"] = "uncertain"
+        ph.click("#ph-centre")
+        ph.wait_for_function("document.querySelector('#ph-changes-view .ph-pt title')?.textContent.includes('uncertainty unavailable')")
+        check(ph.locator("#ph-changes-view .ph-err").count() == 0, "T140: unknown uncertainty is not presented as zero error")
         ph_state["mode"] = "masked"
         ph.click("#ph-centre")
         ph.wait_for_function("document.querySelector('#ph-body').textContent.includes('No usable brightness measurements')")

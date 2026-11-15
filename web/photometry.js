@@ -190,7 +190,7 @@ function render() {
   } else {
     const ana = analyse(steady.filter((f) => Number.isFinite(f.wavelength_um)));
     const spectrum = el("section", { id: "ph-spectrum-view", role: "tabpanel", "aria-labelledby": "ph-spectrum-tab", hidden: st.view !== "spectrum" },
-      el("h4", {}, "Where is this source brightest?"),
+      el("h4", {}, "Which infrared wavelengths are brightest?"),
       el("p", { class: "small muted" }, "Left to right: infrared wavelength. Higher dots: more light. Each dot is a separate exposure; the small bars show measurement uncertainty where available."),
       selectControl("ph-epoch", "Observing visit", periods.map((p) => [p.id, `${p.label} · ${p.dates}`]), st.epoch,
         (value) => { st.epoch = periods.find((p) => String(p.id) === value)?.id; }),
