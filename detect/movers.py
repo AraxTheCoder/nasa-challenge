@@ -13,8 +13,12 @@ their variance and flags, not the stretched display frames):
    or >= SN_REF_OTHER in any other image. It needs MIN_REFS images of the same detector at other times that
    cover the spot, otherwise nothing can be said and it is dropped too.
 3. Confirmation. SPHEREx images every spot with two detectors at the same moment (bands 1+4, 2+5, 3+6 share
-   the light through a dichroic). A real source is in both; a cosmic ray, hot pixel or persistence is in one.
+   the light through a dichroic). A real source is in both; a cosmic ray or hot pixel is in one.
    Sightings without their twin (S/N >= SN_TWIN at the same sky position) are dropped.
+4. Same detector pixel (T67, `same_pixel`). The afterglow (persistence) of a bright star shows in both detectors,
+   because both saw the star; it stays on the detector pixel while the telescope points elsewhere. Other images
+   of the same detector that cover that pixel are checked; `detect.classify` turns hits into artifacts. The
+   cached cutouts cover little of each detector, so this can often not be checked (`looked` 0).
 
 What is left is grouped: the two simultaneous images are one sighting; sightings within LINK_HOURS and a
 plausible speed become one track. `detect.classify` (T08) then decides known / unknown / artifact.
@@ -37,7 +41,7 @@ from pathlib import Path
 
 import numpy as np
 
-VERSION = "1"
+VERSION = "2"
 SN_DETECT = 6.0          # a sighting: 3x3 signal-to-noise of the peak
 SN_REF = 3.0             # same detector, other time: this much at the spot = it is always there
 SN_REF_OTHER = 5.0       # any other detector, other time
@@ -52,6 +56,10 @@ BRIGHT_SN = 300.0        # near something this bright (spikes, ghosts, wings) no
 BRIGHT_PX = 10
 EDGE_PX = 4
 BKG_PX = 25              # box of the median background
+PIXEL_ARCSEC = 6.15
+PERSIST_H = 24.0         # T67: an afterglow of a bright source in an image up to this much earlier ...
+PERSIST_X = 20.0         # ... that was at least this many times brighter (in S/N) on the same detector pixel
+PERSIST_SN = 100.0       # ... and at least this bright
 MAX_SIGHTINGS = 400      # per image; more means a crowded or broken image: only the brightest are used
 
 
@@ -117,11 +125,14 @@ def load_frame(path: Path) -> dict | None:
             bad = ~np.isfinite(img)
             if "FLAGS" in hd:
                 bad |= (hd["FLAGS"].data.astype(np.int64) & build.HW_MASK) != 0
-            wcs = WCS(hd["IMAGE"].header)
+            h = hd["IMAGE"].header
+            wcs = WCS(h)
+            # cutout pixel -> 0-based detector pixel ("0-based active pixel coordinates", WCS A): + off
+            off = (1.0 - h["CRPIX1A"], 1.0 - h["CRPIX2A"]) if "CRPIX1A" in h and "CRPIX2A" in h else None
     except Exception:  # noqa: BLE001 - a broken cache file must not fail the build
         return None
     sn, sub, wide = sn_map(img, var, bad)
-    return {"sn": sn, "img": sub, "bad": wide, "wcs": wcs}
+    return {"sn": sn, "img": sub, "bad": wide, "wcs": wcs, "off": off}
 
 
 def sightings(fr: dict) -> list[dict]:
@@ -167,6 +178,49 @@ def sn_at(fr: dict, ra, dec) -> np.ndarray:
         a, b = int(xi[k]), int(yi[k])
         if not fr["bad"][b - 1:b + 2, a - 1:a + 2].any():
             out[k] = fr["sn"][b - r:b + r + 1, a - r:a + r + 1].max()
+    return out
+
+
+def same_pixel(f: dict, ra: float, dec: float, sn: float, fs: list[dict], loaded: dict[str, dict]) -> dict:
+    """T67: does the sighting at (ra, dec) in frame f follow the detector instead of the sky? Looks at the same
+    detector pixel in the other images of f's detector (taken at other moments, pointing elsewhere):
+    - lit there while the simultaneous image of the other detector shows nothing at that sky position: a hot
+      pixel or a stuck spot of the detector;
+    - an earlier image (< PERSIST_H) has a source PERSIST_X times brighter on that pixel: its afterglow
+      (persistence), which shows in both detectors because both saw the bright source.
+    Returns {"looked": images that cover the pixel, "lit": images where it is lit, "persist": afterglow sources}."""
+    out = {"looked": 0, "lit": 0, "persist": 0}
+    fr = loaded[f["id"]]
+    if fr.get("off") is None:
+        return out
+    x, y = fr["wcs"].all_world2pix([ra], [dec], 0)
+    dx, dy = float(x[0]) + fr["off"][0], float(y[0]) + fr["off"][1]
+    r = int(math.ceil(MATCH_PX))
+    for g in fs:
+        gr = loaded[g["id"]]
+        if g.get("detector") != f.get("detector") or gr.get("off") is None or \
+           abs(g["mjd"] - f["mjd"]) * 86400 <= SAME_TIME_S:
+            continue
+        a, b = int(round(dx - gr["off"][0])), int(round(dy - gr["off"][1]))
+        ny, nx = gr["sn"].shape
+        if not (r <= a < nx - r and r <= b < ny - r) or gr["bad"][b - 1:b + 2, a - 1:a + 2].any():
+            continue
+        ra2, dec2 = (float(v[0]) for v in gr["wcs"].all_pix2world([a], [b], 0))
+        if _sep_arcsec({"ra": ra, "dec": dec}, {"ra": ra2, "dec": dec2}) <= 3 * MATCH_PX * PIXEL_ARCSEC:
+            continue                                   # pointing the same way: that is the reference check's job
+        out["looked"] += 1
+        there = float(gr["sn"][b - r:b + r + 1, a - r:a + r + 1].max())
+        if there < SN_REF_OTHER:
+            continue
+        hours = (f["mjd"] - g["mjd"]) * 24
+        if 0 < hours <= PERSIST_H and there >= max(PERSIST_SN, PERSIST_X * sn):
+            out["persist"] += 1
+            continue
+        twins = [loaded[h["id"]] for h in fs if h.get("detector") != g.get("detector")
+                 and abs(h["mjd"] - g["mjd"]) * 86400 <= SAME_TIME_S]
+        seen = [v for v in (float(sn_at(t, ra2, dec2)[0]) for t in twins) if np.isfinite(v)]
+        if seen and max(seen) < SN_TWIN:
+            out["lit"] += 1                            # in this detector only: the pixel, not the sky
     return out
 
 
@@ -219,9 +273,11 @@ def find(frames: list[dict], loaded: dict[str, dict], inside=None) -> tuple[list
                 counts["confirmed"] += 1
                 g = twin_frames[k]
                 kept.append({"frame_id": f["id"], "mjd": f["mjd"], "detector": f.get("detector"), "ra": s["ra"],
-                             "dec": s["dec"], "sn": round(s["sn"], 1), "refs": int(refs[k])})
+                             "dec": s["dec"], "sn": round(s["sn"], 1), "refs": int(refs[k]),
+                             "pixel": same_pixel(f, s["ra"], s["dec"], s["sn"], fs, loaded)})
                 kept.append({"frame_id": g["id"], "mjd": g["mjd"], "detector": g.get("detector"), "ra": s["ra"],
-                             "dec": s["dec"], "sn": round(float(twin[k]), 1), "refs": int(refs[k])})
+                             "dec": s["dec"], "sn": round(float(twin[k]), 1), "refs": int(refs[k]),
+                             "pixel": same_pixel(g, s["ra"], s["dec"], float(twin[k]), fs, loaded)})
 
     # group: the simultaneous pair is one sighting; sightings close in time and reachable are one object
     parent = list(range(len(kept)))
@@ -293,12 +349,13 @@ def find_movers(target: dict, raw_root: Path | None = None) -> dict:
         dets.append({"id": f"d{n:03d}", "status": "unknown", "matched_object": None, "synthetic": False,
                      "score": 0.0, "track": track,
                      "evidence": {"moments": moments, "images": len(g), "absent_in": min(s["refs"] for s in g),
-                                  "sn": max(s["sn"] for s in g)}})
+                                  "sn": max(s["sn"] for s in g),
+                                  "same_pixel": {k: sum(s["pixel"][k] for s in g) for k in ("looked", "lit", "persist")}}})
     target["detections"] = dets
     prov.append({"service": "detect.movers (T06)",
                  "query": (f"v{VERSION}: 3x3 S/N >= {SN_DETECT:g}; gone at other times (S/N < {SN_REF:g} same detector, "
                            f"< {SN_REF_OTHER:g} others, >= {MIN_REFS} references); in both simultaneous detectors "
-                           f"(S/N >= {SN_TWIN:g}); {counts}; {len(dets)} detection(s)"),
+                           f"(S/N >= {SN_TWIN:g}); same detector pixel checked in other images (T67); {counts}; {len(dets)} detection(s)"),
                  "retrieved_utc": _now()})
     return target
 

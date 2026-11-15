@@ -1,4 +1,7 @@
-# Contracts (v0.31)
+# Contracts (v0.32)
+
+v0.32 (T67): detection `evidence` may carry `same_pixel` `{looked, lit, persist}` (does it follow the detector
+instead of the sky); `detect.classify` calls such detections `artifact`. Additive.
 
 v0.31 (T106): `detect.run.detect_target(..., movers=True)`: `movers=False` skips the mover search (the Live API's
 early lookup on a build's stub, before images exist). `GET /api/targets/<id>/objects` runs the mover search alone
@@ -311,6 +314,11 @@ from the geocentre.
   moments it was seen, in how many images, in how many images of the same spot at other times it was *not*
   there (same detector), and its best signal-to-noise. `detect.classify` uses it: one moment, both
   simultaneous detectors, absent otherwise = `unknown` with a low score (no motion measured yet).
+  v0.32 (T67) adds `same_pixel: {looked, lit, persist}`, summed over the track's images: in how many other
+  images of the same detector (pointing elsewhere) the same *detector* pixel was looked at, in how many it was
+  lit while the other detector showed nothing at that sky position (hot pixel), and how many earlier images
+  had a much brighter source there (afterglow / persistence). `persist >= 1`, or `lit >= 1` in at least half
+  of `looked`, = `artifact`.
 - `reason` (v0.9, optional): one plain-words sentence why the detection got its status, e.g.
   "follows (4) Vesta (JPL) within 0.4 px on 3 frame(s)" or "seen in one frame only". Shown in the UI.
 - Pipeline for detections: T06 finds tracks → `detect.known_objects` (T07/T51: asteroids from a local copy
