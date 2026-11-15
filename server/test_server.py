@@ -243,7 +243,9 @@ def test_objects_and_labels_jobs_do_not_overwrite_each_other(tmp_path, monkeypat
     t = client.get(f"/api/targets/{tid}/target.json").json()
     assert t["labels"] == [{"name": "HD 1"}] and t["labels_requested"] is True
     assert t["known_objects"][0]["name"] == "433 Eros" and t["objects_requested"] is True
-    assert [p["service"] for p in t["provenance"]] == ["build", "SIMBAD", "JPL SB Identification (sb_ident, first pass)"]
+    # T106: the fake lookup had no mover search, so the next /objects ran it (no images here: skipped)
+    assert [p["service"] for p in t["provenance"]] == ["build", "SIMBAD", "JPL SB Identification (sb_ident, first pass)",
+                                                       "mover search (T06) skipped"]
 
 
 def test_early_labels_and_objects_land_with_the_build(tmp_path, monkeypatch):
@@ -283,7 +285,7 @@ def test_early_labels_and_objects_land_with_the_build(tmp_path, monkeypatch):
         t["provenance"].append({"service": "SIMBAD"})
         return t
 
-    def fake_detect(t):
+    def fake_detect(t, **kw):
         t["known_objects"] = [{"name": "433 Eros", "source": "mpcorb", "synthetic": False, "positions": [pos("c001")]},
                               {"name": "1 Ceres", "source": "mpcorb", "synthetic": False, "positions": [pos("c002")]}]
         t["provenance"].append({"service": "MPC orbit catalogue"})
@@ -301,7 +303,7 @@ def test_early_labels_and_objects_land_with_the_build(tmp_path, monkeypatch):
     assert [p["frame_id"] for p in t["labels"][0]["positions"]] == ["f000", "f001"]
     assert [o["name"] for o in t["known_objects"]] == ["1 Ceres"]          # Eros was only on the dropped frame
     assert t["known_objects"][0]["positions"][0]["frame_id"] == "f001"
-    assert [p["service"] for p in t["provenance"]] == ["build", "SIMBAD", "MPC orbit catalogue"]
+    assert [p["service"] for p in t["provenance"]] == ["build", "SIMBAD", "MPC orbit catalogue", "mover search (T06) skipped"]
     assert client.get(f"/api/targets/{body['id']}/objects").json() == {"status": "ready", "n": 1}
     assert client.get(f"/api/targets/{body['id']}/labels").json() == {"status": "ready", "n": 1}
 
@@ -545,3 +547,34 @@ def test_hips_colour_and_detector_epoch_layers_over_http(client):
     assert r.status_code == 200 and r.content[:4] == b"\x89PNG"
     assert client.get(f"/api/hips/{tid}/e1x/properties").status_code == 404
     assert client.get(f"/api/hips/{tid}/e1/properties").status_code == 200
+
+
+def test_fields_from_before_t06_get_only_the_mover_search(tmp_path, monkeypatch):
+    """T106: objects_requested fields without a T06 provenance entry: movers + classify, no JPL lookup again."""
+    import json
+
+    import detect.movers
+    import detect.run
+
+    app = create_app(tmp_path)
+    client = TestClient(app)
+    tid = "c1800000-p000000-s15"
+    (tmp_path / tid).mkdir()
+    (tmp_path / tid / "target.json").write_text(json.dumps({
+        "id": tid, "synthetic": False, "center": {"ra_deg": 180, "dec_deg": 0}, "frames": [],
+        "image": {"width": 10, "height": 10, "pixel_scale_arcsec": 6.15}, "labels": [],
+        "known_objects": [{"name": "433 Eros", "positions": []}], "detections": [], "objects_requested": True,
+        "provenance": [{"service": "build"}, {"service": "MPC orbit catalogue MPCORB.DAT (local copy)"}]}))
+    monkeypatch.setattr(detect.run, "detect_target", lambda t: (_ for _ in ()).throw(AssertionError("JPL asked again")))
+
+    def fake_movers(t):
+        t["provenance"].append({"service": "detect.movers (T06)", "query": "v1"})
+        return t
+
+    monkeypatch.setattr(detect.movers, "find_movers", fake_movers)
+    assert client.get(f"/api/targets/{tid}/objects").status_code == 202
+    assert _poll(client, f"/api/targets/{tid}/objects").json() == {"status": "ready", "n": 1}
+    t = client.get(f"/api/targets/{tid}/target.json").json()
+    assert t["known_objects"][0]["name"] == "433 Eros"                      # kept, not looked up again
+    assert any(p["service"] == "detect.movers (T06)" for p in t["provenance"])
+    assert client.get(f"/api/targets/{tid}/objects").json() == {"status": "ready", "n": 1}   # once only

@@ -1,4 +1,8 @@
-# Contracts (v0.30)
+# Contracts (v0.31)
+
+v0.31 (T106): `detect.run.detect_target(..., movers=True)`: `movers=False` skips the mover search (the Live API's
+early lookup on a build's stub, before images exist). `GET /api/targets/<id>/objects` runs the mover search alone
+on a field whose known objects were looked up without it. Additive.
 
 v0.30 (T06): detections may carry `evidence` (how often seen, where absent, S/N); `detect.run` now fills
 `detections` from the field's cached SPHEREx images (`detect.movers`). Additive.
@@ -344,8 +348,8 @@ def build_target(target_id: str, ra_deg: float, dec_deg: float, size_arcmin: flo
     progress(step, done=None, total=None, message="") feeds the Live API's progress bar."""
 
 # detect/run.py (B)
-def detect_target(target: dict, jpl=None, vmag_lim: float = DEFAULT_VMAG) -> dict:
-    """Fill known_objects and detections in place; touches only those two fields and appends to
+def detect_target(target: dict, jpl=None, vmag_lim: float = DEFAULT_VMAG, movers: bool = True) -> dict:
+    """Fill known_objects and detections in place (movers=False, v0.31: known objects only, no image needed); touches only those two fields and appends to
     provenance. A failed JPL lookup never raises: known_objects stays [] and the error goes into provenance."""
 
 def detect(target_dir: str | Path, jpl=None, vmag_lim: float = DEFAULT_VMAG) -> Path:

@@ -21,6 +21,11 @@ REPO = Path(__file__).resolve().parent.parent
 FIXTURE = REPO / "fixtures" / "targets" / "demo-synthetic"
 
 
+
+def movers_ran(t: dict) -> bool:
+    """T106: did the mover search (T06) run on this field (found something, nothing, skipped or failed)?"""
+    return any("(T06)" in (p.get("service") or "") for p in t.get("provenance", []))
+
 class NoData(Exception):
     """SPHEREx has no images at the requested position."""
 
@@ -200,21 +205,33 @@ class Builder:
             job = self._object_jobs.get(tid)
             if job is None:
                 t = json.loads(tj.read_text(encoding="utf-8"))
-                if t.get("objects_requested") or t.get("synthetic"):
+                done = t.get("objects_requested")
+                if t.get("synthetic") or (done and movers_ran(t)):
                     return {"status": "ready", "n": len(t.get("known_objects", [])) + len(t.get("detections", []))}
+                # T106: a field whose known objects were looked up before T06 existed gets only the mover search
+                # (a few seconds), not the JPL lookup again (minutes)
                 job = {"status": "building", "n": None,
-                       "message": "asking JPL for known asteroids and comets (can take a few minutes)"}
+                       "message": "looking for moving sources in the field's images" if done else
+                                  "asking JPL for known asteroids and comets (can take a few minutes)"}
                 self._object_jobs[tid] = job
-                threading.Thread(target=self._run_objects, args=(tid, job), daemon=True,
+                threading.Thread(target=self._run_objects, args=(tid, job, bool(done)), daemon=True,
                                  name=f"objects-{tid}").start()
         return dict(job)
 
-    def _run_objects(self, tid: str, job: dict) -> None:
+    def _run_objects(self, tid: str, job: dict, movers_only: bool = False) -> None:
         tj = self.target_dir(tid) / "target.json"
         try:
             from detect.run import detect_target
             t = json.loads(tj.read_text(encoding="utf-8"))
-            detect_target(t)
+            if movers_only:
+                from detect.classify import classify_detections
+                from detect.movers import find_movers
+                t["detections"] = []
+                find_movers(t)
+                if t["detections"]:
+                    classify_detections(t)
+            else:
+                detect_target(t)
             self._merge(tid, t, ("known_objects", "detections"), "objects_requested")
             job.update(status="ready", n=len(t["known_objects"]) + len(t["detections"]))
             job.pop("message", None)
@@ -297,7 +314,7 @@ class Builder:
 
         def objects():
             from detect.run import detect_target
-            early["objects"] = detect_target(copy.deepcopy(stub))
+            early["objects"] = detect_target(copy.deepcopy(stub), movers=False)   # T106: no images yet
 
         early["stub"] = stub
         early["threads"] = [threading.Thread(target=fn, daemon=True, name=f"early-{fn.__name__}-{stub['id']}")
