@@ -48,8 +48,8 @@ def epochs(target: dict) -> dict[int, list[dict]]:
     return dict(sorted(out.items()))
 
 
-LAYER_RE = r"^(e\d+(d[1-6]|c)?|f\d{3,}|d-f\d{3,}-f\d{3,}|x-[a-z0-9_]+(-[a-z0-9_]+){0,2})$"
-# x-<feature>: T93 chemistry map; x-<a>-<b>[-<c>]: T96 2-3 of them as one colour picture (wavelength order)
+LAYER_RE = r"^(e\d+(d[1-6]|c)?|f\d{3,}|d-f\d{3,}-f\d{3,}|x-[a-z0-9_]+(-[a-z0-9_]+){0,9})$"
+# x-<feature>: T93 chemistry map; x-<a>-<b>[-<c>...]: T96/T108 2 or more of them as one colour picture (wavelength order)
 # T89: e<ep>d<n> = the epoch's frames of detector n only (one band of the map); e<ep>c = false colour of
 # all of them: blue = D1+D2 (0.75-1.62 µm), green = D3+D4 (1.63-3.82 µm), red = D5+D6 (3.83-5.0 µm).
 COLOUR = ((5, 6), (3, 4), (1, 2))          # R, G, B detector pairs

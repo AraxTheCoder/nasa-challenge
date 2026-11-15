@@ -250,15 +250,26 @@ def compute(target_dir: Path, feature: str, progress=None, refresh: bool = False
 # The direction that matters for each feature in a combined picture: the hydrogen lines and PAH glow (emission),
 # the ices and the water bands absorb.
 SHOWS = {k: "emission" if v[3] == "line" or k == "pah" else "absorption" for k, v in FEATURES.items()}
-COMBINE_MAX = 3
-# Colours by wavelength, shortest first, as in narrow-band images (and T89's false colour: blue short, red long):
-# two = cyan + red, three = blue + green + red. Overlaps mix: red + green = yellow, all three = white.
-COMBINE_COLOURS = {2: ((0, 1, 1), (1, 0, 0)), 3: ((0, 0, 1), (0, 1, 0), (1, 0, 0))}
+COMBINE_MAX = len(FEATURES)   # T108: any number (was 3, Mati 2026-11-15)
+
+
+def _hue_colours(n: int) -> tuple:
+    """n colours by wavelength, shortest first. 2 = cyan + red, 3 = blue + green + red (T96): independent, so every
+    mix can be read back (red + green = yellow). From 4 on: hues evenly from blue (240°) through cyan, green and
+    yellow to red (0°), full brightness; then a mix can look like another feature's own colour."""
+    import colorsys
+    if n == 2:
+        return ((0, 1, 1), (1, 0, 0))
+    return tuple(tuple(round(v, 3) for v in colorsys.hsv_to_rgb((240 - 240 * i / (n - 1)) / 360, 1, 1)) for i in range(n))
+
+
+# Colours by wavelength, shortest first, as in narrow-band images (and T89's false colour: blue short, red long).
+COMBINE_COLOURS = {n: _hue_colours(n) for n in range(2, COMBINE_MAX + 1)}
 _FLOOR = math.asinh(1.0) / math.asinh(SIGMA_SPAN)    # 1 noise level in the grey maps' stretch: weaker = black
 
 
 def combo(features) -> list[str]:
-    """2-3 distinct known features in wavelength order (the order of their colours); ValueError otherwise."""
+    """2 or more distinct known features in wavelength order (the order of their colours); ValueError otherwise."""
     fs = list(dict.fromkeys(features))
     if not 2 <= len(fs) <= COMBINE_MAX or any(f not in FEATURES for f in fs):
         raise ValueError(f"combine 2 to {COMBINE_MAX} different features of: {', '.join(FEATURES)}")
@@ -273,7 +284,7 @@ def strength(grey: np.ndarray, shows: str) -> np.ndarray:
 
 
 def combined_map(target_dir: Path, features) -> tuple[np.ndarray, np.ndarray]:
-    """(RGB uint8 (h, w, 3), coverage) of 2-3 features' maps, which compute() made first (LookupError if not).
+    """(RGB uint8 (h, w, 3), coverage) of 2 or more features' maps, which compute() made first (LookupError if not).
     Each feature adds its colour times its strength; coverage = where all of them have data."""
     from PIL import Image
 

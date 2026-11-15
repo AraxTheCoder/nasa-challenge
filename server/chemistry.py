@@ -5,7 +5,7 @@
     GET /api/targets/<id>/chemistry?feature=<f>&start=1         start; 202 {"status": "building", done, total},
                                                                 then 200 {"status": "ready", ...stats, "layer"}
     GET /api/targets/<id>/chemistry/<f>.png                     the map (grey + alpha) on the field grid
-    GET /api/targets/<id>/chemistry/<a>-<b>[-<c>].png           T96: 2-3 maps as one colour picture (RGBA)
+    GET /api/targets/<id>/chemistry/<a>-<b>[-<c>...].png      T96/T108: 2 or more maps as one colour picture (RGBA)
     Map layer: /api/hips/<id>/x-<f>/...                         (server/hips.py), like the A − B difference;
                /api/hips/<id>/x-<a>-<b>[-<c>]/...               T96: the colour picture (features in wavelength order)
 
@@ -100,7 +100,7 @@ def chemistry_png(tid: str, name: str, request: Request):
     if not m or d is None:
         return missing
     parts = m.group(1).split("-")
-    if len(parts) > 1:                                   # T96: the colour picture of 2-3 maps made earlier
+    if len(parts) > 1:                                   # T96/T108: the colour picture of 2+ maps made earlier
         import io
         from PIL import Image
         from pipeline.chemistry import combined_map

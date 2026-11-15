@@ -1,4 +1,8 @@
-# Contracts (v0.34)
+# Contracts (v0.35)
+
+v0.35 (T108): chemistry pictures combine any number of features (was 2-3): `combine.max` = all features,
+`combine.colours` has an entry per count (2 and 3 unchanged; from 4 on hues by wavelength, blue to red); layer
+`x-<a>-<b>[-<c>...]` and `.../chemistry/<a>-<b>[-<c>...].png` accept more names. Additive for readers.
 
 v0.34 (T107): `GET /api/chemistry/features` adds `presets`: tested feature combinations for kinds of places
 (`pipeline.chemistry.PRESETS`). New field only. See "Chemistry maps".

@@ -63,7 +63,7 @@ def test_shows_and_combo_order():
     assert C.SHOWS["br_alpha"] == "emission" and C.SHOWS["pah"] == "emission" and C.SHOWS["pa_beta"] == "emission"
     assert C.SHOWS["h2o_ice"] == "absorption" and C.SHOWS["co2_ice"] == "absorption" and C.SHOWS["h2o_19"] == "absorption"
     assert C.combo(["br_alpha", "pah", "h2o_ice"]) == ["h2o_ice", "pah", "br_alpha"]      # by wavelength
-    for bad in (["pah"], ["pah", "pah"], ["pah", "gold"], ["pa_beta", "br_gamma", "pah", "br_alpha"]):
+    for bad in (["pah"], ["pah", "pah"], ["pah", "gold"]):                         # T108: 4+ features are fine now
         try:
             C.combo(bad)
         except ValueError:
@@ -106,6 +106,16 @@ def test_presets_are_valid_combinations():
     ids = [p["id"] for p in C.PRESETS]
     assert len(ids) == len(set(ids)) and ids
     for p in C.PRESETS:
-        assert C.combo(p["features"]) == p["features"]            # valid, 2-3 features, already in wavelength order
+        assert C.combo(p["features"]) == p["features"]            # valid, already in wavelength order
         assert all(p[k] for k in ("name", "looks_for", "read", "caveats", "tested"))
         assert -90 <= p["try"]["dec"] <= 90 and 0 <= p["try"]["ra"] < 360 and 5 <= p["try"]["size"] <= 210
+
+
+def test_colours_for_any_number_of_features():
+    """T108: 2 and 3 as in T96; from 4 on hues from blue to red, all different."""
+    assert C.COMBINE_MAX == len(C.FEATURES)
+    assert C.COMBINE_COLOURS[2] == ((0, 1, 1), (1, 0, 0)) and C.COMBINE_COLOURS[3] == ((0, 0, 1), (0, 1, 0), (1, 0, 0))
+    for n in range(4, C.COMBINE_MAX + 1):
+        cs = C.COMBINE_COLOURS[n]
+        assert len(set(cs)) == n and cs[0] == (0, 0, 1) and cs[-1] == (1, 0, 0) and max(map(max, cs)) == 1
+    assert C.combo(list(C.FEATURES)) == sorted(C.FEATURES, key=lambda f: C.FEATURES[f][1])
