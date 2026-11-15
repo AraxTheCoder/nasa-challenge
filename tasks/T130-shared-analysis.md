@@ -22,3 +22,10 @@ Select a region, then inspect the unusual-spectra panel for automatic chemistry 
 ## Notes from others
 
 Validation: field-spectra/profile/chemistry/API focused tests and server/variability/limits tests pass; viewer JavaScript syntax and diff whitespace checks pass. Tests cover sparse and mixed populations, cross-population blends, signed multi-feature matching, missing coverage, epoch disagreement, overlapping-feature reuse, reprojection invalidation, disk cache reuse after restart, and catalogue reclassification without image remeasurement. Real-data visual validation remains for the human; matching thresholds have synthetic coverage, not a measured completeness/purity claim.
+
+- 2026-11-15 [Mati (Claude)] Heads-up, Mati's Decision (TEAM.md): (1) Unusual spectra starts only when the toggle is
+  ticked: the automatic `load(st.mapOn || requested)` for explicit / selected fields in `web/outliers.js` goes back
+  to `load(st.mapOn)`; (2) T134 adds sources found in SPHEREx's own images ("SPHEREx-only", `source: "spherex"`,
+  ids `x###`) to the measured sources via one line in `measure_field` / `_cached`, judged with the stars
+  (`peer_group`), flagged ones catalogue-checked after the ranking. Kept as small hooks; tell Mati if they clash
+  with T130 / T131 work in progress.
