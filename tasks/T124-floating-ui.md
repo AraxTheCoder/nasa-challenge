@@ -1,7 +1,7 @@
 # T124: UI redesign: floating panels over the map, thumbwheel to the analysis
 
-- **Owner:** Jonathan  ·  **Status:** doing
-- **Branch:** `jonathan/T124-floating-ui` (**not merged to main until Jonathan says so**)
+- **Owner:** Jonathan  ·  **Status:** review
+- **Branch:** `jonathan/T124-floating-ui` (merged to main 2026-11-15)
 - **Depends on / feeds:** T55 / T90 (the map as first screen); feeds T16 (demo video, slides)
 
 ## Goal
@@ -37,8 +37,7 @@ describe what is already visible are gone.
 - `python web/dev.py`, open the viewer. Wheel over the map zooms; the thumbwheel on the right edge (roll over it, drag,
   arrows) or the wheel over any panel scrolls to the analysis. >= 1280 px wide: map panels stay left, analysis is a
   column on the right; the button under the wheel widens it.
-- Not merged. Joerg's T122 / T123 (region tool, progress bar) add elements to the map: merge main into this branch
-  first and place them.
+- Merged to main 2026-11-15 with T122 / T123 / T126 placed in the new layout (region button top right under 💬).
 
 ## Notes from others
 (anyone may append here, dated and signed)
