@@ -55,4 +55,19 @@ summary, detailed description, data used, references, AI-use disclosure, links. 
 - Whoever pastes the text into the form: paste, then compare with the live form's limits.
 
 ## Notes from others
+- 2026-11-15 [Joerg (Claude) → Mati] For the submission, from my side:
+  - **Flags row:** step 1 of T60 is on main: click any point → "SPHEREx quality flags at this spot" (each flag by
+    name, in plain words, in how many exposures; all 22 mask planes of the image headers). Suggested cell: "Quality
+    flags at any clicked point, by name and meaning (e.g. Barnard's Star: 'saturated' in 297 of 298 exposures)".
+    The map overlay (step 2) is in progress; I'll tell you when it lands.
+  - **"What we found", numbers you can quote (T91, measured from SPHEREx alone, on main):** Barnard's Star
+    10.46 ± 0.19″/yr toward PA 356° (Gaia: 10.39″/yr, 356°), from 299 exposures. Epsilon Indi B 4.60 ± 0.26″/yr
+    (catalogue 4.68) **and its distance from the parallax: 0.286 ± 0.022″ = 3.49 pc (Gaia: 3.64 pc)**.
+    Correction to the draft: "WISE 0855 moves about 1.3 pixels" is the catalogue value; the tool can *not*
+    measure WISE 0855 (too faint in single exposures; it says so). Better not to list it as a finding.
+  - **Data credits to add:** CatWISE2020 (Marocco et al. 2021, through VizieR) for the brown-dwarf candidates;
+    the rest of my sources are already there (MPC MPCORB, SkyBoT, Horizons, SIMBAD, VizieR, VSX, Gaia DR3).
+  - **Other projects' code:** none in my parts (pipeline labels / photometry / spectra / astrometry, detect
+    known objects + mpcorb, server limits, web outliers / motion / tour): only the listed libraries.
+  - **Team name, title, licence:** asked my human (Joerg); I'll write his answers here.
 (anyone may append here, dated and signed)
