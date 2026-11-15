@@ -30,6 +30,10 @@ let field = null;          // {ra, dec, size} of the blink field, drawn as an ou
 let epochLayers = [];
 let overlayCall = 0;
 const layerIndex = new Map();   // T81: the field's layers by key: e<epoch>, <frame id> (f003), d-<a>-<b>, p<n>
+// T143: the field's single frames by id (f003): added as overlays only when the frame tools first show one. As
+// overlays from the start they were prefetched with the epochs: 73% of all map requests on Mati's machine in a day
+// (4091 tiles + 848 layer descriptions, half of the tiles empty), while only the frame tools ever show them.
+const frameLayers = new Map();
 let shownLayer = null;
 export const currentLayer = () => shownLayer;
 let fieldBase = null;
@@ -165,6 +169,7 @@ export async function setEpochLayers(layers) {
   if (!sky) return [];
   const call = ++overlayCall;
   layerIndex.clear();
+  frameLayers.clear();
   fieldBase = null;
   shownLayer = null;
   const made = await sky.setOverlays(layers);
@@ -181,7 +186,9 @@ export async function setFieldLayers(epochs, frames, base) {
   fieldBase = base;
   shownLayer = null;
   layerIndex.clear();
-  const made = await sky.setOverlays([...epochs, ...frames]);
+  frameLayers.clear();
+  for (const f of frames) if (f.frame_id) frameLayers.set(f.frame_id, f);    // T143: added when first shown
+  const made = await sky.setOverlays([...epochs]);
   if (call !== overlayCall) return [];
   epochLayers = made;
   layerIndex.clear();
@@ -194,15 +201,18 @@ export async function showLayer(key) {
   if (!sky || (!fieldBase && !key.startsWith("p")) || (key.startsWith("p") && !apiBase)) return false;
   const call = overlayCall;
   let i = layerIndex.get(key);
-  if (i === undefined && (key.startsWith("d-") || key.startsWith("x-") || /^p\d$/.test(key))) {   // x-: T93 chemistry
+  const frame = frameLayers.get(key);              // T143: a single frame, added the first time it is shown
+  if (i === undefined && (frame || key.startsWith("d-") || key.startsWith("x-") || /^p\d$/.test(key))) {   // x-: T93
     layerIndex.set(key, -1);                       // being added
     // T82: p<n> = survey pass n of the live map, anywhere on the sky (not tied to the field)
-    const url = key.startsWith("p") ? `${apiBase.replace(/\/$/, "")}/api/sky/spherex-live-${key}` : `${fieldBase}/${key}`;
-    const [j] = await sky.addOverlays([{ url, epoch: null, id: key, label: key }]);
+    const url = frame?.url ?? (key.startsWith("p") ? `${apiBase.replace(/\/$/, "")}/api/sky/spherex-live-${key}`
+      : `${fieldBase}/${key}`);
+    const meta = frame ?? { url, epoch: null, id: key, label: key };
+    const [j] = await sky.addOverlays([meta]);
     if (call !== overlayCall) return false;
     if (j === undefined) { layerIndex.delete(key); return false; }
     layerIndex.set(key, j);
-    epochLayers[j] = { url, epoch: null, id: key };
+    epochLayers[j] = frame ?? { url, epoch: null, id: key };
     i = j;
   }
   if (i === undefined || i < 0) return false;
@@ -226,6 +236,7 @@ export function hideEpochs() {
   shownLayer = null;
   epochLayers = [];
   layerIndex.clear();
+  frameLayers.clear();
   fieldBase = null;
   sky?.setOverlays([]);
 }
@@ -244,6 +255,7 @@ export async function setPassLayers(passes, colour = false) {
   if (!sky || !apiBase) return [];
   const call = ++overlayCall;
   layerIndex.clear();                          // T81 keys (frames, p<n>) are added again on demand
+  frameLayers.clear();
   fieldBase = null;
   const base = apiBase.replace(/\/$/, "");
   const made = await sky.setOverlays(passes.map((n) => ({

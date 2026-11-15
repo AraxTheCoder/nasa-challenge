@@ -285,7 +285,7 @@ def load_map(path: Path) -> tuple[np.ndarray, np.ndarray]:
     return _load_map(str(path), path.stat().st_mtime, SMOOTH_PX)
 
 
-@lru_cache(maxsize=32)
+@lru_cache(maxsize=8)        # T143: was 32; the map server keeps the maps it draws in its own memory budget (hips.py)
 def _load_map(path: str, mtime: float, sigma: float):
     from PIL import Image
     a = np.asarray(Image.open(path).convert("LA"), np.float32)
