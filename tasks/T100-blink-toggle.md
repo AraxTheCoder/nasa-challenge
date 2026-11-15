@@ -1,6 +1,6 @@
 # T100: Map blink switch; chemistry picture survives zooming
 
-- **Owner:** Mati  ·  **Status:** review (not yet seen working in a browser)
+- **Owner:** Mati  ·  **Status:** done (checked in a browser by Joerg, 2026-11-15)
 - **Branch:** `mati/T100-blink-toggle`
 - **Depends on / feeds:** T90 (automatic blink), T93/T96 (chemistry maps)
 

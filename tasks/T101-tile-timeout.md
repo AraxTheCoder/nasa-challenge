@@ -1,6 +1,6 @@
 # T101: Map tile downloads get a time limit
 
-- **Owner:** Mati  ·  **Status:** review (not yet seen working in a browser)
+- **Owner:** Mati  ·  **Status:** done (checked in a browser by Joerg, 2026-11-15)
 - **Branch:** `mati/T101-tile-timeout`
 - **Depends on / feeds:** T94 (missing tiles; this was a note there)
 
