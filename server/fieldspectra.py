@@ -1,4 +1,5 @@
-"""T85/T86: spectra of every catalogue source of a field, and the ones that stand out (CONTRACTS v0.15).
+"""T85/T86: spectra of every catalogue source of a field, and the ones that stand out (CONTRACTS v0.15);
+T61: the ones that change brightness (`variability`, v0.33).
 
     GET /api/targets/<id>/spectral-outliers             cached result, or {"status": "not_started"}
     GET /api/targets/<id>/spectral-outliers?start=1     start measuring (202 {"status": "building", done, total}
@@ -35,6 +36,12 @@ def _outliers(path: str, mtime: float) -> dict:
     fs = json.loads(open(path, encoding="utf-8").read())
     fieldspectra.seed_spectra(fs)          # measured from the command line: clicks on its sources answer at once too
     out = spectral_outliers.find_outliers(fs)
+    try:                                   # T61: sources that change brightness (the same spectra, the level)
+        from detect.variability import find_variables
+        out["variability"] = find_variables(fs)
+    except Exception as e:  # noqa: BLE001 - the outlier list must not depend on it
+        traceback.print_exc()
+        out["variability"] = {"status": "error", "message": f"{type(e).__name__}: {e}", "variables": [], "blended": []}
     return {**out, "field": {"target_id": fs["target_id"], "n_sources": len(fs["sources"]),
                              "n_exposures": len(fs["exposures"]), "missing": len(fs["missing"]),
                              "seconds": fs.get("seconds"), "version": fs.get("version"),

@@ -1,6 +1,6 @@
 # T104: The chemistry map stays until the user ends it
 
-- **Owner:** Mati  ·  **Status:** review (not yet seen in a browser)
+- **Owner:** Mati  ·  **Status:** done (checked in a browser by Joerg, 2026-11-15)
 - **Branch:** `main`
 - **Depends on / feeds:** T93 / T96, T100
 
