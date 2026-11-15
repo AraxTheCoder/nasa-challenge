@@ -25,7 +25,7 @@ function samples() {
 async function refresh() {
   const request = ++state.request;
   state.tiles = []; explore.redraw();
-  if (!state.on) return;
+  if (!state.on) { note(""); return; }
   const ids = samples();
   if (!ids?.length) { note("Zoom in to see tile coverage (view up to 8°). Coverage overview is in Community."); return; }
   note("Loading community coverage…");
@@ -69,7 +69,7 @@ function hook() {
   const row = $("#labels-toggle")?.closest(".hud-row");
   if (!row) return;
   state.hooked = true;
-  const input = el("input", { id: "community-coverage-toggle", type: "checkbox" });
+  const input = el("input", { id: "community-coverage-toggle", type: "checkbox", "aria-label": "Community coverage", "aria-describedby": "community-coverage-note" });
   const label = el("label", { class: "community-coverage-label" }, input, " Community coverage",
     el("span", { id: "community-coverage-note", class: "small muted", hidden: true, role: "status" }));
   row.append(label);

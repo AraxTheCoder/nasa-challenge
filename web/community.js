@@ -50,7 +50,8 @@ function showCounts() {
   const b = button();
   if (!b) return;
   b.textContent = st.counts ? `💬 ${st.counts.comments} · 👁 ${st.counts.views}` : "💬 Discuss";
-  b.title = `Discuss tile ${st.pix ?? "under the view centre"}. Views count visits, not scientific reviews.`;
+  const coverage = st.coverage ? `${st.coverage.label} (${st.coverage.browsers} visiting browsers). ` : "";
+  b.title = `Discuss tile ${st.pix ?? "under the view centre"}. ${coverage}Views count visits, not scientific reviews.`;
   b.setAttribute("aria-expanded", String(st.open));
 }
 async function refreshCounts() {
@@ -63,7 +64,7 @@ async function refreshCounts() {
 }
 function setTile(pix) {
   if (pix === st.pix) return;
-  st.pix = pix; st.replyTo = null; st.thread = null; st.counts = null; st.focusId = null; st.notice = "";
+  st.pix = pix; st.replyTo = null; st.thread = null; st.counts = null; st.coverage = null; st.focusId = null; st.notice = "";
   showCounts();
 }
 function onMove() {
@@ -207,6 +208,14 @@ async function loadCoverage() {
 }
 function viewOnMap(c) {
   const pix = c.pix ?? st.pix, pos = position(c);
+  if (!explore.getSky() && pos) {
+    const url = new URL(location.href);
+    for (const key of ["view", "explore", "data", "target", "size", "blink"]) url.searchParams.delete(key);
+    url.searchParams.set("ra", String(pos[0])); url.searchParams.set("dec", String(pos[1]));
+    url.searchParams.set("community", String(pix));
+    if (c.id != null) url.searchParams.set("comment", String(c.id)); else url.searchParams.delete("comment");
+    location.assign(url); return;
+  }
   if (st.workspace) setWorkspace(false);
   if (pos) explore.goTo(...pos);
   setTile(pix); st.focusId = c.id ?? null;
@@ -475,5 +484,5 @@ function hook() {
 }
 document.addEventListener("explore:ready", hook);
 setTimeout(() => { initWorkspace(); hook(); }, 0);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && st.open) { e.stopPropagation(); close(); } });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && st.open) { e.stopImmediatePropagation(); close(); } });
 globalThis.spherexCommunity = { tile: () => st.pix, counts: () => st.counts };

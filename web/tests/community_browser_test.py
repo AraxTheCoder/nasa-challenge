@@ -29,8 +29,14 @@ class QuietHandler(SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "text/html")
             self.end_headers()
             self.wfile.write(b'<html><head><link rel="stylesheet" href="/web/style.css"></head><body>'
-                             b'<div id="explore"></div><input type="checkbox" id="flags-toggle">'
-                             b'<script type="module" src="/web/community.js"></script></body></html>')
+                             b'<header class="app-header"><h1 class="brand">SPHEREx Blink</h1><nav class="workspace-tabs" role="tablist" aria-label="Workspace">'
+                             b'<button id="workspace-explore" role="tab" aria-selected="true">Explore</button>'
+                             b'<button id="workspace-community" role="tab" aria-selected="false">Community</button></nav></header>'
+                             b'<div id="explore-workspace"><div id="explore"><div id="sky" style="width:800px;height:600px"></div>'
+                             b'<div class="hud-row"><label><input type="checkbox" id="labels-toggle">Labels</label></div></div>'
+                             b'<input type="checkbox" id="flags-toggle"></div>'
+                             b'<script type="module" src="/web/community.js"></script>'
+                             b'<script type="module" src="/web/community-coverage.js"></script></body></html>')
         else:
             super().do_GET()
 
@@ -72,11 +78,22 @@ def run():
                     page.on("console", lambda msg: print("BROWSER", msg.text) if msg.type == "error" else None)
                     # Keep map navigation deterministic while exercising the real DOM, drafts, network and SQLite.
                     page.route("**/web/explore.js", lambda route: route.fulfill(content_type="text/javascript", body=f'''
-                      let v = {{ra: 150, dec: 2.2, fovArcmin: 15}}, change = () => {{}};
+                      let v = {{ra: 150, dec: 2.2, fovArcmin: 15}};
+                      const changes = [], hooks = [], canvas = document.createElement("canvas");
+                      canvas.width = 800; canvas.height = 600;
+                      const ctx = canvas.getContext("2d"), stroke = ctx.stroke.bind(ctx);
+                      window.coverageStrokes = 0;
+                      ctx.stroke = () => {{ window.coverageStrokes++; stroke(); }};
+                      const sky = {{on: (event, fn) => changes.push(fn), base: {{slice: 0}},
+                        addDrawHook: fn => hooks.push(fn), proj: {{
+                          fromScreen: (x,y) => [v.ra+(x/800-.5)*v.fovArcmin/60, v.dec+(y/600-.5)*v.fovArcmin/60],
+                          toScreen: (ra,dec) => ({{x:(ra-v.ra)*60/v.fovArcmin*800+400,y:(dec-v.dec)*60/v.fovArcmin*600+300,front:true}})
+                        }} }};
                       export const getApiBase = () => {json.dumps(api)};
                       export const view = () => v;
-                      export const getSky = () => ({{on: (event, fn) => change = fn, base: {{slice: 0}}}});
-                      export const goTo = (ra, dec, fov) => {{v = {{ra, dec, fovArcmin: (fov ?? .25) * 60}}; change();}};
+                      export const getSky = () => sky;
+                      export const redraw = () => hooks.forEach(fn => fn(ctx, sky.proj));
+                      export const goTo = (ra, dec, fov) => {{v = {{ra, dec, fovArcmin: (fov ?? .25) * 60}}; changes.forEach(fn => fn());}};
                       window.communityMove = goTo;
                       export const bandWavelengths = () => [1.2, 4.5];
                       export const setBand = i => window.restoredBand = i;
@@ -152,6 +169,22 @@ def run():
                     expect(page.locator(f"#cm-comment-{posted['id']}")).to_be_visible()
                     page.wait_for_function("window.restoredPair?.join(',') === 'f000,f004'")
                     assert page.evaluate("window.restoredLayer") == "f000"
+                    page.locator("#community-coverage-toggle").check()
+                    expect(page.locator("#community-coverage-note")).to_contain_text("gray = unvisited")
+                    page.wait_for_function("window.coverageStrokes > 0")
+                    page.evaluate("communityMove(150, 2.2, 12)")
+                    expect(page.locator("#community-coverage-note")).to_contain_text("Zoom in")
+                    page.evaluate("communityMove(150, 2.2, .25)")
+                    expect(page.locator("#community-coverage-note")).to_contain_text("gray = unvisited")
+                    page.locator("#community-coverage-toggle").uncheck()
+                    expect(page.locator("#community-coverage-note")).to_be_hidden()
+                    page.get_by_role("button", name="Coverage", exact=True).click()
+                    expect(page.locator(".cm-coverage-card")).to_have_count(4)
+                    target_tile = page.locator(".cm-coverage-list .cm-item").first.locator("strong").text_content()
+                    page.locator(".cm-coverage-list .cm-item").first.get_by_role("button", name="View on map →", exact=True).click()
+                    expect(page.locator("#community h3")).to_have_text(target_tile)
+                    page.goto(f"{url}?community={pix}&comment={posted['id']}")
+                    expect(page.locator(f"#cm-comment-{posted['id']}")).to_be_visible()
                     page.evaluate("window.changedFrames = true; window.restoredPair = null; window.restoredLayer = null")
                     page.get_by_role("button", name="Open saved evidence").click()
                     expect(page.locator("#community")).to_contain_text("saved frames are unavailable")
@@ -183,6 +216,16 @@ def run():
                     page.wait_for_timeout(300)
                     assert original_url.endswith(f"/{pix}/comments")
                     expect(page.locator("#community-text")).to_have_value("Keep this newer draft")
+                    # Hidden map time while browsing Community must not inflate coverage.
+                    page.evaluate("communityMove(40, 60, .25)")
+                    hidden_pix = page.evaluate("spherexCommunity.tile()")
+                    page.get_by_role("tab", name="Community", exact=True).click()
+                    expect(page.get_by_role("tab", name="Community", exact=True)).to_have_attribute("aria-selected", "true")
+                    page.wait_for_timeout(4200)  # longer than the 4-second map view-count dwell
+                    assert page.request.get(f"{api}/api/community/tiles/{hidden_pix}").json()["views"] == 0
+                    page.get_by_role("tab", name="Explore", exact=True).click()
+                    page.locator("#community-btn").click()
+                    expect(page.locator("#community-text")).to_be_visible()
                     # Narrow screen layout and Escape from inside the composer.
                     page.set_viewport_size({"width": 390, "height": 844})
                     assert page.locator("#community").bounding_box()["width"] <= 390
@@ -242,7 +285,11 @@ def run():
                     app_page.screenshot(path=str(screenshots / "community-before-mobile-check.png"))
                     assert app_page.evaluate("document.documentElement.scrollWidth") <= 390, app_page.evaluate("[...document.querySelectorAll('body *')].filter(n=>n.getBoundingClientRect().right>390).map(n=>[n.tagName,n.id,n.className,n.getBoundingClientRect().width]).slice(0,20)")
                     app_page.get_by_role("button", name="Recent", exact=True).click()
+                    expect(app_page.get_by_role("heading", name="Recent discussions", exact=True)).to_be_visible()
                     app_page.screenshot(path=str(screenshots / "community-mobile.png"))
+                    app_page.get_by_role("button", name="Coverage", exact=True).click()
+                    expect(app_page.locator(".cm-coverage-card")).to_have_count(4)
+                    app_page.screenshot(path=str(screenshots / "community-coverage-mobile.png"))
                     app_page.reload()
                     expect(app_page.get_by_role("tab", name="Community", exact=True)).to_have_attribute("aria-selected", "true")
                     expect(app_page.locator("#community")).to_contain_text("Recent discussions")
@@ -250,6 +297,9 @@ def run():
                     app_page.goto(f"{origin}/web/?explore=0&api={api}&view=community&community={pix}&comment={posted['id']}")
                     expect(app_page.locator(f"#cm-comment-{posted['id']}")).to_be_visible()
                     expect(app_page.get_by_role("tab", name="Community", exact=True)).to_have_attribute("aria-selected", "true")
+                    app_page.set_viewport_size({"width": 320, "height": 700})
+                    expect(app_page.get_by_role("tab", name="Community", exact=True)).to_be_visible()
+                    app_page.wait_for_function("document.documentElement.scrollWidth <= innerWidth")
                     assert not errors, errors
                     browser.close()
                     print("Community browser checks passed: drafts, reply/tile isolation, counts/focus, failures, second looks, links, saved evidence, feed, delayed posts and phone layout, Community workspace/coverage navigation, history and deep links.")

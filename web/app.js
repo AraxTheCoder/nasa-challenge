@@ -607,7 +607,7 @@ function bindPage() {
   document.addEventListener("map:give", () => setManual(false));  // T96: Chemistry cleared: the automatic blink again
   setupBlinkSwitch();
   document.addEventListener("keydown", (e) => {
-    if (document.body.classList.contains("community-workspace") || e.target.closest?.("input, select, textarea, .sky-stage")) return;
+    if (document.body.classList.contains("community-workspace") || e.target.closest?.("input, select, textarea, .sky-stage, .workspace-tabs")) return;
     if ([" ", "p", "P", "x", "X", "m", "M", "d", "D", "ArrowLeft", "ArrowRight"].includes(e.key) && app.shownTarget) setManual(true);
   }, true);
 

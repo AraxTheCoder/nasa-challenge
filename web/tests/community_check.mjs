@@ -20,6 +20,7 @@ broken.clear(3, null);
 assert.equal(broken.get(3, null).text, '');
 const link = new URL(discussionLink('https://example.com/web/?ra=12&size=15&tour=1&data=old&api=https%3A%2F%2Fapi.example.com#old', 777, 12));
 assert.equal(link.pathname, '/web/');
+assert.equal(link.searchParams.get('view'), 'community');
 assert.equal(link.searchParams.get('community'), '777');
 assert.equal(link.searchParams.get('comment'), '12');
 assert.equal(link.searchParams.get('api'), 'https://api.example.com');

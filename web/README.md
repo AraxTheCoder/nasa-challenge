@@ -29,7 +29,7 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `flagsmap.js` | "Quality flags" in the map bar (T60): where the field's pixels are unreliable, as a mask |
 | `outliers.js` | "Unusual spectra" (T86/T88): sources whose spectral shape stands out, as a panel and rings on the map; T61: "Changes brightness", sources whose flux changes at the same wavelength (dashed V rings) |
 | `motion.js` | a catalogued star's motion measured from SPHEREx alone, in the spectrum panel (T91) |
-| `community.js`, `community-state.js` | Tile discussions, second-look requests with saved evidence and share links, unanswered/recent feeds, per-tile/reply browser drafts (T120/T129) |
+| `community.js`, `community-state.js`, `community-coverage.js` | Tile discussions, second-look requests with saved evidence and share links, unanswered/recent feeds, per-tile/reply browser drafts (T120/T129) |
 | `tour.js` | guided tour of the five official targets (T92, `?tour=1`) |
 | `util.js` | DOM and formatting helpers |
 | `presets.json` | the five official test fields (SIMBAD positions moved to epoch 2026.0, with query + timestamp) |
@@ -40,7 +40,15 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `tests/live_check.py` | exploratory browser check on real data against the running web/dev.py (10 scenarios, report + screenshots, no asserts; T115–T117) |
 | `tests/*.mjs` | Node checks, e.g. HEALPix geometry against astropy-healpix |
 
-## Page layout (T124)
+## Page layout (T124/T133)
+
+The fixed header has **Explore / Community** tabs. Community opens a full-width discussion workspace with
+Recent, Unanswered, Coverage and This tile; `?view=community` links directly to it. It works before the sky map
+is ready and keeps the explorer's field and drafts while switching. View tile on map returns to Explore.
+Coverage classifies attention by distinct visiting browser IDs: 0 unvisited, 1–2 light, 3–9 some, 10+ high;
+repeat hourly visits do not raise the distinct count. These are attention estimates, not certified complete
+scientific reviews. Coverage includes a less/most-visited list and an optional **Community coverage** map
+checkbox (order-6 tile outlines when zoomed to a view of up to 8°).
 
 The sky map stays behind the whole page; everything floats over it as panels. First screen: the wordmark and
 one form (RA, Dec, **Go** = move the map; field size + **Build field** = build that field; test fields,
@@ -85,6 +93,7 @@ URL parameters:
   e.g. `?data=../fixtures/targets/`. Add `&target=<id>` to pick a target: `demo-epochs` has every
   feature (3 epochs, pairs, labels, known / unknown / artifact objects), `demo-synthetic` is minimal.
 - `?explore=0` no sky map (embeds, slow connections, tests). `?debug=1` sky-map tile outlines.
+- `?view=community` opens the Community workspace (Recent, Unanswered, Coverage and tile discussions).
 - `?community=<pix>&comment=<id>` opens and highlights a discussion comment and restores its saved evidence when still cached (T129).
 - `?lam=2.17` a wavelength in µm (T78): the blink viewer shows the frames closest to it, the sky map the closest channel.
 - `?tip=1` / `?tip=0` force the RA/Dec help bubble on / off (it is switched off by default, T29).
