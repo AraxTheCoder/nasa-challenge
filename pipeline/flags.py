@@ -62,6 +62,7 @@ def meanings(rows: list[dict]) -> dict:
 
 # ---------- T60 step 2: where in a field the data is unreliable ----------
 
+MASK_VERSION = 2         # bump when the overlay's look changes: cached flags.png are redrawn
 MIN_SHARE = 0.15         # flagged in at least this share of the frames to be drawn
 BAD_MASK = sum(1 << b for b, (_, k, _) in FLAG_BITS.items() if k == "bad")
 WARN_MASK = sum(1 << b for b, (_, k, _) in FLAG_BITS.items() if k == "warn")
@@ -132,7 +133,7 @@ def field_mask(target: dict, raw_root=None) -> dict:
     # only what persists: a pixel flagged in one frame of 36 (a cosmic ray) is not a property of the place
     is_bad, is_warn = fb >= MIN_SHARE, (fb < MIN_SHARE) & (fw >= MIN_SHARE)
     rgba[is_bad] = (255, 70, 70, 0)
-    rgba[is_warn] = (245, 190, 60, 0)
-    rgba[..., 3] = np.where(is_bad, 70 + 150 * fb, np.where(is_warn, 50 + 110 * fw, 0)).astype(np.uint8)
+    rgba[is_warn] = (255, 214, 0, 0)            # bright yellow: the old amber was lost on the dark map
+    rgba[..., 3] = np.where(is_bad, 70 + 150 * fb, np.where(is_warn, 110 + 120 * fw, 0)).astype(np.uint8)
     return {"rgba": rgba, "n_frames": n, "bad_fraction": float(bad.sum() / cov.sum()) if cov.sum() else 0.0,
             "counts": dict(sorted(counts.items(), key=lambda kv: -kv[1]))}

@@ -47,6 +47,9 @@ Mati's Decision, T76, while this was being merged). Nothing of
 - Not run here (Jonathan's rule): `web/tests/browser_test.py`; please run it in CI / by hand.
 
 ## Notes from others
+- 2026-11-15 [Joerg → Jonathan] The map's Debug overlay is on by default (app.js: `?debug=0` turns it off), so every
+  visitor, and judges, see tile outlines (red diagonals across a field, "7/4444 loading" labels) and the
+  "in flight … errors 0" line. For the public site / demo video: off by default, `?debug=1` to switch it on? Your call.
 - 2026-11-14 [Joerg → Jonathan] Three things seen after the T90 merge (checked on 7b054fd itself, without my
   changes): (1) `web/tests/browser_test.py` fails at line 127, `Page.fill` waits for `input[name=ra]` (the
   coordinate form moved / is hidden), so CI's browser test will be red; (2) the field epoch layers per detector

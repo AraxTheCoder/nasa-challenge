@@ -261,6 +261,6 @@ def test_field_flag_mask_marks_persistent_flags_only(monkeypatch):
     m = flags.field_mask(target)
     r = m["rgba"]
     assert m["n_frames"] == 10 and tuple(r[0, 0, :3]) == (255, 70, 70) and r[0, 0, 3] > 200
-    assert tuple(r[1, 1, :3]) == (245, 190, 60) and 0 < r[1, 1, 3] < r[0, 0, 3]
+    assert tuple(r[1, 1, :3]) == (255, 214, 0) and 0 < r[1, 1, 3] < r[0, 0, 3]
     assert r[2, 2, 3] == 0 and r[2, 3, 3] == 0 and r[0, 1, 3] == 0
     assert m["counts"]["OVERFLOW"] == 10 and m["counts"]["GHOST"] == 3 and m["counts"]["TRANSIENT"] == 1
