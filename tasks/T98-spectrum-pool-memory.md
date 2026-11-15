@@ -1,6 +1,6 @@
 # T98: Live API memory: spectrum worker pool sized to the machine, released when idle
 
-- **Owner:** Mati  ·  **Status:** doing
+- **Owner:** Mati  ·  **Status:** done
 - **Branch:** `mati/T98-spectrum-pool-memory`
 - **Depends on / feeds:** follows T83 (16 worker processes for spectra), T85 (field spectra); feeds T14 (how much RAM the host needs)
 
@@ -11,10 +11,10 @@ Spectra on a big machine stay as fast as today.
 
 ## Plan
 - [x] Measure where the memory goes (below)
-- [ ] `pipeline/photometry.py`: number of worker processes from RAM and CPU count, override with
+- [x] `pipeline/photometry.py`: number of worker processes from RAM and CPU count, override with
       `SPHEREX_SPECTRUM_PROCESSES` (0 = threads only)
-- [ ] Shut the pool down after some minutes without use; the next request starts a new one
-- [ ] Tests; measure again; note for T14
+- [x] Shut the pool down after some minutes without use; the next request starts a new one
+- [x] Tests; measure again; note for T14
 
 ## Findings
 Measured 2026-11-15 ~00:50 UTC on Mati's machine (WSL2, 16 cores, 31 GB), `python web/dev.py`, RSS of the
@@ -37,6 +37,17 @@ API process and all its children, sampled once a second:
   with T60.
 
 ## Handoff
+- `pipeline/photometry.py`: `spectrum_processes()` picks the worker count: at most 16, one per CPU, together
+  at most a quarter of the RAM at 0.25 GB each (8 GB → 8, 4 GB → 4, ≥16 GB → 16 as before).
+  `SPHEREX_SPECTRUM_PROCESSES=<n>` overrides it; `0` = threads only, no worker processes.
+- The pool shuts down after `POOL_IDLE_S` = 5 min without work (`_retire_when_idle`); the next spectrum
+  starts a new one. A pool with tasks waiting or running is never shut down.
+- Checked with real processes (idle time set to 4 s): 16 workers start, results correct; after the idle
+  time 16 of 19 child processes are gone (252 MB → 31 MB, the forkserver and resource tracker stay); the next
+  request gets a new pool at once; a 7 s job outlives the idle time untouched. 225 Python tests pass.
+- Not yet measured on the running API after this change (needs a server restart and 5 idle minutes).
+- For T14: budget ~1.6 GB for the API process plus 0.25 GB per worker while spectra run.
+- Left: the 1.5 GB of the server process itself is unexplained.
 
 ## Notes from others
 (anyone may append here, dated and signed)

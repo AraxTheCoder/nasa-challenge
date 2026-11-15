@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 import threading
 import time
@@ -165,9 +166,33 @@ def spectrum_cache(ra: float, dec: float) -> Path:
     return SPECTRA_ROOT / f"{ra:.4f}_{dec:+.4f}.json"
 
 
-SPECTRUM_PROCESSES = 16      # T83: the cutouts' CPU part (FITS headers, WCS, RICE) holds the GIL; spread it
+WORKER_GB = 0.25             # T98: one worker process, measured (129 MB fresh, ~235 MB after field spectra)
+
+
+def spectrum_processes(ram_gb: float | None = None, cpus: int | None = None, env: str | None = None) -> int:
+    """T98: how many worker processes this machine gets: at most 16 (T83), one per CPU, and together no more
+    than a quarter of the RAM (8 GB -> 8, 4 GB -> 4; 16 of them took 3.3 GB and got the API OOM-killed on an
+    8 GB machine). SPHEREX_SPECTRUM_PROCESSES overrides it; 0 = no worker processes, threads only."""
+    env = os.environ.get("SPHEREX_SPECTRUM_PROCESSES") if env is None else env
+    if env not in (None, ""):
+        try:
+            return max(0, int(env))
+        except ValueError:
+            print(f"SPHEREX_SPECTRUM_PROCESSES={env!r} is not a number, ignored", file=sys.stderr)
+    n = min(16, cpus or os.cpu_count() or 4)
+    if ram_gb is None:
+        try:
+            ram_gb = os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") / 2**30
+        except (AttributeError, ValueError, OSError):      # Windows has no sysconf: CPUs decide
+            return n
+    return max(2, min(n, int(ram_gb / 4 / WORKER_GB)))
+
+
+SPECTRUM_PROCESSES = spectrum_processes()   # T83: the cutouts' CPU part (FITS headers, WCS, RICE) holds the GIL; spread it
+POOL_IDLE_S = 300            # T98: after this long without work the worker processes exit and give their memory back
 SPECTRUM_BATCH = 8           # images per task: 16 processes x 8 threads = 128 requests in flight (latency-bound)
 _proc_pool = None
+_pool_used = 0.0
 _proc_lock = threading.Lock()
 
 
@@ -212,13 +237,35 @@ def _spectrum_batch(exposures: list, ra: float, dec: float) -> list[tuple[str, o
 
 
 def _pool():
-    global _proc_pool
+    global _proc_pool, _pool_used
     with _proc_lock:
         if _proc_pool is None:
             import multiprocessing
             from concurrent.futures import ProcessPoolExecutor
             _proc_pool = ProcessPoolExecutor(SPECTRUM_PROCESSES, mp_context=multiprocessing.get_context("forkserver"))
+            threading.Thread(target=_retire_when_idle, args=(_proc_pool,), daemon=True, name="spectrum-pool-idle").start()
+        _pool_used = time.monotonic()
         return _proc_pool
+
+
+def _retire_when_idle(pool, idle_s: float | None = None, poll_s: float | None = None) -> None:
+    """T98: shut `pool` down once it had no work for POOL_IDLE_S, so its processes (~0.2 GB each) don't stay
+    for the life of the server; the next _pool() starts a new one (~2 s). Work handed in is never dropped:
+    a pool with tasks waiting or running counts as in use, and shutdown lets anything still in it finish."""
+    global _proc_pool, _pool_used
+    while True:
+        time.sleep(poll_s if poll_s is not None else min(30.0, POOL_IDLE_S / 4))
+        with _proc_lock:
+            if _proc_pool is not pool:            # replaced after a failure (the callers set it to None)
+                break
+            if getattr(pool, "_pending_work_items", None):      # tasks waiting or running
+                _pool_used = time.monotonic()
+                continue
+            if time.monotonic() - _pool_used < (idle_s if idle_s is not None else POOL_IDLE_S):
+                continue
+            _proc_pool = None
+            break
+    pool.shutdown(wait=False)
 
 
 def _anomalies(out: dict) -> dict:
