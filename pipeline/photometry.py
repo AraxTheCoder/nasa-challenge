@@ -27,6 +27,7 @@ import argparse
 import json
 import math
 import os
+import re
 import sys
 import threading
 import time
@@ -216,8 +217,49 @@ _pool_used = 0.0
 _proc_lock = threading.Lock()
 
 
+_FIELD_ID = re.compile(r"^c(\d{7})-([mp])(\d{6})-s(\d+)")
+_fields = {"mtime": None, "at": 0.0, "list": []}
+
+
+def _field_centres() -> list[tuple[float, float, float]]:
+    """T143: (ra, dec, side deg) of the built fields, from their folder names (c2694472-p047664-s14 = 269.4472°,
+    +4.7664°, 14′: the same 4-decimal centre their cutouts are stored under). Read again when the folder changes."""
+    root = build.RAW_ROOT.parent / "targets"
+    try:
+        m = root.stat().st_mtime
+    except OSError:
+        return []
+    if _fields["mtime"] != m or time.time() - _fields["at"] > 30:
+        out = []
+        for name in os.listdir(root):
+            g = _FIELD_ID.match(name)
+            if g:
+                out.append((int(g[1]) / 1e4, (-1 if g[2] == "m" else 1) * int(g[3]) / 1e4, int(g[4]) / 60))
+        _fields.update(mtime=m, at=time.time(), list=out)
+    return _fields["list"]
+
+
+def _field_cutout(url: str, ra: float, dec: float, size_deg: float) -> Path | None:
+    """T143: a stored cutout of this image made for a built field (its build, its spectra, its sources) that has
+    (ra, dec) and the measuring margin (size_deg / 2) inside: read instead of downloading a small one. Point spectra
+    took a median 14 s (max 87 s) on Mati's machine, nearly all of them downloads, mostly inside analysed fields."""
+    cos = math.cos(math.radians(dec))
+    near = []
+    for fra, fdec, side in _field_centres():
+        sep = math.degrees(math.acos(min(1.0, math.sin(math.radians(dec)) * math.sin(math.radians(fdec))
+                                         + cos * math.cos(math.radians(fdec)) * math.cos(math.radians(ra - fra)))))
+        if sep <= side:                                   # a cutout of a field this far off can't hold the point
+            near.append((sep, fra, fdec))
+    for sep, fra, fdec in sorted(near):
+        # the circle that fits in the cutout's square (any rotation) must hold the point and its margin
+        hit = build.cached_cutout(url, fra, fdec, 2 * (sep + size_deg / 2), build.RAW_ROOT)
+        if hit:
+            return hit
+    return None
+
+
 def _spectrum_cutout(url: str, ra: float, dec: float, size_deg: float = SPECTRUM_CUT_DEG) -> Path:
-    hit = build.cached_cutout(url, ra, dec, size_deg)
+    hit = build.cached_cutout(url, ra, dec, size_deg, build.RAW_ROOT) or _field_cutout(url, ra, dec, size_deg)  # T143
     if hit:
         return hit
     d = build._cutout_dir(url, ra, dec, build.RAW_ROOT)

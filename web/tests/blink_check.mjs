@@ -79,6 +79,10 @@ const modes = [];
 passes.onModeChange((m) => modes.push(m));
 await passes.initPasses();
 await passes.setMode('epochs');
+// The page clears the overlays when the blink turns to field epochs (app.js onBlinkSource -> explore.hideEpochs ->
+// sky.setOverlays([])). T143: overlays asked for again keep their layers, so only after that clear is the pass
+// metadata fetched again (and can arrive late, as tested here).
+await sky.setOverlays([]);
 hold('http://test/api/sky/spherex-live-p1/properties');
 const slowPasses = passes.setMode('passes');
 assert.equal(modes.at(-1), 'passes', 'old epoch timer can be stopped before the pass metadata arrives');

@@ -17,16 +17,82 @@ position at orders 6 and 7 (2026-11-14).
 """
 from __future__ import annotations
 
+import functools
 import io
 import json
 import math
-from functools import lru_cache
+import threading
+from collections import OrderedDict, namedtuple
 from pathlib import Path
 
 import numpy as np
 
 TILE = 512
 HIPS_ORDER = 7          # 3.2"/px: a bit finer than SPHEREx's 6.15"/px so zooming in stays sharp
+# T143: the field images and finished tiles kept in memory, by size instead of by count (lru_cache's 256 frames of an
+# 86′ field were ~900 MB as float32 on Mati's 8 GB machine; a 210′ field's ~4x that)
+IMAGE_CACHE_MB = 400
+TILE_CACHE_MB = 150
+
+
+def _nbytes(value) -> int:
+    if isinstance(value, (bytes, bytearray)):
+        return len(value)
+    if isinstance(value, np.ndarray):
+        return value.nbytes
+    if isinstance(value, tuple):
+        return sum(_nbytes(v) for v in value)
+    return 0
+
+
+CacheInfo = namedtuple("CacheInfo", "hits misses maxsize currsize")
+
+
+class _BudgetCache:
+    """T143: memoize like lru_cache, but drop the least recently used results once their total size passes the budget
+    (numpy arrays: nbytes; bytes: len). Results are computed outside the lock; `cache_clear()` / `cache_info()` as
+    lru_cache's (maxsize = the budget in bytes, currsize = entries)."""
+
+    def __init__(self, budget_mb: float):
+        self.budget = int(budget_mb * 2 ** 20)
+        self.used = 0
+        self.hits = self.misses = 0
+        self.items: OrderedDict = OrderedDict()
+        self.lock = threading.Lock()
+
+    def __call__(self, fn):
+        @functools.wraps(fn)
+        def cached(*args):
+            key = (fn.__name__, args)
+            with self.lock:
+                hit = self.items.get(key)
+                if hit is not None:
+                    self.items.move_to_end(key)
+                    self.hits += 1
+                    return hit[0]
+                self.misses += 1
+            value = fn(*args)
+            size = max(_nbytes(value), 200)                # 200: a None / small result still counts a little
+            with self.lock:
+                if key not in self.items:
+                    self.items[key] = (value, size)
+                    self.used += size
+                    while self.used > self.budget and len(self.items) > 1:
+                        _, (_, s) = self.items.popitem(last=False)
+                        self.used -= s
+            return value
+        cached.cache_clear = self.clear
+        cached.cache_info = lambda: CacheInfo(self.hits, self.misses, self.budget, len(self.items))
+        return cached
+
+    def clear(self) -> None:
+        with self.lock:
+            self.items.clear()
+            self.used = 0
+
+
+_images = _BudgetCache(IMAGE_CACHE_MB)    # frames, epochs, colour, A − B, chemistry: one budget
+_tiles = _BudgetCache(TILE_CACHE_MB)      # finished tile PNGs
 
 
 def _interleave_table() -> np.ndarray:
@@ -129,9 +195,14 @@ def properties(tid: str, target: dict, ep) -> str:
     return "".join(f"{k:<20} = {v}\n" for k, v in lines.items())
 
 
-@lru_cache(maxsize=64)
+def _u8(img: np.ndarray) -> np.ndarray:
+    """T143: grey 0-255 kept as 8 bits (a quarter of float32), rounded."""
+    return np.clip(np.rint(img), 0, 255).astype(np.uint8)
+
+
+@_images
 def epoch_image(target_dir: str, mtime: float, ep: int, det: int | None = None) -> tuple[np.ndarray, np.ndarray]:
-    """Mean of the epoch's frames (grey 0-255; det: only that detector's) and a coverage mask.
+    """Mean of the epoch's frames (grey 0-255 as uint8, T143; det: only that detector's) and a coverage mask.
     mtime keys the cache."""
     from PIL import Image
 
@@ -148,48 +219,50 @@ def epoch_image(target_dir: str, mtime: float, ep: int, det: int | None = None) 
         cnt += alpha
     if acc is None:                                      # no frame of that detector in this epoch
         w, h = t["image"]["width"], t["image"]["height"]
-        return np.zeros((h, w), np.float32), np.zeros((h, w), bool)
+        return np.zeros((h, w), np.uint8), np.zeros((h, w), bool)
     mean = np.divide(acc, cnt, out=np.zeros_like(acc), where=cnt > 0)
-    return mean, cnt > 0
+    return _u8(mean), cnt > 0
 
 
-@lru_cache(maxsize=32)
+@_images
 def colour_image(target_dir: str, mtime: float, ep: int) -> tuple[np.ndarray, np.ndarray]:
-    """T89: false colour of the epoch, (h, w, 3) 0-255: R = D5+D6, G = D3+D4, B = D1+D2; coverage mask."""
+    """T89: false colour of the epoch, (h, w, 3) 0-255 (uint8, T143): R = D5+D6, G = D3+D4, B = D1+D2; coverage."""
     chans, cov = [], None
     for pair in COLOUR:
         acc = cnt = None
         for det in pair:
             m, c = epoch_image(target_dir, mtime, ep, det)
+            m = m.astype(np.float32)                     # 8-bit means: summed as floats (no overflow)
             acc = np.where(c, m, 0) if acc is None else acc + np.where(c, m, 0)
             cnt = c.astype(np.float32) if cnt is None else cnt + c
         chans.append(np.divide(acc, cnt, out=np.zeros_like(acc), where=cnt > 0))
         cov = cnt > 0 if cov is None else cov | (cnt > 0)
-    return np.dstack(chans), cov
+    return _u8(np.dstack(chans)), cov
 
 
-@lru_cache(maxsize=256)
+@_images
 def frame_image(target_dir: str, mtime: float, fid: str) -> tuple[np.ndarray, np.ndarray]:
-    """One frame (grey 0-255) and its coverage mask."""
+    """One frame (grey 0-255, uint8 as in its PNG, T143) and its coverage mask."""
     from PIL import Image
 
     d = Path(target_dir)
     t = json.loads((d / "target.json").read_text(encoding="utf-8"))
     f = next(f for f in t["frames"] if f["id"] == fid)
-    a = np.asarray(Image.open(d / f["image"]).convert("LA"), np.float32)
-    return a[..., 0], a[..., 1] > 0
+    a = np.asarray(Image.open(d / f["image"]).convert("LA"))
+    return a[..., 0].copy(), a[..., 1] > 0
 
 
-@lru_cache(maxsize=64)
+@_images
 def diff_image(target_dir: str, mtime: float, a: str, b: str) -> tuple[np.ndarray, np.ndarray]:
     """A − B with B fitted to A (robust linear fit over pixels valid in both, as web/diff.js does):
-    grey 128 = no change, white = brighter in A, black = brighter in B."""
+    grey 128 = no change, white = brighter in A, black = brighter in B. uint8 (T143)."""
     ga, ma = frame_image(target_dir, mtime, a)
     gb, mb = frame_image(target_dir, mtime, b)
+    ga, gb = ga.astype(np.float32), gb.astype(np.float32)
     both = ma & mb
     out = np.full(ga.shape, 128.0, np.float32)
     if both.sum() < 10:
-        return out, both
+        return _u8(out), both
     x, y = gb[both], ga[both]
     keep = np.ones(x.size, bool)
     for _ in range(3):                                   # clip outliers (the movers) and refit
@@ -200,7 +273,7 @@ def diff_image(target_dir: str, mtime: float, a: str, b: str) -> tuple[np.ndarra
     diff = ga - (gain * gb + off)
     scale = max(np.percentile(np.abs(diff[both]), 99.5), 1.0)
     out[both] = np.clip(128 + 127 * diff[both] / scale, 0, 255)
-    return out, both
+    return _u8(out), both
 
 
 def layer_image(target_dir: str, mtime: float, key: str) -> tuple[np.ndarray, np.ndarray]:
@@ -221,7 +294,7 @@ def _chem_mtime(target_dir: Path, key: str) -> float:
     return max(p.stat().st_mtime for p in ps) if all(p.is_file() for p in ps) else 0.0
 
 
-@lru_cache(maxsize=32)
+@_images                                                 # T143: in the image budget (float: smooth sub-pixel sampling)
 def chemistry_image(target_dir: str, mtime: float, feature: str) -> tuple[np.ndarray, np.ndarray]:
     """T93: the chemistry map (grey 128 = like the continuum) and its coverage; empty if not made yet.
     T96: feature "a-b[-c]" = those maps as one colour picture (RGB). T121: smoothed (pipeline.chemistry.load_map),
@@ -271,7 +344,7 @@ def tile_png(target_dir: Path, ep, order: int, npix: int) -> bytes | None:
     return _tile_cached(str(target_dir), mtime, key, order, npix)
 
 
-@lru_cache(maxsize=8192)
+@_tiles                                                  # T143: was 8192 tiles, whatever their size
 def _tile_cached(target_dir: str, mtime: float, key: str, order: int, npix: int) -> bytes | None:
     return _render_tile(Path(target_dir), key, order, npix)
 

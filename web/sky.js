@@ -134,6 +134,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   const { gl } = G;
 
   const st = { ra, dec, fov, cam: null, w: 1, h: 1, dpr: 1, base: null, overlays: [], overlayCall: 0, shown: -1,
+    pool: new Map(),   // T143: overlay layers by address, kept with their tiles while setOverlays asks for them again
     dirty: true, loads: 0, queue: [], inflight: new Set(), rendering: false, hooks: [], frame: 0, errors: 0, debug: false, stats: null, listeners: { change: [], tiles: [] } };
 
   // ----- camera + projection -----
@@ -802,6 +803,16 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     if (keys[e.key]) { e.preventDefault(); e.stopPropagation(); keys[e.key](); }
   });
 
+  /** T143: pooled overlays that are no longer overlays: their tiles' textures freed, out of the pool. */
+  function dropUnused() {
+    const live = new Set(st.overlays);
+    for (const [url, layer] of st.pool) {
+      if (live.has(layer)) continue;
+      for (const t of layer.tiles.values()) if (t.tex) gl.deleteTexture(t.tex);
+      st.pool.delete(url);
+    }
+  }
+
   /** An overlay layer from {url, label, epoch, eager?}; cubes start on the base's band. */
   async function makeOverlay(l) {
     try {
@@ -825,16 +836,28 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       for (const l of st.overlays) if (l.depth > 1) l.slice = Math.min(l.depth - 1, st.base.slice);   // T82: pass layers
       markDirty();
     },
-    /** layers: [{url, label, epoch}] — all are prefetched, one is drawn (showOverlay). */
+    /** layers: [{url, label, epoch}] — all are prefetched, one is drawn (showOverlay). T143: a layer asked for
+     *  again (same address) keeps its loaded tiles: the field's layers are set again on every band / colour / blink
+     *  change (399 times in one day on Mati's machine) and every tile used to be loaded anew. */
     async setOverlays(layers) {
       const call = ++st.overlayCall;
-      for (const l of st.overlays) for (const t of l.tiles.values()) if (t.tex) gl.deleteTexture(t.tex);
       st.overlays = [];
       st.shown = -1;
       markDirty();
-      const made = await Promise.all(layers.map(makeOverlay));
+      const made = await Promise.all(layers.map((l) => st.pool.get(l.url.replace(/\/$/, "")) ?? makeOverlay(l)));
       if (call !== st.overlayCall) return [];
+      made.forEach((layer, i) => {
+        if (!layer) return;
+        const l = layers[i];
+        if (st.pool.get(layer.url) === layer) {                       // kept: what it is now asked as
+          layer.meta = l;
+          layer.label = l.label ?? layer.label;
+          if (layer.depth > 1) layer.slice = Math.min(layer.depth - 1, l.slice ?? st.base?.slice ?? layer.slice);
+        }
+      });
       st.overlays = made.filter(Boolean);
+      dropUnused();
+      for (const layer of st.overlays) st.pool.set(layer.url, layer);
       markDirty();
       return st.overlays.map((l) => l.meta);
     },
@@ -862,6 +885,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       if (call !== st.overlayCall) return [];
       const first = st.overlays.length;
       st.overlays.push(...made);
+      for (const layer of made) if (!st.pool.has(layer.url)) st.pool.set(layer.url, layer);   // T143: freed with the rest
       markDirty();
       return made.map((_, k) => first + k);
     },

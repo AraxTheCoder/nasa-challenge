@@ -302,3 +302,31 @@ def test_far_away_position_is_not_on_the_image():
     w.wcs.cdelt = [-6.15 / 3600, 6.15 / 3600]
     xs, ys = photometry._sky_to_pixel(w, [(0.0, 0.0), (66.79, 24.54), (246.79, -24.54)], 100, 100)
     assert np.isnan(xs[0]) and np.isnan(xs[1]) and abs(xs[2] - 49.5) < 1e-6 and abs(ys[2] - 49.5) < 1e-6
+
+
+def test_point_spectrum_reads_a_built_fields_stored_cutout(tmp_path, monkeypatch):
+    """T143: a point inside a built field reads that field's stored cutout of the image (the circle that fits in it
+    holds the point and its measuring margin) instead of downloading a small one; otherwise it downloads."""
+    import math
+
+    from pipeline import photometry, s3
+
+    raw = tmp_path / "raw"
+    monkeypatch.setattr(build, "RAW_ROOT", raw)
+    monkeypatch.setattr(photometry, "_fields", {"mtime": None, "at": 0.0, "list": []})
+    (tmp_path / "targets" / "c2694472-p047664-s14").mkdir(parents=True)        # Barnard's Star, 14'
+    (tmp_path / "targets" / "c1328906-m071808-s86-d1").mkdir()                 # far away, one band
+    side = round(14 / 60 + 2 * 0.03, 4)                                        # as pipeline.fieldspectra cuts it
+    d = build._cutout_dir("u1", 269.4472, 4.7664, raw)
+    d.mkdir(parents=True)
+    (d / f"{side:.4f}.fits").write_bytes(b"field cutout")
+    assert photometry._field_centres()[0][2] in (14 / 60, 86 / 60)
+    downloads = []
+    monkeypatch.setattr(s3, "fetch_cutout", lambda url, ra, dec, size, dest: downloads.append((url, ra, dec)) or dest)
+    east = lambda arcmin: 269.4472 + arcmin / 60 / math.cos(math.radians(4.7664))   # noqa: E731
+    assert photometry._spectrum_cutout("u1", east(3), 4.7664) == d / f"{side:.4f}.fits"
+    assert photometry._spectrum_cutout("u1", east(6.5), 4.7664) == d / f"{side:.4f}.fits"   # 6.5' + 1.5' < 8.8'
+    assert not downloads
+    photometry._spectrum_cutout("u1", east(8), 4.7664)                         # its margin would leave the cutout
+    photometry._spectrum_cutout("u2", east(3), 4.7664)                         # no stored cutout of that image
+    assert [u for u, _, _ in downloads] == ["u1", "u2"]
