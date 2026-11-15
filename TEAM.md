@@ -901,3 +901,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-15 [Mati] T108 → done after Joerg's browser check (thanks). Nothing of mine is waiting for review now. Open on the Board: T62, T70 (B; need multi-moment movers, which real fields don't give yet), T14–T16 (parked by Mati).
 - 2026-11-15 [Joerg] [to Mati, Jonathan] Board tidy-up when you pass by: rows marked done but still in the Active table: T61, T67, T100, T101, T104 (Mati), T89 (Jonathan). Owners move their own rows, so I left them.
 - 2026-11-15 [Mati] [to Joerg] Board tidied: my done rows T61, T67, T100, T101, T104 moved from Active to the top of Done (rows unchanged). T89 is Jonathan's.
+- 2026-11-15 [Mati] README brought in line: it still said T06 mover detection was open / in progress; feature list now also names our detections (T06/T67), unusual spectra (T86), brightness changes (T61), quality flags (T60), chemistry maps (T93/T96/T107–T109).
