@@ -44,3 +44,14 @@
   **To look at:** drag a panel against each edge: it stops 8 px inside, not under the header; make the window
   narrower: moved panels follow; move the Map panel low, then turn a chemistry picture on: the panel moves up so the
   note and the Spots list stay inside.
+- **Fix (Mati: "it jumps under my cursor", "a margin on top I can't drag to"):** style.css (T133) gives a moved panel
+  `margin-top: 54px` (under the page header), and on narrow screens the dock is what a moved panel is placed in. relPos()
+  measures where the panel shows, place() set left/top as if they counted from the screen's corner: every drag started
+  54 px lower (62 + 8 more on narrow screens), every re-place (resize, ResizeObserver) slid it 54 px down, and my
+  header limit counted the header twice (a 62 px band under it was unreachable). Now place() measures where the panel
+  landed and shifts left/top by what is off, so it shows exactly where asked. No margins any more: a panel goes up to the
+  window's edges and the header's bottom edge. A panel that isn't shown (map hidden) isn't placed; one that was moved
+  but hidden at page load gets its saved position when it shows.
+  Checked with a Node geometry simulation of place()/relPos() (fake panel with the 54 px margin and the narrow-screen
+  dock offset): drag, 5 re-places, both corners land exactly; the version before the fix reproduced the jump and drift.
+

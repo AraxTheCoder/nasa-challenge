@@ -18,7 +18,6 @@ const NAMES = { field: "Field", view: "Map" };      // T137: a folded panel's na
 const PINNED = matchMedia("(min-width: 1280px)");   // the same breakpoint as style.css
 const INTERACTIVE = "input, select, button:not(.hud-grip), textarea, a, label, output, summary, [contenteditable]";
 const KEEP = 48;          // px: the narrowest a panel gets
-const MARGIN = 8;         // T137: px between a moved panel and the window's edges
 const THRESHOLD = 3;      // px before a press becomes a drag (so a click stays a click)
 
 function loadAll(key = KEY) {
@@ -36,21 +35,28 @@ function stageBox(hud) {
   return s ? s.getBoundingClientRect() : { left: 0, top: 0, width: innerWidth, height: innerHeight };
 }
 
-/** Put a panel at (left, top) px relative to the map's screen, all of it inside (T137; before only its top 48 px
- *  stayed on screen) and below the page header. Larger than the screen: its top-left corner (with the grip) stays. */
+/** Show a panel at (left, top): px from the map screen's corner to where the panel shows (as relPos measures it).
+ *  T137: all of it inside the screen, up to its edges, and not under the page header; larger than the screen: its
+ *  top-left corner (with the grip) stays. Returns null when the panel isn't shown (nothing to measure). */
 function place(hud, left, top) {
+  if (!hud.getClientRects().length) return null;
   const box = stageBox(hud);
-  hud.style.maxWidth = `${Math.max(KEEP, box.width - 2 * MARGIN)}px`;    // T137: never wider than the window
+  hud.style.maxWidth = `${Math.max(KEEP, box.width)}px`;                  // T137: never wider than the screen
   const r = hud.getBoundingClientRect();
   // keep its width: near the right edge the box would otherwise shrink and re-wrap its contents (folded: only the
   // one-line tab shows, its width is taken when it opens)
   if (!hud.style.width && !hud.classList.contains("hud-folded")) hud.style.width = `${Math.ceil(r.width)}px`;
-  // the page header is fixed over the top of the map (both layouts): not under it
-  const minTop = (document.querySelector(".app-header")?.offsetHeight ?? 0) + MARGIN;
-  const x = Math.min(Math.max(left, MARGIN), Math.max(MARGIN, box.width - r.width - MARGIN));
-  const y = Math.min(Math.max(top, minTop), Math.max(minTop, box.height - r.height - MARGIN));
+  const minTop = document.querySelector(".app-header")?.offsetHeight ?? 0;   // fixed over the map's top, both layouts
+  const x = Math.min(Math.max(left, 0), Math.max(0, box.width - r.width));
+  const y = Math.min(Math.max(top, minTop), Math.max(minTop, box.height - r.height));
   Object.assign(hud.style, { left: `${x}px`, top: `${y}px`, right: "auto", bottom: "auto", transform: "none" });
   hud.classList.add("hud-moved");
+  // T137: left/top don't count from the screen's corner everywhere (style.css moves a moved panel 54 px down, under
+  // the page header; on narrow screens the dock is what it is placed in): shift by what is off, so it shows at (x, y).
+  // Without this every drag started 54 px lower (the panel jumped) and the header was counted twice.
+  const now = hud.getBoundingClientRect();
+  const offX = now.left - box.left - x, offY = now.top - box.top - y;
+  if (Math.abs(offX) > 0.5 || Math.abs(offY) > 0.5) Object.assign(hud.style, { left: `${x - offX}px`, top: `${y - offY}px` });
   return { left: x, top: y };
 }
 
@@ -156,9 +162,14 @@ export function initHud() {
   // a smaller window must not strand a moved panel off screen, nor a panel that grows (T137: the chemistry note,
   // the Spots list, a longer line) push its bottom out of the window
   const keepIn = (hud) => {
-    if (!hud.classList.contains("hud-moved") || hud.classList.contains("hud-dragging")) return;
-    const p = relPos(hud);
-    place(hud, p.left, p.top);
+    if (hud.classList.contains("hud-dragging") || !hud.getClientRects().length) return;   // dragged now / not shown
+    if (hud.classList.contains("hud-moved")) {
+      const p = relPos(hud);
+      place(hud, p.left, p.top);
+      return;
+    }
+    const saved = loadAll()[hud.dataset.hud];      // moved earlier, but not shown when the page loaded: place it now
+    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) place(hud, saved.left, saved.top);
   };
   addEventListener("resize", () => huds.forEach(keepIn));
   if (typeof ResizeObserver === "function") {

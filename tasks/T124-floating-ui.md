@@ -64,3 +64,8 @@ describe what is already visible are gone.
   `.app-header`'s height, `max-width` = window − 16 px; `KEEP` is only the narrowest width now), and `initHud()`
   re-places moved groups on resize and via a ResizeObserver when a group grows (not during a drag). `reset()` also
   clears `max-width`.
+- 2026-11-15 [Mati] T137 fix: `place()` now measures where the panel landed after setting left/top and shifts them by
+  the difference. Reason: `body:has(.app-header) .hud-moved { margin-top: 54px }` (T133) and, on narrow screens, the dock
+  being the moved panel's containing block made relPos() and left/top disagree (54 px jump on every drag; drift on every
+  re-place). No margins now (edges and the header's bottom are the limits). Hidden panels aren't placed.
+
