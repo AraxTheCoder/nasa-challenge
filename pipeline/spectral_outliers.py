@@ -397,7 +397,7 @@ def peer_group(source: dict) -> str:
     kind = (source.get("kind") or "").lower()
     if source.get("spectral_population") == "galaxies" or otype in GALAXY_OTYPES or any(k in kind for k in ("galaxy", "quasar")):
         return "galaxies"
-    if "*" in otype or otype in {"BD?", "Y*O", "Y*?"} or any(k in kind for k in ("star", "dwarf")) or source.get("source") in {"gaia_dr3", "vsx"}:
+    if "*" in otype or otype in {"BD?", "Y*O", "Y*?"} or any(k in kind for k in ("star", "dwarf")) or source.get("source") in {"gaia_dr3", "vsx", "spherex"}:   # T135: SPHEREx-only ~ stars
         return "stars"
     return "unclassified"
 

@@ -86,6 +86,8 @@ def _cached(target: dict, target_dir=None) -> dict | None:
     mtime = p.stat().st_mtime
     fs_head = _read_field(str(p), mtime)
     sources = fieldspectra.sources_of(target)
+    from pipeline.srcfind import spherex_sources
+    sources = sources + spherex_sources(target, sources)   # T135: stored ones only, never found here
     if fs_head.get("version") != fieldspectra.VERSION or \
             fs_head.get("sources_key") != fieldspectra._key(sources):
         return None                         # older method or the labels changed: measure again
@@ -95,7 +97,24 @@ def _cached(target: dict, target_dir=None) -> dict | None:
     catalogue_json = json.dumps(cat, sort_keys=True)
     sources_json = json.dumps(sources, sort_keys=True)
     with _analysis_lock_for(str(p)):  # concurrent polls of this field share one analysis
-        return _outliers(str(p), mtime, sources_json, catalogue_json)
+        result = _outliers(str(p), mtime, sources_json, catalogue_json)
+    return _tag_spherex(result, target, target_dir, sources)
+
+
+def _tag_spherex(result: dict, target: dict, target_dir, sources: list[dict]) -> dict:
+    """T135: flagged SPHEREx-only sources looked up in SIMBAD / Gaia / CatWISE (cached per field), uncatalogued
+    first. A copy: the analysis above is cached in memory."""
+    if target_dir is None or not any(s.get("source") == "spherex" for s in sources):
+        return result
+    from pipeline import catcheck, srcfind
+    mjds = sorted(f["mjd"] for f in target.get("frames", []) if f.get("mjd"))
+    year = catcheck._year_of_mjd(mjds[len(mjds) // 2]) if mjds else 2025.9
+    try:
+        items = srcfind.tag_items([dict(it) for it in result.get("items", [])], target_dir, sources, year)
+    except Exception:  # noqa: BLE001 - the list stands without the lookup
+        traceback.print_exc()
+        return result
+    return {**result, "items": items}
 
 
 def _state(target: dict, start: bool, target_dir=None) -> dict:
