@@ -1,6 +1,6 @@
 # T60: A/C: Contamination flags in the viewer: per-frame FLAGS bits exported with the frame, overlay toggle, flag names at the inspected pixel
 
-- **Owner:** Joerg  ·  **Status:** doing
+- **Owner:** Joerg  ·  **Status:** done
 - **Branch:** `joerg/T60-flags`
 - **Depends on / feeds:** T04
 
@@ -17,7 +17,10 @@ The viewer can show SPHEREx quality flags (challenge consideration: "display met
   DR1 image) with kind (bad / warn / info) and plain words. Photometry returns `frames[].flags` + `flag_meanings`
   (CONTRACTS); the spectrum panel shows "SPHEREx quality flags at this spot". Barnard's Star: TRANSIENT, BLOOM in
   298 of 298 exposures, OVERFLOW (saturated) in 297, PERSIST in 21.
-- Still open: overlay on the map (which pixels of the shown frame are flagged), browser test on the fixture.
+- Step 2: `flags.field_mask` (FLAGS of every frame resampled to the field grid; only flags in >= 15 % of frames
+  drawn, so one-off cosmic rays don't paint the field), `server/flagsmap.py` (`/flags`, `/flags.png`, cached next
+  to target.json), `web/flagsmap.js` ("Quality flags" toggle in the map bar, overlay through explore.addDrawHook).
+  RW Aur field: 36 frames, 2.2 % of pixel-frames unreliable; red discs on the saturated stars, amber specks.
 From idea I5 in TEAM.md (moved to the Board by Mati, 2026-11-14). A ~1.5 h + C ~1 h.
 
 ## Questions / needs from others
