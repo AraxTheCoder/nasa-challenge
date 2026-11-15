@@ -1,4 +1,8 @@
-# Contracts (v0.40)
+# Contracts (v0.41)
+
+v0.41 (T129): community comments add optional kind/title/evidence and recent activity accepts
+`unanswered=true`. Existing discussions migrate in place; saved evidence and direct discussion links
+support second looks. See Community / T129 below.
 
 v0.40 (T130): spectral-outliers algorithm `version: 3` uses separate peer populations and adds
 `chemistry_profiles`. See the T130 extension below. Measurement cache format unchanged. Chemistry maps

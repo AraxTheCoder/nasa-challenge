@@ -166,11 +166,12 @@ async function restoreEvidence(c) {
         return f && (!e[`frame_${slot}_time`] || f.time_utc === e[`frame_${slot}_time`])
           && (!e[`frame_${slot}_obs`] || f.obs_id === e[`frame_${slot}_obs`]);
       };
-      if (ids.has(e.frame_a) && ids.has(e.frame_b) && sameFrame("a") && sameFrame("b")) selectPair(e.frame_a, e.frame_b);
+      const pairAvailable = ids.has(e.frame_a) && ids.has(e.frame_b) && sameFrame("a") && sameFrame("b");
+      if (pairAvailable) selectPair(e.frame_a, e.frame_b);
       else if (e.frame_a || e.frame_b) st.notice = "The saved frames are unavailable in this field. The evidence below records the original comparison.";
       const flags = $("#flags-toggle");
       if (flags && typeof e.flags === "boolean" && flags.checked !== e.flags) { flags.checked = e.flags; flags.dispatchEvent(new Event("change")); }
-      if (e.layer && /^[a-zA-Z0-9_-]{1,180}$/.test(e.layer)) {
+      if (e.layer && (!e.frame_a || pairAvailable) && /^[a-zA-Z0-9_-]{1,180}$/.test(e.layer)) {
         document.dispatchEvent(new CustomEvent("map:take"));
         if (!await explore.showLayer(e.layer)) st.notice = "The saved map layer is unavailable. The position and frame comparison remain accessible.";
       }

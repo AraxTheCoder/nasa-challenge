@@ -85,7 +85,7 @@ def run():
                       const a = {id: 'f000', time_utc: '2025-01-01T00:00:00Z', obs_id: 'obs-a'},
                             b = {id: 'f004', time_utc: '2025-07-01T00:00:00Z', obs_id: 'obs-b'};
                       export const currentTarget = () => ({id: 'saved-field', center: {ra_deg: 150, dec_deg: 2.2},
-                        size_arcmin: 15, synthetic: true, frames: [a,b]});
+                        size_arcmin: 15, synthetic: true, frames: window.changedFrames ? [{...a, time_utc: '2026-01-01T00:00:00Z'}, b] : [a,b]});
                       export const currentPair = () => ({a,b});
                       export const selectPair = (a,b) => window.restoredPair = [a,b];
                       document.addEventListener('community:restore', e => e.detail.done(!window.failRestore));
@@ -150,7 +150,12 @@ def run():
                     expect(page.locator(f"#cm-comment-{posted['id']}")).to_be_visible()
                     page.wait_for_function("window.restoredPair?.join(',') === 'f000,f004'")
                     assert page.evaluate("window.restoredLayer") == "f000"
-                    page.evaluate("window.failRestore = true")
+                    page.evaluate("window.changedFrames = true; window.restoredPair = null; window.restoredLayer = null")
+                    page.get_by_role("button", name="Open saved evidence").click()
+                    expect(page.locator("#community")).to_contain_text("saved frames are unavailable")
+                    assert page.evaluate("window.restoredPair") is None
+                    assert page.evaluate("window.restoredLayer") is None
+                    page.evaluate("window.changedFrames = false; window.failRestore = true")
                     page.get_by_role("button", name="Open saved evidence").click()
                     expect(page.locator("#community")).to_contain_text("saved field is no longer available")
                     # Reply from the DOM clears the unanswered request, without clearing another draft.
@@ -182,6 +187,24 @@ def run():
                     page.locator("#community-text").focus()
                     page.keyboard.press("Escape")
                     expect(page.locator("#community")).to_be_hidden()
+                    assert not errors, errors
+                    # Exercise the real app's saved-field handler too, without external sky-map services.
+                    result = page.request.get(f"{api}/api/target?ra=150&dec=2.2&size=15").json()
+                    for _ in range(100):
+                        if result["status"] != "building":
+                            break
+                        time.sleep(0.05)
+                        result = page.request.get(api + result["poll_url"]).json()
+                    assert result["status"] == "ready"
+                    app_page = browser.new_page()
+                    app_page.on("pageerror", lambda error: errors.append(str(error)))
+                    app_page.goto(f"{origin}/web/?explore=0&api={api}")
+                    app_page.wait_for_function("document.querySelector('#source-info').textContent.includes('Live API')")
+                    restored = app_page.evaluate("id => new Promise(done => document.dispatchEvent(new CustomEvent('community:restore', {detail: {targetId: id, done}})))", result["id"])
+                    assert restored is True, "normal application must restore cached fields"
+                    expect(app_page.locator("#viewer-body")).to_be_visible()
+                    missing = app_page.evaluate("() => new Promise(done => document.dispatchEvent(new CustomEvent('community:restore', {detail: {targetId: 'missing-field', done}})))")
+                    assert missing is False
                     assert not errors, errors
                     browser.close()
                     print("Community browser checks passed: drafts, reply/tile isolation, counts/focus, failures, second looks, links, saved evidence, feed, delayed posts and phone layout.")

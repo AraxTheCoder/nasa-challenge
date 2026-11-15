@@ -29,6 +29,7 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `flagsmap.js` | "Quality flags" in the map bar (T60): where the field's pixels are unreliable, as a mask |
 | `outliers.js` | "Unusual spectra" (T86/T88): sources whose spectral shape stands out, as a panel and rings on the map; T61: "Changes brightness", sources whose flux changes at the same wavelength (dashed V rings) |
 | `motion.js` | a catalogued star's motion measured from SPHEREx alone, in the spectrum panel (T91) |
+| `community.js`, `community-state.js` | Tile discussions, second-look requests with saved evidence and share links, unanswered/recent feeds, per-tile/reply browser drafts (T120/T129) |
 | `tour.js` | guided tour of the five official targets (T92, `?tour=1`) |
 | `util.js` | DOM and formatting helpers |
 | `presets.json` | the five official test fields (SIMBAD positions moved to epoch 2026.0, with query + timestamp) |
@@ -84,6 +85,7 @@ URL parameters:
   e.g. `?data=../fixtures/targets/`. Add `&target=<id>` to pick a target: `demo-epochs` has every
   feature (3 epochs, pairs, labels, known / unknown / artifact objects), `demo-synthetic` is minimal.
 - `?explore=0` no sky map (embeds, slow connections, tests). `?debug=1` sky-map tile outlines.
+- `?community=<pix>&comment=<id>` opens and highlights a discussion comment and restores its saved evidence when still cached (T129).
 - `?lam=2.17` a wavelength in µm (T78): the blink viewer shows the frames closest to it, the sky map the closest channel.
 - `?tip=1` / `?tip=0` force the RA/Dec help bubble on / off (it is switched off by default, T29).
 

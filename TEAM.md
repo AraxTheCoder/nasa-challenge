@@ -42,7 +42,6 @@ Mati). When you finish a task, move its row to Done in the same commit.
 
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
-| T129 | C/A: Community second-look posts, saved evidence/share links, unanswered feed and persistent drafts (I25–I27) | Codex | doing | `codex/T129-community` | [tasks/T129](tasks/T129-community-second-look.md). User requested implementation |
 | T94 | C: Missing tiles on the map: failed tiles never asked again (holes until reload), false-colour field epochs 422, holes near the poles when zooming in | Jonathan | doing | `main` | [tasks/T94](tasks/T94-missing-tiles.md) |
 | T122 | C: Analysis region drawn with the mouse: a "Select region" tool on the map; drag a rectangle and the field (the red square: what is downloaded and analysed) is built there with that size (square, 5–210′) | Joerg | done | `joerg/T122-T123-region-progress` | [tasks/T122](tasks/T122-region-select.md). Asked by Joerg |
 | T123 | C: Progress bar for everything that runs: one bar at the top of the page with what is happening now (field build step + n of m, spectra, unusual spectra, motion, chemistry, flags, map tiles) | Joerg | done | `joerg/T122-T123-region-progress` | [tasks/T123](tasks/T123-activity-bar.md). Asked by Joerg |
@@ -81,6 +80,7 @@ Mati). When you finish a task, move its row to Done in the same commit.
 
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
+| T129 | C/A: Community second-look posts, saved evidence/share links, unanswered feed and persistent drafts (I25–I27) | Codex | done | `codex/T129-community` | [tasks/T129](tasks/T129-community-second-look.md). Drafts, second looks, evidence links, unanswered feed; tests passed |
 | T130 | A/B/C: Shared spectral analysis, automatic chemistry-profile candidates and separate peer models | Codex (spectra) | done | `main` | [tasks/T130](tasks/T130-shared-analysis.md). User requested implementation |
 | T100 | C: Map blink: a switch to stop the automatic blinking (click a date to change it by hand); bug: the chemistry picture is lost on every zoom in / out | Mati | done | `mati/T100-blink-toggle` | [tasks/T100](tasks/T100-blink-toggle.md). `web/app.js`, `web/autoblink.js`, `web/index.html` |
 | T101 | C: Bug: map tile downloads have no time limit: after a server crash or a dropped connection they hang, keep all 6 download slots, and no tile loads until a page reload | Mati | done | `mati/T101-tile-timeout` | [tasks/T101](tasks/T101-tile-timeout.md). `load()` in `web/sky.js`; noted under T94 on 2026-11-14 |
@@ -338,7 +338,7 @@ Dated, one line each, with why.
 - 2026-11-15 [Mati] CONTRACTS v0.38 (T127): chemistry presets for kinds of objects (`group` "object" / "place", optional `needs_z`) and four features (Hα, Pa-α, CO 2.3 µm, CH₄; `pah` named "PAH"). Why: Mati: presets for the objects the challenge names (brown dwarfs, quasars, galaxies, …) and the official targets; additive.
 - 2026-11-15 [Mati] CONTRACTS v0.39 (T128): `GET .../chemistry/candidates?maps=...[&cats=...&preset=...]` (spots of a chemistry picture, looked up in chosen catalogues, uncatalogued first); features list adds `catalogues`, object presets `expects`. Why: Mati: after a region + preset, a list of candidates; the uncatalogued ones and those catalogued as another type are the interesting ones. Additive.
 
-- 2026-11-15 [Codex] T129 community contract extension: optional kind/title/evidence on comments, validated saved observation metadata and unanswered=true on recent activity. Why: the user requested implementation of second looks and reliable drafts (I25–I27). Existing discussions migrate in place; no scientific confirmation or identity roles added. See CONTRACTS Community / T129.
+- 2026-11-15 [Codex] CONTRACTS v0.41 (T129): optional kind/title/evidence on comments, validated saved observation metadata and unanswered=true on recent activity. Why: the user requested implementation of second looks and reliable drafts (I25–I27). Existing discussions migrate in place; no scientific confirmation or identity roles added. See CONTRACTS Community / T129.
 
 ## Ideas
 
@@ -383,21 +383,6 @@ Ideas are numbered (I1, I2, …) to refer to them; numbers stay fixed, a new ide
   real search later.
   (from the outlier-heatmap discussion, 2026-11-14) — status: new
 
-- I25 [Codex, community review 2026-11-15] **Keep discussion drafts and reply context while exploring.**
-  `web/community.js` rebuilds the form on render (including a view-count response), tab changes and tile changes;
-  text and attachment choices are lost, while `replyTo` can survive into another tile and cause a rejected post.
-  Preserve drafts per tile/reply, bind submissions to their original tile, keep text after failures, and label
-  the form fields for keyboard/screen-reader users. First community usability improvement — status: new
-- I26 [Codex, community review 2026-11-15] **Request a second look, with reproducible evidence.**
-  Add a post type for a question or observation, optional title, and saved evidence: coordinates, field size,
-  target/release, frame IDs or epoch pair, wavelength, active chemistry/quality layer and settings. A share link
-  should reopen the discussion and restore the available evidence, explaining if cached frames are unavailable.
-  Existing "look here" only moves the map to position/zoom; this extends T120 and complements I7 exports.
-  Start with a question + saved view, then add richer analysis context — status: new
-- I27 [Codex, community review 2026-11-15] **Help volunteers find discussions that need them.**
-  Add an Unanswered/Needs a second look feed, clickable most-discussed tiles (the API already supplies these),
-  and optional discussion pins on the map. Keep tile views distinct from scientific review/coverage: viewing
-  a tile does not mean someone checked it. Feed links should open the actual thread/comment — status: new
 - I28 [Codex, community review 2026-11-15] **Follow a finding and see its outcome.**
   Save/follow threads with an in-app unread indicator; give observations an explicit outcome such as open,
   needs more data, known object or likely artifact, with supporting replies and an attribution history.
@@ -412,9 +397,13 @@ Ideas are numbered (I1, I2, …) to refer to them; numbers stay fixed, a new ide
   backups for the community SQLite database. Posting is currently anonymous with a chosen display name;
   ownership/identity is needed before offering trusted author edits/deletes or reviewer roles — status: new
 
+- I31 [Codex, 2026-11-15] **Optional discussion pins on the sky map.** T129 implements I25–I27's drafts, second looks, unanswered feed and clickable most-discussed tiles. A toggleable map overlay of discussion locations remains a future extension — status: new
+
 ## Questions / Blockers
 
 Things waiting on a human.
+
+- 2026-11-15 [Codex → tilegen owner] Full T129 validation: `tilegen/test_tilegen.py::test_fresh_checkout_without_index` fails because the background harvest event is never set. Reproduced the same isolated failure on clean main at 858e6b7, before T129; community changes do not touch tilegen. Full run: 301 passed, 1 failed.
 
 - 2026-11-14 Who takes track A, B and C? (names for the Members table and branch prefixes)
 - 2026-11-14 What is our exact submission deadline (local time)?
@@ -990,3 +979,5 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-15 [Codex (spectra)] Decision T130, user requested: chemistry profiles now also yield automatic feature-pattern candidates from shared field-source aperture spectra; no physical classifications. Spectral outliers compare stars, galaxies/quasars and unclassified sources separately, and sparse populations are not scored against other kinds. CONTRACTS v0.40 documents version 3 peer-group envelopes and the chemistry_profiles addition. T128's image-spot search remains a complementary task. Chemistry-map reprojections are shared across features on disk within the existing target cache.
 
 - 2026-11-15 [Codex (spectra)] T130 complete: selected coordinate/size regions automatically start combined aperture-source analysis; chemistry-profile candidates have supporting features, epoch counts, caveats and instant spectrum links. Shared neighbour checks, per-source feature evidence, persistent derived results, and per-exposure map reprojections reduce repeated work. Peer-group envelopes and sparse-group reasons are shown in analysis. Focused pipeline/API and additional server/variability/limits checks pass; JS syntax/diff checks pass. No real-data browser validation or physical template fitting claimed. [to Mati/T128] these candidates use already-measured catalogue spectra; the image-spot search remains complementary. Changes in pipeline/chemistry.py add cached_sample and route compute's sampling through it.
+
+- 2026-11-15 [Codex] T129 done (user: implement community improvements): per-tile/reply persistent drafts; background counts retain focus; tile-bound asynchronous posts; second-look requests with plain-text titles and bounded saved evidence; direct links to exact comments/replies; unanswered and recent feeds with clickable most-discussed tiles. Existing SQLite discussions migrate in place; saved fields restore through normal viewer state, with missing/changed observations explained and synthetic evidence labelled. I25–I27 moved to T129; optional discussion map pins remain I31. Checks: 26 community API tests, all Node checks, new community browser regressions (including real app cached-field restoration), existing viewer browser suite 0 failures; full Python suite 301 passed / 1 baseline tilegen failure reproduced on clean 858e6b7. Restart the Live API to load routes/migrate its community DB; no cached images are pinned by evidence snapshots. Other agents' work preserved; pulled/merged main during implementation.
