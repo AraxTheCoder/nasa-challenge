@@ -9,6 +9,7 @@
 
 import { $, el } from "./util.js";
 import { getSky } from "./explore.js";
+import { targetBase } from "./viewer.js";
 
 const st = { target: null, epoch: null, on: false, layers: null, objs: [] };   // T55 /app/: traces off by default
 const EPOCH_COLOURS = ["#6cb4ff", "#9be38a", "#ffd27a", "#ff9a6c", "#e88bff", "#7fe3e0"];
@@ -154,7 +155,21 @@ document.addEventListener("viewer:target", (e) => {
   st.epoch = null;
   controls();
   draw(); // works if the map is already up; otherwise the first explore:epoch draws
+  withLabels(st.target);
 });
+
+/** With the Labels switch off the viewer hands the field over without its labels (T37/T90), and the traces lost
+ *  every catalogued star (Barnard's Star among them), keeping only asteroids. Their own copy of the labels comes
+ *  from the server's target.json, if it has them; nothing is computed for this. */
+async function withLabels(t) {
+  if (!t || t.labels?.length || t.synthetic !== false || !targetBase()) return;
+  try {
+    const full = await (await fetch(new URL("target.json", targetBase()), { cache: "no-cache" })).json();
+    if (st.target !== t || !full?.labels?.length) return;
+    st.objs = pickObjects({ ...t, labels: full.labels });
+    draw();
+  } catch { /* the traces keep what they have */ }
+}
 
 document.addEventListener("explore:epoch", (e) => {
   st.epoch = e.detail?.epoch ?? null;
