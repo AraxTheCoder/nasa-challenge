@@ -21,7 +21,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from . import render
+from . import janitor, render
 
 TILE_RE = re.compile(r"^Norder(\d+)/Dir(\d+)/Npix(\d+)(?:_(\d+))?\.png$")
 MISSING = b"MISSING"
@@ -49,16 +49,23 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
     pending: list[str] = []
     wake = threading.Condition()
 
-    def render_to_cache(path: str, m, pass_: int | None = None) -> None:
+    def render_to_cache(path: str, m, pass_: int | None = None) -> bytes:
+        """Render, keep on disk, return the bytes (MISSING = no data there). A full disk only costs the cache
+        (T94: it failed every new tile)."""
         f = cache_root / path
         t0 = time.time()
         args = (int(m.group(4) or 0), int(m.group(1)), int(m.group(3)))
         png = render.render(*args, pass_=pass_) if pass_ else render.render(*args)
         stats["seconds"] += time.time() - t0
-        f.parent.mkdir(parents=True, exist_ok=True)
+        data = png if png is not None else MISSING
         tmp = f.with_name(f.name + f".{threading.get_ident()}.part")
-        tmp.write_bytes(png if png is not None else MISSING)
-        tmp.replace(f)
+        try:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            tmp.write_bytes(data)
+            tmp.replace(f)
+        except OSError:
+            tmp.unlink(missing_ok=True)
+        return data
 
     def queue_neighbours(path: str, m, pass_: int | None = None) -> None:
         try:
@@ -130,8 +137,10 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
         if not m or int(m.group(1)) not in render.LIVE_ORDERS:
             raise HTTPException(404)
         f = cache_root / path
+        fresh = None                               # bytes rendered by this request (also when not cached)
         if f.exists():
             stats["cached"] += 1
+            janitor.used(f)                        # T94: least recently used tiles go first
         else:
             with lock:
                 ev = inflight.get(path)
@@ -142,7 +151,7 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
                 busy["n"] += 1
                 try:
                     with sem:
-                        render_to_cache(path, m, pass_)
+                        fresh = render_to_cache(path, m, pass_)
                     stats["rendered"] += 1
                 finally:
                     busy["n"] -= 1
@@ -153,9 +162,9 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
                 ev.wait(300)                       # same tile already being rendered: wait for it
         if prefetch:
             queue_neighbours(path, m, pass_)
-        if not f.exists():
+        if fresh is None and not f.exists():
             raise HTTPException(503, "render failed")
-        data = f.read_bytes()
+        data = fresh if fresh is not None else f.read_bytes()
         if data == MISSING:
             return Response(status_code=404, headers={"Cache-Control": "public, max-age=86400"})
         return Response(data, media_type="image/png", headers={"Cache-Control": "public, max-age=604800, immutable"})
@@ -210,6 +219,7 @@ def create_app(cache_root: Path = Path("data/tilegen_cache"), slots: int = 6, pr
             cut_stats["seconds"] += time.time() - t0
         else:
             cut_stats["cached"] += 1
+            janitor.used(gz)                       # T94: least recently used cutouts go first
         return Response(gz.read_bytes(), media_type="application/gzip", headers=headers)
 
     @app.get("/cutout/health")

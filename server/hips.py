@@ -78,7 +78,7 @@ def has_layer(target: dict, key: str) -> bool:
     if key.startswith("e"):
         ep, det, _ = epoch_key(key)
         frames = epochs(target).get(ep, [])
-        return bool(frames) and (det is None or any(int(f.get("detector", 0)) == det for f in frames))
+        return bool(frames) and (det is None or any(int(f.get("detector") or 0) == det for f in frames))
     if key.startswith("d-"):
         _, a, b = key.split("-")
         return a in ids and b in ids
@@ -135,7 +135,7 @@ def epoch_image(target_dir: str, mtime: float, ep: int, det: int | None = None) 
     d = Path(target_dir)
     t = json.loads((d / "target.json").read_text(encoding="utf-8"))
     acc = cnt = None
-    frames = [f for f in epochs(t)[ep] if det is None or int(f.get("detector", 0)) == det]
+    frames = [f for f in epochs(t)[ep] if det is None or int(f.get("detector") or 0) == det]
     for f in frames:
         a = np.asarray(Image.open(d / f["image"]).convert("LA"), np.float32)
         grey, alpha = a[..., 0], a[..., 1] > 0

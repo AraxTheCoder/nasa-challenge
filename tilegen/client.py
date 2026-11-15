@@ -18,6 +18,7 @@ import time
 
 MODES = ("local", "remote", "balanced")
 ALPHA = 0.3                  # weight of the newest tile in the moving average
+MIN_RATE = 0.2               # tiles per second a failing side is never pushed below (it recovers by measuring)
 PRIOR_RATE = {"local": 1.0, "remote": 1.5}   # tiles per second before the first measurement (VM: next to the bucket)
 REMEASURE_S = 20.0           # a side unused this long gets the next tile while it is idle
 
@@ -142,8 +143,10 @@ class TileGenerator:
                     rate = max(load0, side.inflight + 1) / max(dt, 0.05)       # Little's law: L / W
                     side.rate = rate if side.rate is None else (1 - ALPHA) * side.rate + ALPHA * rate
                 else:
-                    side.failed += 1                                           # back off from a failing side
-                    side.rate = min(side.rate or PRIOR_RATE[name], PRIOR_RATE[name]) / 4
+                    # back off from a failing side, but not to zero: 16 failures in a row (the VM's disk was full,
+                    # T94) pinned it at 0.0 tiles/s for good, and this machine took every tile at ~300 s each
+                    side.failed += 1
+                    side.rate = max(MIN_RATE, min(side.rate or PRIOR_RATE[name], PRIOR_RATE[name]) / 2)
 
     def _local(self, slice_: int, order: int, npix: int, pass_: int | None):
         from . import render

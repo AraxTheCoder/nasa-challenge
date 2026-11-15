@@ -310,6 +310,16 @@ _fetchers = ThreadPoolExecutor(16, thread_name_prefix="chunk-image-rows")
 CHUNK_ROOT = Path("data/raw/s3chunks")
 
 
+def _used(path: Path) -> None:
+    """T94: a cache hit marks the file as used, so the cache cap (tilegen/janitor.py) drops least recently used
+    chunks first."""
+    try:
+        from tilegen.janitor import used
+    except ImportError:          # pipeline/ without tilegen: nothing trims this cache anyway
+        return
+    used(path)
+
+
 class NotInBucket(FileNotFoundError):
     """The path is not in the bucket (e.g. a reprocessed l2b_retry file): resolve the real path."""
 
@@ -337,6 +347,7 @@ class S3Image:
         meta_f = self.dir / "meta.json"
         if meta_f.exists():
             meta = json.loads(meta_f.read_text(encoding="utf-8"))
+            _used(meta_f)
         else:
             try:
                 head = _get(self.url, 0, 16 * BLOCK)          # primary + IMAGE header in one go
@@ -350,15 +361,15 @@ class S3Image:
             hflags, sflags = _header_at(self.url, off_flags, 8)
             meta = {"himg": himg.tostring(), "data0": data0, "off_flags": off_flags,
                     "hflags": hflags.tostring(), "sflags": sflags}
-            self.dir.mkdir(parents=True, exist_ok=True)
             tmp = meta_f.with_name(f"meta.{threading.get_ident()}.part")
-            tmp.write_text(json.dumps(meta), encoding="utf-8")
             try:
+                self.dir.mkdir(parents=True, exist_ok=True)
+                tmp.write_text(json.dumps(meta), encoding="utf-8")
                 tmp.replace(meta_f)
             except PermissionError:          # Windows: another thread wrote / is reading it right now
                 tmp.unlink(missing_ok=True)
-                if not meta_f.exists():
-                    raise
+            except OSError:                  # T94: disk full: work without the cached header
+                tmp.unlink(missing_ok=True)
         self.himg = fits.Header.fromstring(meta["himg"])
         self.hflags = fits.Header.fromstring(meta["hflags"])
         self.data0, self.off_flags, self.sflags = meta["data0"], meta["off_flags"], meta["sflags"]
@@ -395,6 +406,7 @@ class S3Image:
         f = self.dir / f"r{CHUNK_ROWS}_{i:03d}.npz"
         if f.exists():
             z = np.load(f)
+            _used(f)
             out = (z["img"], z["bad"], float(z["med"]), float(z["sig"]))
             self._remember(key, out)
             return out
@@ -429,8 +441,8 @@ class S3Image:
             tmp = f.with_name(f"{f.stem}.{threading.get_ident()}.part.npz")
             np.savez(tmp, img=img, bad=bad, med=med, sig=sig)
             tmp.replace(f)
-        except OSError:
-            pass
+        except OSError:                              # disk full (T94): no cached copy, no half file
+            tmp.unlink(missing_ok=True)
 
 
 HW_MASK = sum(1 << b for b in (0, 1, 2, 6, 9, 10, 11, 14, 17, 25, 26, 27, 28))   # as pipeline.build

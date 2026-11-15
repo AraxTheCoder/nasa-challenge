@@ -22,6 +22,10 @@ const MIN_FOV = 1 / 60;                   // 1 arcmin
 const MAX_TEXTURES = 200;           // 1 MB of GPU memory each
 const MAX_PARALLEL_LOADS = 6;             // = what a browser opens per host over HTTP/1.1
 const MAX_SLOW_LOADS = 4;                 // live-rendered tiles; leaves 2 connections for the rest
+// T94: float rounding put the order-0 zoom limit at log2 = 1e-16 for ~20% of window widths / pixel ratios, and
+// ceil() made that "wants 1": an exact boundary counts as the lower order
+const ORDER_EPS = 1e-9;
+const FAILED_RETRY_MS = 30000;            // T94: a tile that failed 5 times is asked again after this
 const PRELOAD = 1e6;                      // prio >= PRELOAD: preload (other epochs, parent tiles)
 const MAX_PRELOADS = 3;                   // preloads in flight at once, and only when nothing visible waits
 // Preload tiers, in this order after every visible tile: parent (zoom out), ring around the view
@@ -177,7 +181,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   // ----- tiles -----
   function pickOrder(layer) {
     const arcsecPerPx = (st.fov * 3600) / (st.w * st.dpr);
-    const k = Math.ceil(Math.log2(TEXEL_ARCSEC_ORDER0 / arcsecPerPx));
+    const k = Math.ceil(Math.log2(TEXEL_ARCSEC_ORDER0 / arcsecPerPx) - ORDER_EPS);
     // T55: while survey passes blink on top, the base map stops one order short (no slow live renders
     // competing with the passes'; it only shows where a pass has no data)
     const max = layer === st.base && st.baseCap != null ? Math.min(layer.maxOrder, st.baseCap) : layer.maxOrder;
@@ -365,7 +369,15 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       }
       t.tries = (t.tries ?? 0) + 1;
       st.errors++;
-      if (t.tries >= 5) { t.state = "failed"; t.error = String(e.message ?? e); }
+      if (t.tries >= 5) {
+        // T94: not given up for good (a restarted or briefly busy server left holes until a reload): after a
+        // pause the tile is forgotten, so the next frame that still shows it asks again from scratch
+        t.state = "failed";
+        t.error = String(e.message ?? e);
+        setTimeout(() => {
+          if (t.state === "failed" && job.layer.tiles.get(t.key) === t) { job.layer.tiles.delete(t.key); markDirty(); }
+        }, FAILED_RETRY_MS);
+      }
       else {
         t.state = "retry";
         setTimeout(() => { if (t.state === "retry") { t.state = "queued"; st.queue.push(job); pump(); markDirty(); } },
@@ -532,10 +544,16 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     }
   }
 
+  /** T94: zoomed out at most until the screen wants HiPS order 0 (one order-0 texel per device pixel): further
+   *  out it would want order -1, which no map has. Never more than MAX_FOV. */
+  function maxFov() {
+    return Math.min(MAX_FOV, (TEXEL_ARCSEC_ORDER0 * st.w * st.dpr) / 3600);
+  }
+
   /** Order the screen would need for 1 texel per device pixel (may exceed what the map has). */
   function wantedOrder() {
     const arcsecPerPx = (st.fov * 3600) / (st.w * st.dpr);
-    return Math.ceil(Math.log2(TEXEL_ARCSEC_ORDER0 / arcsecPerPx));
+    return Math.ceil(Math.log2(TEXEL_ARCSEC_ORDER0 / arcsecPerPx) - ORDER_EPS);
   }
 
   // ----- debug overlay (toggle): tile outlines + zoom/loading state -----
@@ -590,6 +608,9 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     gl.clear(gl.COLOR_BUFFER_BIT);
     drawLayer(st.base, 1);
     st.overlays.forEach((l, i) => {
+      // T94: an overlay that starts at a deep order (survey passes: 6) has nothing at a much coarser view;
+      // drawing it there asked for its first order over the whole sky (233 tiles queued at "screen wants -1")
+      if (wantedOrder() < l.minOrder - 1) return;
       if (i === st.shown) drawLayer(l, 1);
       else prefetch(l);                 // keep the other epochs loaded, so a switch is instant
     });
@@ -679,6 +700,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
       c.width = Math.round(st.w * st.dpr);
       c.height = Math.round(st.h * st.dpr);
     }
+    st.fov = Math.min(st.fov, maxFov());   // T94: a smaller window must not leave it below order 0
     st.dirty = false;
     markDirty();
   }
@@ -720,7 +742,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   /** Zoom by factor, keeping the sky point under (px, py) in place. */
   function zoomAt(factor, px, py) {
     const before = fromScreen(px, py);
-    st.fov = Math.max(MIN_FOV, Math.min(MAX_FOV, st.fov * factor));
+    st.fov = Math.max(MIN_FOV, Math.min(maxFov(), st.fov * factor));
     const after = fromScreen(px, py);
     if (before && after) rotateCentre(vec(before), vec(after));
     changed();
@@ -845,7 +867,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     },
     goTo(ra, dec, fov) {
       setFrame(((Number(ra) % 360) + 360) % 360, Math.max(-90, Math.min(90, Number(dec))));
-      if (fov) st.fov = Math.max(MIN_FOV, Math.min(MAX_FOV, fov));
+      if (fov) st.fov = Math.max(MIN_FOV, Math.min(maxFov(), fov));
       changed();
     },
     /** T55: like goTo, but the sky point (ra, dec) ends up under screen point (x, y) instead of the centre. */

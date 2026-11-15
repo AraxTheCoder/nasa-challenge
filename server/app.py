@@ -175,14 +175,20 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
                 "frame_layers": hips.frame_layers(tid, t)}       # T81: f<id>; A − B is d-<a>-<b>
 
     @app.get("/api/hips/{tid}/e{ep}/properties")
-    def hips_properties(tid: str, ep: int):
+    def hips_properties(tid: str, ep: str):
+        if not ep.isdigit():                   # T89/T94: e1c, e2d3 are layers, not epoch numbers
+            return hips_layer_properties(tid, f"e{ep}")
+        ep = int(ep)
         t = _target(tid)
         if ep not in hips.epochs(t):
             raise HTTPException(404)
         return PlainTextResponse(hips.properties(tid, t, ep))
 
     @app.get("/api/hips/{tid}/e{ep}/Norder{order}/Dir{d}/Npix{name}")
-    def hips_tile(tid: str, ep: int, order: int, d: int, name: str):
+    def hips_tile(tid: str, ep: str, order: int, d: int, name: str):
+        if not ep.isdigit():                   # T89/T94: e1c, e2d3 are layers, not epoch numbers
+            return hips_layer_tile(tid, f"e{ep}", order, d, name)
+        ep = int(ep)
         if not name.endswith(".png") or not 0 <= order <= hips.HIPS_ORDER:
             raise HTTPException(404)
         _target(tid)
