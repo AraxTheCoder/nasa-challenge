@@ -339,7 +339,16 @@ export async function initChemistry(api) {
   zIn.addEventListener("change", () => setZ(zIn.value));
   const zRow = el("div", { class: "chem-zrow" }, el("label", { for: "chem-z" }, "Redshift z "), zIn,
     el("p", { id: "chem-z-hint", class: "muted small" }));
-  box.addEventListener("toggle", () => { if (box.open) askRedshift(); });
+  // T137: the open list ends above the window's bottom and scrolls (the panels float over a fixed map since T124,
+  // so the page can't scroll to its end); a list inside its panel (narrow screens) keeps style.css's cap
+  const fit = () => {
+    const list = $("#chem-list");
+    if (!box.open || !list) return;
+    list.style.maxHeight = getComputedStyle(list).position === "absolute"
+      ? `${Math.max(160, Math.floor(innerHeight - list.getBoundingClientRect().top - 12))}px` : "";
+  };
+  box.addEventListener("toggle", () => { if (box.open) { askRedshift(); fit(); } });
+  addEventListener("resize", fit);
   $("#chem-list").prepend(...[presets, zRow].filter(Boolean), ...st.features.map((f) => {
     const cb = el("input", { type: "checkbox", value: f.id });
     cb.addEventListener("change", () => toggle(f.id, cb.checked));

@@ -116,7 +116,7 @@ details.panel summary { cursor: pointer; font: 600 15px var(--font-din); }
 .hud > * { pointer-events: auto; }
 .hud-moved { position: absolute; z-index: 11; max-width: none; }
 .hud-panel { padding: 9px 12px; }
-.hud-panel:empty, .hud-row:not(:has(> :not([hidden]):not(.hud-grip))) { display: none; }   /* nothing to show yet */
+.hud-panel:empty, .hud-row:not(:has(> :not([hidden]):not(.hud-grip, .hud-fold))) { display: none; }   /* nothing to show yet */
 /* drag handles (hud.js): the grip, or any empty part of a panel, moves its group */
 .hud[data-hud] .hud-panel { cursor: grab; touch-action: none; }
 .hud-panel input, .hud-panel select, .hud-panel button, .hud-panel label, .hud-panel output { cursor: auto; }
@@ -125,6 +125,13 @@ details.panel summary { cursor: pointer; font: 600 15px var(--font-din); }
   color: var(--muted); font-size: 16px; line-height: 1; letter-spacing: -1px; user-select: none; touch-action: none; }
 .hud-grip:hover { color: var(--text); }
 .hud-dragging, .hud-dragging .hud-panel, .hud-dragging .hud-grip { cursor: grabbing !important; }
+/* T137: folding a group (hud.js): the – after the grip; folded, only its tab (⠿ + name) and its status stay */
+.hud-fold, .hud-unfold { background: none; border: none; color: var(--muted); font: inherit; line-height: 1;
+  padding: 2px 5px; border-radius: 6px; }
+.hud-fold { font-size: 16px; margin-left: 2px; }
+.hud-fold:hover, .hud-unfold:hover { color: var(--text); }
+.hud-tab { display: flex; align-items: center; gap: 6px; padding: 6px 10px; }
+.hud:not(.hud-folded) > .hud-tab, .hud-folded > :not(.hud-tab, .messages, .job) { display: none !important; }
 .hud-dragging .hud-panel { box-shadow: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 20px 48px rgb(0 0 0 / 0.65); }
 .hud-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 .hud-row label { display: inline-flex; align-items: center; gap: 6px; }
@@ -569,7 +576,9 @@ table.frames { width: 100%; border-collapse: collapse; font-size: 12px; font-var
 .chem-grey { background: #808080; }
 .chem-bright { background: #eee; }
 .chem-pick { position: relative; }
-.chem-list { gap: 2px; }
+/* T137: height set by chemistry.js; the rows keep their height and the list scrolls */
+.chem-list { gap: 2px; overflow: hidden auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.chem-list > * { flex-shrink: 0; }
 .chem-list .chem-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; padding: 2px 0; }
 .chem-list .chem-row:has(input:disabled) { opacity: 0.5; }
 .chem-list p { order: -1; margin: 0 0 4px; white-space: normal; }
