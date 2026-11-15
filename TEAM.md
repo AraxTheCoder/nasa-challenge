@@ -42,7 +42,6 @@ Mati). When you finish a task, move its row to Done in the same commit.
 
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
-| T130 | A/B/C: Shared spectral analysis, automatic chemistry-profile candidates and separate peer models | Codex (spectra) | doing | `main` | [tasks/T130](tasks/T130-shared-analysis.md). User requested implementation |
 | T129 | C/A: Community second-look posts, saved evidence/share links, unanswered feed and persistent drafts (I25–I27) | Codex | doing | `codex/T129-community` | [tasks/T129](tasks/T129-community-second-look.md). User requested implementation |
 | T94 | C: Missing tiles on the map: failed tiles never asked again (holes until reload), false-colour field epochs 422, holes near the poles when zooming in | Jonathan | doing | `main` | [tasks/T94](tasks/T94-missing-tiles.md) |
 | T122 | C: Analysis region drawn with the mouse: a "Select region" tool on the map; drag a rectangle and the field (the red square: what is downloaded and analysed) is built there with that size (square, 5–210′) | Joerg | done | `joerg/T122-T123-region-progress` | [tasks/T122](tasks/T122-region-select.md). Asked by Joerg |
@@ -82,6 +81,7 @@ Mati). When you finish a task, move its row to Done in the same commit.
 
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
+| T130 | A/B/C: Shared spectral analysis, automatic chemistry-profile candidates and separate peer models | Codex (spectra) | done | `main` | [tasks/T130](tasks/T130-shared-analysis.md). User requested implementation |
 | T100 | C: Map blink: a switch to stop the automatic blinking (click a date to change it by hand); bug: the chemistry picture is lost on every zoom in / out | Mati | done | `mati/T100-blink-toggle` | [tasks/T100](tasks/T100-blink-toggle.md). `web/app.js`, `web/autoblink.js`, `web/index.html` |
 | T101 | C: Bug: map tile downloads have no time limit: after a server crash or a dropped connection they hang, keep all 6 download slots, and no tile loads until a page reload | Mati | done | `mati/T101-tile-timeout` | [tasks/T101](tasks/T101-tile-timeout.md). `load()` in `web/sky.js`; noted under T94 on 2026-11-14 |
 | T104 | C: Bug: the chemistry map switches itself off after a while (a background field build finishing, or the field's labels / known objects arriving, re-announce the field) | Mati | done | `main` | [tasks/T104](tasks/T104-chemistry-stays.md). Follow-up to T100; not seen in a browser yet |
@@ -982,3 +982,9 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 
 - 2026-11-15 [Codex] Community review requested by the user: synced main and inspected T120, community frontend/API/tests, sharing and the tour. Added ideas I25–I30 (draft preservation; reproducible second-look posts; unanswered feed/map discovery; follows/outcomes; newcomer contribution; moderation). Suggested first slice: I25 + a small I26/I27 implementation. Ideas only; no implementation task claimed and no API/code changes. Other agents' working files and untracked pitch.pdf left untouched.
 - 2026-11-15 [Mati] T128 merged, `review`: after a chemistry picture of the open region, "Spots" lists where its features show (rings on the map, click = spectrum), looked up in the catalogues ticked above the list (SIMBAD, Gaia DR3, CatWISE2020 by default; AllWISE, 2MASS), positions moved by proper motion first; uncatalogued first, other types next, the preset's known type last. CONTRACTS v0.39. Not yet seen in a browser.
+
+
+
+- 2026-11-15 [Codex (spectra)] Decision T130, user requested: chemistry profiles now also yield automatic feature-pattern candidates from shared field-source aperture spectra; no physical classifications. Spectral outliers compare stars, galaxies/quasars and unclassified sources separately, and sparse populations are not scored against other kinds. CONTRACTS v0.40 documents version 3 peer-group envelopes and the chemistry_profiles addition. T128's image-spot search remains a complementary task. Chemistry-map reprojections are shared across features on disk within the existing target cache.
+
+- 2026-11-15 [Codex (spectra)] T130 complete: selected coordinate/size regions automatically start combined aperture-source analysis; chemistry-profile candidates have supporting features, epoch counts, caveats and instant spectrum links. Shared neighbour checks, per-source feature evidence, persistent derived results, and per-exposure map reprojections reduce repeated work. Peer-group envelopes and sparse-group reasons are shown in analysis. Focused pipeline/API and additional server/variability/limits checks pass; JS syntax/diff checks pass. No real-data browser validation or physical template fitting claimed. [to Mati/T128] these candidates use already-measured catalogue spectra; the image-spot search remains complementary. Changes in pipeline/chemistry.py add cached_sample and route compute's sampling through it.

@@ -285,3 +285,24 @@ def test_candidates_find_the_absorber_and_skip_pairs_edges_and_patches(tmp_path)
         assert "PAH" in str(e)
     else:
         raise AssertionError("missing map not reported")
+
+
+def test_reprojection_shared_between_features_and_invalidated(tmp_path, monkeypatch):
+    from astropy.wcs import WCS
+    from pipeline import chemistry as C
+    path = tmp_path / 'exposure.fits'
+    path.write_bytes(b'input')
+    wcs = WCS(naxis=2)
+    calls = []
+    def fake(path, grid, npix):
+        calls.append(npix)
+        return tuple(np.full((npix, npix), v, dtype=float) for v in (1, 2, 3))
+    monkeypatch.setattr(C, 'sample_exposure', fake)
+    first = C.cached_sample(path, wcs, 4, tmp_path / 'samples')
+    second = C.cached_sample(path, wcs, 4, tmp_path / 'samples')
+    assert all(np.array_equal(a, b) for a, b in zip(first, second))
+    assert calls == [4]
+    path.write_bytes(b'updated input')
+    C.cached_sample(path, wcs, 4, tmp_path / 'samples')
+    C.cached_sample(path, wcs, 5, tmp_path / 'samples')
+    assert calls == [4, 4, 5]

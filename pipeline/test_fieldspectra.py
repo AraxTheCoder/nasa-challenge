@@ -120,20 +120,45 @@ def test_saturated_source_not_judged_and_said_why():
     assert nj["star 4"].startswith("saturated") and out["n_judged"] == 59
 
 
-def test_blend_and_galaxy_caveats():
+def test_isolated_galaxy_is_not_scored_against_stars():
     fs = _field(odd={5: lambda w: 1 + 0.8 * np.clip((w - 2.8) / 2.0, 0, None)})
     fs["sources"][5]["otype"] = "G"
     out = SO.find_outliers(fs)
-    it = out["items"][0]
-    assert it["name"] == "star 5" and any("galaxy" in c for c in it["caveats"])
+    assert not out["items"]
+    assert out["n_judged"] == 59
+    assert any(n["id"] == "s5" and "peers" in n["why"] for n in out["not_judged"])
 
 
 def test_chart_data_points_and_envelope():
     excess = lambda w: 1 + 1.5 * np.clip((w - 2.8) / 2.0, 0, None)
     out = SO.find_outliers(_field(odd={5: excess}))
     pts = {p["id"]: p for p in out["points"]}
-    assert len(pts) == 60 and len(out["bands_um"]) == 22 and len(out["envelope"]["p16"]) == 22
+    env = out["groups"]["stars"]["envelope"]
+    assert len(pts) == 60 and len(out["bands_um"]) == 22 and len(env["p16"]) == 22
     assert pts["s5"]["outlier"] and not pts["s6"]["outlier"]
     ordinary_y = np.median([p["y"] for p in pts.values() if not p["outlier"]])
     assert pts["s5"]["y"] > ordinary_y + 0.2          # more light at 3.4-4.8 µm: up in the colour diagram
-    assert all(a <= b for a, b in zip(out["envelope"]["p16"], out["envelope"]["p84"]) if a is not None and b is not None)
+    assert all(a <= b for a, b in zip(env["p16"], env["p84"]) if a is not None and b is not None)
+
+
+def test_separate_galaxy_population_has_own_model():
+    fs = _field(n=80)
+    for i in range(60, 80):
+        fs["sources"][i]["otype"] = "QSO" if i == 60 else "G"
+        # Strongly different slope, but ordinary within this population.
+        fs["flux_ujy"][i] = [f * w ** 2 for f, w in zip(fs["flux_ujy"][i], fs["wavelength_um"][i])]
+        fs["err_ujy"][i] = [f * .02 for f in fs["flux_ujy"][i]]
+    out = SO.find_outliers(fs)
+    assert not out["items"]
+    assert out["groups"]["galaxies"]["n_sources"] == 20
+    assert out["n_judged"] == 80
+    assert {p["peer_group"] for p in out["points"]} == {"stars", "galaxies"}
+
+
+def test_cross_population_blend_is_still_flagged():
+    fs = _field(odd={5: lambda w: 1 + .8 * np.clip((w - 2.8) / 2, 0, None)})
+    fs['sources'][59].update(otype='G', ra_deg=fs['sources'][5]['ra_deg'] + 1 / 3600)
+    out = SO.find_outliers(fs)
+    match = next(it for it in out['items'] if it['id'] == 's5')
+    assert match['peer_group'] == 'stars'
+    assert any('blended' in c for c in match['caveats'])

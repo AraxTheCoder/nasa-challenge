@@ -70,6 +70,7 @@ def sources_of(target: dict) -> list[dict]:
         out.append({"id": lab.get("id"), "name": lab.get("name"), "source": lab.get("source"),
                     "kind": lab.get("kind"), "otype": lab.get("otype"), "mag": lab.get("mag"),
                     "mag_band": lab.get("mag_band"), "named": bool(lab.get("named")),
+                    **({"redshift": lab.get("redshift", lab.get("z"))} if "redshift" in lab or "z" in lab else {}),
                     "ra_deg": round(float(np.degrees(ra0)) % 360, 7), "dec_deg": round(float(dec0), 7),
                     "mjd0": round(t0, 5), "dra_deg_day": float(np.degrees(dra)), "ddec_deg_day": float(ddec)})
     return _dedupe(out)

@@ -151,7 +151,7 @@ function colourChart(d, W) {
 
 /** The selected source's band shape against what an ordinary source of its kind would show. */
 function shapeChart(d, p, W) {
-  const um = d.bands_um ?? [], env = d.envelope ?? {};
+  const um = d.bands_um ?? [], env = d.groups?.[p.peer_group]?.envelope ?? d.envelope ?? {};
   const H = Math.round(Math.min(320, Math.max(220, W * 0.72)));
   const m = { l: 46, r: 12, t: 12, b: 40 };
   const it = (d.items ?? []).find((i) => i.id === p.id);
@@ -219,11 +219,11 @@ function vizBlock(d) {
       el("p", { class: "ol-legend small muted" }, key("ol-sw-ord", "ordinary (defines normal)"), key("ol-sw-odd", "stands out", C_ODD),
         key("ol-sw-sel", "selected", C_SEL), " · click a dot")),
     el("figure", { class: "ol-fig", style: `width:${W}px` },
-      el("figcaption", { class: "small" }, el("strong", {}, p.name), p.outlier ? "" : " (ordinary)", ": its bands vs. the field"),
+      el("figcaption", { class: "small" }, el("strong", {}, p.name), p.outlier ? "" : " (ordinary)", `: its bands vs. ${p.peer_group ?? "peers"}`),
       shapeChart(d, p, W),
       el("p", { class: "ol-legend small muted" }, key("ol-sw-pt", p.outlier ? "this source" : "this source", p.outlier ? C_ODD : "#8b93a7"),
-        key("ol-sw-line", "an ordinary source of its kind", C_SEL), key("ol-sw-env", "68 % of ordinary sources")),
-      it ? el("p", { class: "small" }, it.reason) : el("p", { class: "small muted" }, "Fits the field's ordinary shape: no consistent deviation.")));
+        key("ol-sw-line", "an ordinary source of its kind", C_SEL), key("ol-sw-env", `68 % of ${p.peer_group ?? "peer"} references`)),
+      it ? el("p", { class: "small" }, it.reason) : el("p", { class: "small muted" }, "Fits its peer group: no consistent deviation.")));
 }
 
 function item(it) {
@@ -275,24 +275,42 @@ function varBlock(d) {
   return el("div", { class: "ol-var" }, ...parts);
 }
 
+function profileBlock(d) {
+  const profiles = d.chemistry_profiles;
+  if (!profiles) return null;
+  const matches = profiles.matches ?? [];
+  return el("section", { class: "ol-profiles" },
+    el("h4", {}, "Automatic chemistry-profile candidates"),
+    el("p", { class: "small muted" }, profiles.method),
+    matches.length ? el("ul", { class: "ol-list" }, ...matches.map((m) => {
+      const name = el("button", { type: "button", class: "link" }, m.name);
+      name.addEventListener("click", () => openSpectrum(m.ra_deg, m.dec_deg, m.name));
+      return el("li", { class: "ol-item" }, name, ` · ${m.profile_name}`,
+        el("p", { class: "small" }, m.features.map((f) => f.status === "insufficient_coverage"
+          ? `${f.name ?? f.feature}: insufficient coverage` : `${f.name ?? f.feature}: ${f.pct > 0 ? "+" : ""}${f.pct}% (${f.significance}σ, ${f.epochs_agree}/${f.epochs_seen} epochs agree)`).join(" · ")),
+        el("p", { class: "small muted" }, m.caveats.join(" ")));
+    })) : el("p", { class: "small muted" }, "No multi-feature candidates meet the thresholds. Missing wavelength coverage can prevent a match."),
+    profiles.skipped?.length ? el("p", { class: "small muted" }, "Galaxy and quasar profiles skipped where source redshifts are unknown.") : null);
+}
+
 function render() {
   const d = st.data;
   const body = $("#ol-body");
   if (!d) return;
   const parts = [];
   if (d.status === "not_started") {
-    const go = el("button", { type: "button" }, "Find sources with unusual spectra");
+    const go = el("button", { type: "button" }, "Analyse sources: spectra + chemistry profiles");
     go.addEventListener("click", () => load(true));
     parts.push(el("p", { class: "small" }, "Measures every catalogue source of this field in every SPHEREx exposure " +
       "(~20 s the first time) and lists the ones whose spectral shape doesn't fit what ordinary sources here look like, " +
-      "and the ones that change brightness."), go);
+      "and the ones that change brightness. Also checks chemistry profiles automatically using the same measured spectra."), go);
   } else if (d.status === "building") {
     parts.push(el("p", { class: "small" }, d.total ? `Reading exposures… ${d.done}/${d.total}` : "Reading exposures…"));
   } else if (d.status === "ready") {
     const items = d.items ?? [];
     const nj = d.not_judged ?? [];
-    const sat = nj.filter((n) => n.why.startsWith("saturated")).length;
     parts.push(el("p", { class: items.length ? "" : "muted" }, d.summary ?? ""));
+    parts.push(profileBlock(d));
     parts.push(vizBlock(d));
     if (items.length) {
       const shown = st.all ? items : items.slice(0, SHOW);
@@ -305,8 +323,8 @@ function render() {
     }
     parts.push(el("p", { class: "muted small" },
       `${d.field?.n_sources ?? "?"} sources in ${d.field?.n_exposures ?? "?"} exposures; ${d.n_judged ?? 0} had enough clean bands` +
-      (nj.length ? ` (not judged: ${sat} saturated, ${nj.length - sat} too faint)` : "") + ". " +
-      "Bars: how far each band is from the field's ordinary shape (solid = the consistent deviations). " + (d.method ?? "")));
+      (nj.length ? ` (${nj.length} not judged: insufficient clean bands or peers)` : "") + ". " +
+      "Bars: how far each band is from its peer group's ordinary shape (solid = the consistent deviations). " + (d.method ?? "")));
     const vb = varBlock(d);
     if (vb) parts.push(vb);
   } else {
@@ -356,7 +374,13 @@ document.addEventListener("viewer:target", (e) => {
   cardEl().hidden = true;
   mapNote();
   getSky()?.redraw();
-  if (st.target && st.target.synthetic === false) load(st.mapOn);   // map toggle on: measure if needed
+  // A selected region/shared explicit field runs all source analyses automatically.
+  const params = new URLSearchParams(location.search);
+  const center = st.target?.center;
+  const requested = center && params.has("size") && params.has("ra") && params.has("dec") &&
+    Math.abs(((Number(params.get("ra")) - center.ra_deg + 540) % 360) - 180) < 0.001 &&
+    Math.abs(Number(params.get("dec")) - center.dec_deg) < 0.001;
+  if (st.target && st.target.synthetic === false) load(st.mapOn || requested);
 });
 
 // ---------- T88: on the map ----------

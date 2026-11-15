@@ -1,4 +1,8 @@
-# Contracts (v0.39)
+# Contracts (v0.40)
+
+v0.40 (T130): spectral-outliers algorithm `version: 3` uses separate peer populations and adds
+`chemistry_profiles`. See the T130 extension below. Measurement cache format unchanged. Chemistry maps
+reuse feature-independent reprojections on disk; their image/API format is unchanged.
 
 v0.39 (T128): `GET /api/targets/<id>/chemistry/candidates?maps=<key>[-<key>...][&cats=...&preset=<id>]`: the spots
 of a chemistry picture where its features show, ranked; with `cats` looked up in those catalogues and tagged
@@ -857,3 +861,38 @@ embeds work (official "Potential Considerations"). Other parameters (`?api=`, `?
 Every `target.json` that is committed or built must validate against `docs/target.schema.json`. CI
 (T46) checks the committed fixtures on every push (`tests/test_contract.py`). Built targets are not
 validated at build time yet (idea: validate in `server/builder.py` before a build counts as ready).
+
+
+### T130: shared source analysis (v0.40)
+
+`GET /api/targets/<id>/spectral-outliers` retains the start/poll protocol above. A selected region (an
+explicit coordinate + size URL) starts analysis automatically in the viewer. All three source analyses
+reuse the field's aperture spectra: spectral anomalies, variability and chemistry-profile candidates.
+Derived results persist under `data/field_spectra/<id>.analysis.json`; the measurement mtime, algorithm
+versions and current catalogue metadata invalidate them. Reclassifying a source reuses its measurements.
+
+Spectral-outlier `version: 3` groups catalogue stars, galaxies/quasars and unclassified sources separately.
+Each group fits its own model and scatter. Groups with fewer than three clean unblended reference sources
+are listed in `not_judged` with a peer-count reason. `n_judged` counts sources actually scored. `items` and
+`points` add `peer_group` (`stars`, `galaxies`, `unclassified`). `groups` maps these keys to
+`{n_sources, summary, method, n_reference?, components?, envelope?}`. The envelope, reference/component
+counts and scatter model belong to each group; consumers should use `groups[point.peer_group].envelope`
+instead of the former top-level `envelope`. The top-level `components`, `scatter_pct`, and `epochs` are no
+longer returned; `field` still reports measurement counts and versions. Sorted `items`, `scores`, colour
+coordinates and per-source shape/model arrays retain their meaning. Sparse groups have no chart points.
+
+`chemistry_profiles` is `{version, matches, skipped, method}`. Each match is
+`{id, name, ra_deg, dec_deg, profile, profile_name, z, features, score, caveats}`. Each feature is
+`{feature, status, pct?, significance?, epochs_seen?, epochs_agree?}`; status is `detected`, `not_detected`
+or `insufficient_coverage`. At least two signed features require >=10% contrast and >=3 sigma with
+continuum on both sides and agreement in two epochs when covered (one when only one has coverage).
+The signs follow each preset's absorption/emission interpretation. Brown-dwarf candidates require methane,
+cool-giant candidates require CO. Evidence is cached between overlapping profiles for each source.
+These are feature-pattern candidates, not physical template fits or object classifications. Blends carry
+warnings. Redshift profiles require a source `redshift`/`z` in the catalogue label; otherwise `skipped`
+contains `{id, profile, why}`. They do not make network calls or assume z=0 for unknown redshifts.
+This searches catalogue-source spectra; T128's image-spot search covers a different use case.
+
+Chemistry map reprojections are cached at `<target>/chemistry/samples/*.npz`, keyed by input file path,
+size/mtime, output grid and sampling version. Feature selection and redshift reuse this shared input;
+changing the input or grid regenerates it. These files fall under the existing target-cache eviction policy.

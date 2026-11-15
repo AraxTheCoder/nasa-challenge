@@ -328,6 +328,40 @@ def relevant(exposures, lam0: float, half: float):
     return [e for e in exposures if e.wave_min_um - reach <= lam0 <= e.wave_max_um + reach]
 
 
+# The reprojection is independent of the chemical feature and redshift. Persist it
+# once per exposure/grid, so switching profiles reuses overlapping wavelengths.
+SAMPLE_VERSION = 1
+
+
+def cached_sample(path: Path, out_w, npix: int, cache_dir: Path):
+    import hashlib
+    import os
+    import threading
+    path = Path(path)
+    stat = path.stat()
+    identity = [SAMPLE_VERSION, str(path.resolve()), stat.st_size, stat.st_mtime_ns,
+                npix, out_w.to_header().tostring()]
+    key = hashlib.sha256(json.dumps(identity).encode()).hexdigest()
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    dest = cache_dir / f"{key}.npz"
+    if dest.is_file():
+        try:
+            with np.load(dest, allow_pickle=False) as data:
+                return tuple(data[k] for k in ("flux", "wl", "bw"))
+        except (OSError, ValueError, EOFError):
+            pass
+    sample = sample_exposure(path, out_w, npix)
+    # Atomic replacement also permits independent feature jobs to share this cache.
+    tmp = dest.with_suffix(f".{os.getpid()}.{threading.get_ident()}.part")
+    try:
+        with tmp.open("wb") as f:
+            np.savez_compressed(f, **dict(zip(("flux", "wl", "bw"), sample)))
+        tmp.replace(dest)
+    finally:
+        tmp.unlink(missing_ok=True)
+    return sample
+
+
 def compute(target_dir: Path, feature: str, progress=None, refresh: bool = False, z: float = 0.0) -> dict:
     """Make (or reuse) <target_dir>/chemistry/<key>.png + .json (key = map_key(feature, z)). Returns the stats dict.
     T109: at redshift z every wavelength used is the rest one times (1 + z)."""
@@ -361,7 +395,7 @@ def compute(target_dir: Path, feature: str, progress=None, refresh: bool = False
 
     def one(e):
         path = photometry._spectrum_cutout(e.fits_url, ra, dec, size_deg)
-        return e, sample_exposure(path, out_w, npix)
+        return e, cached_sample(path, out_w, npix, out_dir / "samples")
 
     with ThreadPoolExecutor(THREADS) as pool:
         for fut in [pool.submit(one, e) for e in todo]:
