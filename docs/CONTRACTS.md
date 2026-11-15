@@ -1,4 +1,8 @@
-# Contracts (v0.38)
+# Contracts (v0.39)
+
+v0.39 (T128): `GET /api/targets/<id>/chemistry/candidates?maps=<key>[-<key>...][&cats=...&preset=<id>]`: the spots
+of a chemistry picture where its features show, ranked; with `cats` looked up in those catalogues and tagged
+(uncatalogued first). Features list adds `catalogues`; object presets add `expects` (SIMBAD types). Additive.
 
 v0.38 (T127): chemistry presets for kinds of objects. Each preset in `/api/chemistry/features` gains `group`
 (`"object"` or `"place"`, the T107 ones are places) and optionally `needs_z: true` (made only at the object's
@@ -800,6 +804,34 @@ picture of maps not all made yet: PNG 404, layer tiles empty. With 4 or more, a 
 feature's own colour (only 2-3 colours are independent).
 Presets (v0.34, T107): see the `presets` line above. Since v0.38 (T127) also for kinds of objects (`group`):
 brown dwarfs, young stars, cool giants, protostars, star-forming galaxies, quasars; `needs_z` ones only at a z > 0.
+
+**Candidates (v0.39, T128).** The spots of a picture whose maps are made (keys as in the layer name):
+
+```
+GET /api/targets/<id>/chemistry/candidates?maps=<k1>[-<k2>...]
+  200 {"status": "ready", "id", "maps": [keys, wavelength order], "found": n peaks, "left_out_pairs": n,
+       "show_sigma": 2.0, "sigma_cap": 5.0,
+       "items": [{"ra_deg", "dec_deg", "x", "y" (field px), "score", "n_show", "compact": bool,
+                  "sigma": {key: noise levels in the feature's direction, + = shows}, "name", "kind", "otype",
+                  "mag", "sep_arcsec" (catalogue label within 10″, else null), "near": {"name", "sep_arcmin"} | null}]}
+  404 {"status": "not_made"}: a map not made yet · 400: unknown key, mixed redshifts · 404: unknown field
+
+GET ...candidates?maps=...&cats=simbad,gaia,catwise[,allwise,2mass][&preset=<id>]
+  as above, plus "checked": [cats that answered], "failed": [cats that did not], "preset"; per item
+  "catalogues": {cat: {"name", "sep_arcsec", SIMBAD: "otype", "kind"; others: "mag", "band"} | null} and
+  "tag": "new" (in none) | "other" (SIMBAD type not in the preset's `expects`) | "untyped" (only in non-SIMBAD
+  catalogues) | "known" (type in `expects`); items ordered new, other / untyped, known. 400: unknown catalogue.
+```
+
+Catalogue positions are moved by their proper motion to the field's SPHEREx date (median frame), then matched
+within 6″ (SIMBAD searched to 300″ for movers > 0.2″/yr, Gaia / CatWISE to 60″; AllWISE / 2MASS have no motions).
+Cached per field in `<target>/chemistry/catcheck.json`. `/api/chemistry/features` adds `"catalogues": [{id, name,
+what, default}]`; object presets add `"expects"`: SIMBAD otypes of known ones (`"galaxies"` = every galaxy type).
+
+Up to 25, ranked by how many features show (>= 2 noise levels; one alone needs 3), then strength (extended spots
+at 0.7 of theirs). Left out: sharpness pairs at bright stars, spots within 3 px of the coverage edge or an empty
+(saturated) hole. `near`: an unnamed extended spot within 3′ of a star of mag <= 9 (its glow). From the maps as
+shown (smoothed, T121); σ capped near 5 (the maps' stretch). Visualization only: spots to look at.
 
 **Redshift (v0.36, T109).** A receding source's features arrive at λ(1 + z); from cz ≈ 1 300 km/s (Br-α; ≈ 2 000
 for CO₂/CO, ≈ 4 000 for Pa-β, Br-γ, PAH) they leave the rest-wavelength window. Milky Way objects need z = 0.
