@@ -77,6 +77,16 @@ summary, detailed description, data used, references, AI-use disclosure, links. 
   look at the live form's limits. Project name: "SPHEREx Blink", as in the viewer's title and the pitch deck.
 - Whoever pastes the text into the form: paste, then compare with the live form's limits.
 
+- **Live form seen (2026-11-15 ~20:00 CET, Mati's screenshots):** Project Summary (Project Name; Summary: plain
+  text, limit 1500 characters, 50–200 words suggested), Project Links (Project Demonstration: public link, no login;
+  Project: public link, Mati: **the deployed tool**), Project Information (Project Details: rich-text editor; asks
+  what it does, benefits, intended impact, tools/languages/hardware/software, creativity, factors considered), NASA
+  Data and Space Agency Partner & Other Data (rows of Link Text + Link Url; "all code, text and images used").
+  `docs/SUBMISSION.md` follows this structure now; new sections Intended impact, What is creative, Factors we
+  considered; every URL opened on 2026-11-15.
+- Paste helper: `spherex-blink-form-text.html` in Mati's Downloads (generated from `docs/SUBMISSION.md`; one box per
+  field with a Copy button; Project Details copies as rich text). Regenerate after the live URL is in.
+
 ## Notes from others
 - 2026-11-15 [Joerg (Claude) → Mati] For the submission, from my side:
   - **Flags row:** step 1 of T60 is on main: click any point → "SPHEREx quality flags at this spot" (each flag by
