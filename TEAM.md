@@ -42,6 +42,7 @@ Mati). When you finish a task, move its row to Done in the same commit.
 
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
+| T131 | A/B/C: Catalogue redshifts, experimental spectral shift search and rest-frame galaxy peers | Codex (spectra) | doing | `main` | [tasks/T131](tasks/T131-redshift-search.md). User requested implementation |
 | T94 | C: Missing tiles on the map: failed tiles never asked again (holes until reload), false-colour field epochs 422, holes near the poles when zooming in | Jonathan | doing | `main` | [tasks/T94](tasks/T94-missing-tiles.md) |
 | T122 | C: Analysis region drawn with the mouse: a "Select region" tool on the map; drag a rectangle and the field (the red square: what is downloaded and analysed) is built there with that size (square, 5–210′) | Joerg | done | `joerg/T122-T123-region-progress` | [tasks/T122](tasks/T122-region-select.md). Asked by Joerg |
 | T123 | C: Progress bar for everything that runs: one bar at the top of the page with what is happening now (field build step + n of m, spectra, unusual spectra, motion, chemistry, flags, map tiles) | Joerg | done | `joerg/T122-T123-region-progress` | [tasks/T123](tasks/T123-activity-bar.md). Asked by Joerg |
