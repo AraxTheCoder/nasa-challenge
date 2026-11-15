@@ -133,7 +133,7 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
   const G = makeGl(canvas);
   const { gl } = G;
 
-  const st = { ra, dec, fov, cam: null, w: 1, h: 1, dpr: 1, base: null, overlays: [], shown: -1,
+  const st = { ra, dec, fov, cam: null, w: 1, h: 1, dpr: 1, base: null, overlays: [], overlayCall: 0, shown: -1,
     dirty: true, loads: 0, queue: [], inflight: new Set(), rendering: false, hooks: [], frame: 0, errors: 0, debug: false, stats: null, listeners: { change: [], tiles: [] } };
 
   // ----- camera + projection -----
@@ -827,10 +827,13 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     },
     /** layers: [{url, label, epoch}] — all are prefetched, one is drawn (showOverlay). */
     async setOverlays(layers) {
+      const call = ++st.overlayCall;
       for (const l of st.overlays) for (const t of l.tiles.values()) if (t.tex) gl.deleteTexture(t.tex);
       st.overlays = [];
       st.shown = -1;
+      markDirty();
       const made = await Promise.all(layers.map(makeOverlay));
+      if (call !== st.overlayCall) return [];
       st.overlays = made.filter(Boolean);
       markDirty();
       return st.overlays.map((l) => l.meta);
@@ -850,11 +853,13 @@ export function createSky(container, { ra = 0, dec = 0, fov = 60 } = {}) {
     },
     /** T81: append overlays (e.g. an A − B layer) without reloading the others; returns their indexes. */
     async addOverlays(layers) {
+      const call = st.overlayCall;
       const made = (await Promise.all(layers.map(async (l) => {
         const opts = { slice: st.base?.slice, ...l };          // cube overlays (T82 passes) start on the base's band
         try { return Object.assign(new Layer(l.url, await readProperties(l.url), opts), { meta: l }); }
         catch (e) { console.warn(e); return null; }
       }))).filter(Boolean);
+      if (call !== st.overlayCall) return [];
       const first = st.overlays.length;
       st.overlays.push(...made);
       markDirty();

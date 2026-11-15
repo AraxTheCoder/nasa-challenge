@@ -142,14 +142,23 @@ function publishTarget(target) {
   document.title = `${target.name ?? target.id} · SPHEREx Blink`;
 }
 
-async function openTarget(targetUrl, expectedId, token, signal) {
+async function openTarget(targetUrl, expectedId, token, signal, autoKey = null) {
   const target = await fetchJson(targetUrl, signal);
   if (token !== app.loadToken) return;
+  if (autoKey) {
+    autoField.ready.set(autoKey, target);
+    // A completed background build is useful in cache, but cannot take over a different view/tool.
+    if (fieldKey() !== autoKey || app.manualMap || explicitHere()) {
+      if (autoField.building === autoKey) autoField.building = null;
+      showBlinkStatus();
+      return;
+    }
+  }
   const warnings = checkTarget(target, expectedId);
   app.shownTargetUrl = targetUrl;
   app.shownTarget = target;
   publishTarget(target);
-  syncExplore(target);
+  syncExplore(target, autoKey);
   if (app.labelsOn && !target.labels_requested) setLabels(true);
   loadObjects(target);
   checkUpdates(target);
@@ -241,7 +250,7 @@ function loadFromUrl() {
 
 /** Build (or fetch the cached) field req. quiet (T55 automatic builds): no progress panel, no error popup:
  *  progress and errors go to the blink indicator instead. */
-async function loadField(req, { quiet = false } = {}) {
+async function loadField(req, { quiet = false, autoKey = null } = {}) {
   const { token, signal } = beginLoad({ quiet });
   if (!quiet) stopBlink();
   $("#empty-default").hidden = true;
@@ -261,10 +270,7 @@ async function loadField(req, { quiet = false } = {}) {
     };
     const { id, targetUrl } = await requestField(app.api, req, { onProgress, signal });
     if (token !== app.loadToken) return;
-    // T104: a background build that finishes while a map tool (Chemistry) holds the map must not swap in its
-    // field: that threw the chemistry picture away "after some time". It is cached; the blink asks again later.
-    if (quiet && app.mapTool && app.manualMap) { autoField.building = null; autoField.key = null; showBlinkStatus(); return; }
-    await openTarget(targetUrl, id, token, signal);
+    await openTarget(targetUrl, id, token, signal, autoKey);
   } catch (err) {
     if (err.name === "AbortError" || token !== app.loadToken) return;
     if (quiet) {
@@ -644,13 +650,13 @@ function setManual(on) {
 
 /** A field arrived: an automatic one (tile build) is remembered for its tile + band; one asked for
  *  explicitly (Build field, a link) moves the map there and is outlined. */
-function syncExplore(target) {
+function syncExplore(target, autoKey = null) {
   app.shownTarget = target;
   const c = target?.center;
   if (!c) return;
-  if (autoField.building) {
-    autoField.ready.set(autoField.building, target);   // tile|variant it was built for
-    autoField.building = null;
+  if (autoKey) {
+    autoField.ready.set(autoKey, target);
+    if (autoField.building === autoKey) autoField.building = null;
   } else if (!app.dataRoot) {
     autoField.explicit = target;
     explore.goTo(c.ra_deg, c.dec_deg, Math.max(0.25, (target.size_arcmin * 3) / 60));
@@ -662,7 +668,9 @@ function syncExplore(target) {
 
 /** T55: blink source changed: epochs = the shown field's layers (if any); passes = autoblink.js's. */
 function onBlinkSource(m) {
+  ++epochCall;
   clearInterval(epochTimer);
+  epochVariant = null;
   if (m === "epochs") {
     explore.hideEpochs();
     if (app.shownTarget) showEpochLayers(app.shownTarget);
@@ -716,6 +724,8 @@ async function showEpochLayers(target) {
     return el("span", { class: "pass-label", title: l.label }, d ? passes.monthSpan(d[0], d[d.length - 1]) : `epoch ${l.epoch}`);
   });
   const pick = (i) => {
+    if (call !== epochCall || passes.mode() !== "epochs" || app.shownTarget !== target ||
+        app.manualMap || !(explicitHere() === target || autoField.ready.get(fieldKey()) === target)) return;
     epochShown = i;
     explore.showEpoch(i);
     // mapframes.js steps aside; auto: picked by the blink itself, not by hand (T96: chemistry stays on top)
@@ -846,7 +856,7 @@ function buildTile(key) {
   const req = { ...tileField(Number(pix)), auto: true, detector: Number(variant.slice(1)) };
   autoField.building = key;
   autoField.progress = null;
-  loadField(req, { quiet: true });
+  loadField(req, { quiet: true, autoKey: key });
   showBlinkStatus();
 }
 

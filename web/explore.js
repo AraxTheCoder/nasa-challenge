@@ -28,6 +28,7 @@ let sky = null;
 let apiBase = null;        // T41: our server caches + prefetches the map tiles (/api/sky/<id>)
 let field = null;          // {ra, dec, size} of the blink field, drawn as an outline
 let epochLayers = [];
+let overlayCall = 0;
 const layerIndex = new Map();   // T81: the field's layers by key: e<epoch>, <frame id> (f003), d-<a>-<b>, p<n>
 let shownLayer = null;
 export const currentLayer = () => shownLayer;
@@ -162,10 +163,13 @@ function drawField(ctx, proj) {
  * prefetched; one is drawn at a time, so blinking is instant once loaded (requirement R2). */
 export async function setEpochLayers(layers) {
   if (!sky) return [];
+  const call = ++overlayCall;
   layerIndex.clear();
   fieldBase = null;
   shownLayer = null;
-  epochLayers = await sky.setOverlays(layers);
+  const made = await sky.setOverlays(layers);
+  if (call !== overlayCall) return [];
+  epochLayers = made;
   return epochLayers;
 }
 
@@ -173,9 +177,13 @@ export async function setEpochLayers(layers) {
 
 export async function setFieldLayers(epochs, frames, base) {
   if (!sky) return [];
+  const call = ++overlayCall;
   fieldBase = base;
   shownLayer = null;
-  epochLayers = await sky.setOverlays([...epochs, ...frames]);
+  layerIndex.clear();
+  const made = await sky.setOverlays([...epochs, ...frames]);
+  if (call !== overlayCall) return [];
+  epochLayers = made;
   layerIndex.clear();
   epochLayers.forEach((l, i) => layerIndex.set(l.frame_id ?? `e${l.epoch}`, i));
   return epochLayers.filter((l) => !l.frame_id);
@@ -184,12 +192,14 @@ export async function setFieldLayers(epochs, frames, base) {
 /** Draw the layer with this key; A − B layers are added the first time they are asked for. */
 export async function showLayer(key) {
   if (!sky || (!fieldBase && !key.startsWith("p")) || (key.startsWith("p") && !apiBase)) return false;
+  const call = overlayCall;
   let i = layerIndex.get(key);
   if (i === undefined && (key.startsWith("d-") || key.startsWith("x-") || /^p\d$/.test(key))) {   // x-: T93 chemistry
     layerIndex.set(key, -1);                       // being added
     // T82: p<n> = survey pass n of the live map, anywhere on the sky (not tied to the field)
     const url = key.startsWith("p") ? `${apiBase.replace(/\/$/, "")}/api/sky/spherex-live-${key}` : `${fieldBase}/${key}`;
     const [j] = await sky.addOverlays([{ url, epoch: null, id: key, label: key }]);
+    if (call !== overlayCall) return false;
     if (j === undefined) { layerIndex.delete(key); return false; }
     layerIndex.set(key, j);
     epochLayers[j] = { url, epoch: null, id: key };
@@ -212,6 +222,7 @@ export function showEpoch(i) {
 export function hideOverlay() { shownLayer = null; sky?.showOverlay(-1); }
 
 export function hideEpochs() {
+  ++overlayCall;
   shownLayer = null;
   epochLayers = [];
   layerIndex.clear();
@@ -231,12 +242,15 @@ export function surveyPasses() {
 export async function setPassLayers(passes, colour = false) {
   shownLayer = null;
   if (!sky || !apiBase) return [];
+  const call = ++overlayCall;
   layerIndex.clear();                          // T81 keys (frames, p<n>) are added again on demand
   fieldBase = null;
   const base = apiBase.replace(/\/$/, "");
-  epochLayers = await sky.setOverlays(passes.map((n) => ({
+  const made = await sky.setOverlays(passes.map((n) => ({
     url: `${base}/api/sky/spherex-live-p${n}${colour ? "-rgb" : ""}`, label: `Survey pass ${n}${colour ? " (false colour)" : ""}`,
     epoch: null, pass: n, eager: true })));
+  if (call !== overlayCall) return [];
+  epochLayers = made;
   return epochLayers;
 }
 

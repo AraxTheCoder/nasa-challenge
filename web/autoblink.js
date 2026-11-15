@@ -19,7 +19,7 @@ export const PASS_ORDER = 6;     // the pass layers' first live order: they blin
 const STEP_MS = 800;
 const DATES_MOVE_DEG = 0.3;      // ask for the dates again once the centre moved this far
 
-const st = { mode: "passes", passes: [], layers: false, colour: false, paused: false, still: false, shown: -1, labels: [], note: null, listeners: [],
+const st = { mode: "passes", passes: [], layers: false, layerCall: 0, colour: false, paused: false, still: false, shown: -1, labels: [], note: null, listeners: [],
   dates: null, datesAt: null, datesTimer: null };
 
 export const mode = () => st.mode;
@@ -52,22 +52,24 @@ export async function setMode(m, _opts = {}) {
   if (m !== "passes" && m !== "epochs") return;
   const changed = m !== st.mode;
   st.mode = m;
+  // Stop the old source immediately, before any replacement metadata can stall.
+  if (changed) st.listeners.forEach((fn) => fn(m));
   $("#blink-passes").hidden = m !== "passes";
   // under blinking passes the base map only shows through their holes: the IRSA cube (order 5) is enough
   // there, and its tiles are no live renders competing with the passes'
   explore.setBaseCap(m === "passes" ? PASS_ORDER - 1 : null);
   if (m === "passes") await loadLayers();
-  else { st.layers = false; st.shown = -1; }        // the field's epochs replace the pass layers
+  else { ++st.layerCall; st.layers = false; st.shown = -1; }        // the field's epochs replace the pass layers
   update();
-  if (changed) st.listeners.forEach((fn) => fn(m));
 }
 
 async function loadLayers() {
   if (st.layers || !st.passes.length) return;
+  const call = ++st.layerCall;
   st.layers = true;
   st.shown = -1;
   const made = await explore.setPassLayers(st.passes, st.colour);
-  if (st.mode !== "passes") return;
+  if (call !== st.layerCall || st.mode !== "passes") return;
   if (!made.length) { st.layers = false; st.note.textContent = "survey passes unavailable (Live API?)"; }
 }
 
@@ -174,6 +176,7 @@ async function askDates() {
       labelPass(i, d ? visitLabel(d) : `pass ${n}`);
     });
   } catch {
+    if (st.datesAt !== at) return;
     st.datesAt = null;                               // ask again on the next move
     st.dates = null;
     st.passes.forEach((n, i) => labelPass(i, `pass ${n}`));
