@@ -665,3 +665,17 @@ body.no-map #show-btn { background: var(--accent); color: #fff; border-color: va
   background: var(--glass); color: var(--text); border: 1px solid var(--border); border-radius: 999px;
   padding: 3px 14px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: var(--lift); }
 @media (prefers-reduced-motion: reduce) { .activity-fill.activity-busy { animation: none; width: 100%; opacity: 0.5; } }
+
+/* T129: discussions and saved second-look evidence. */
+.cm-form label { display: grid; gap: 4px; }
+.cm-form label:has(input[type=checkbox]) { display: flex; gap: 7px; align-items: flex-start; }
+.cm-form input[type=checkbox] { flex: none; margin-top: 3px; }
+.cm-form select { width: 100%; }
+.cm-actions { flex-wrap: wrap; }
+.cm-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; overflow-wrap: anywhere; }
+.cm-item h4, .cm-form h4 { margin: 6px 0; overflow-wrap: anywhere; }
+.cm-evidence { line-height: 1.5; overflow-wrap: anywhere; }
+.cm-badge { padding: 1px 6px; border: 1px solid var(--border); border-radius: 5px; font-size: 11px; }
+.cm-highlight { outline: 2px solid var(--accent, #8cb8ff); outline-offset: 3px; border-radius: 3px; }
+.cm-tabs { flex-wrap: wrap; gap: 12px; }
+.cm-x { align-self: flex-start; }

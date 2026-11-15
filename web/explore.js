@@ -29,6 +29,8 @@ let apiBase = null;        // T41: our server caches + prefetches the map tiles 
 let field = null;          // {ra, dec, size} of the blink field, drawn as an outline
 let epochLayers = [];
 const layerIndex = new Map();   // T81: the field's layers by key: e<epoch>, <frame id> (f003), d-<a>-<b>, p<n>
+let shownLayer = null;
+export const currentLayer = () => shownLayer;
 let fieldBase = null;
 
 export const getSky = () => sky;
@@ -162,6 +164,7 @@ export async function setEpochLayers(layers) {
   if (!sky) return [];
   layerIndex.clear();
   fieldBase = null;
+  shownLayer = null;
   epochLayers = await sky.setOverlays(layers);
   return epochLayers;
 }
@@ -171,6 +174,7 @@ export async function setEpochLayers(layers) {
 export async function setFieldLayers(epochs, frames, base) {
   if (!sky) return [];
   fieldBase = base;
+  shownLayer = null;
   epochLayers = await sky.setOverlays([...epochs, ...frames]);
   layerIndex.clear();
   epochLayers.forEach((l, i) => layerIndex.set(l.frame_id ?? `e${l.epoch}`, i));
@@ -197,15 +201,18 @@ export async function showLayer(key) {
 }
 
 export function showEpoch(i) {
+  const layer = epochLayers[i];
+  shownLayer = layer ? (layer.frame_id ?? layer.id ?? (layer.pass != null ? `p${layer.pass}` : `e${layer.epoch}`)) : null;
   sky?.showOverlay(i);
   // T35: traces.js highlights each object's position in the shown epoch
   document.dispatchEvent(new CustomEvent("explore:epoch", { detail: { epoch: epochLayers[i]?.epoch ?? null } }));
 }
 
 /** T82: draw no overlay (back to the plain map). */
-export function hideOverlay() { sky?.showOverlay(-1); }
+export function hideOverlay() { shownLayer = null; sky?.showOverlay(-1); }
 
 export function hideEpochs() {
+  shownLayer = null;
   epochLayers = [];
   layerIndex.clear();
   fieldBase = null;
@@ -222,6 +229,7 @@ export function surveyPasses() {
 /** Put one overlay per pass on the map (replaces the field's epochs); colour: T89 false-colour layers.
  *  Returns the layers made. */
 export async function setPassLayers(passes, colour = false) {
+  shownLayer = null;
   if (!sky || !apiBase) return [];
   layerIndex.clear();                          // T81 keys (frames, p<n>) are added again on demand
   fieldBase = null;

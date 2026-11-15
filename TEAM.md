@@ -336,6 +336,8 @@ Dated, one line each, with why.
 - 2026-11-15 [Joerg] The Live API's cache sweep also keeps ≥ 5 GB of disk free (T125): the size cap alone let parallel builds fill the disk twice today. CONTRACTS "cache" line says so.
 - 2026-11-15 [Mati] CONTRACTS v0.38 (T127): chemistry presets for kinds of objects (`group` "object" / "place", optional `needs_z`) and four features (Hα, Pa-α, CO 2.3 µm, CH₄; `pah` named "PAH"). Why: Mati: presets for the objects the challenge names (brown dwarfs, quasars, galaxies, …) and the official targets; additive.
 
+- 2026-11-15 [Codex] T129 community contract extension: optional kind/title/evidence on comments, validated saved observation metadata and unanswered=true on recent activity. Why: the user requested implementation of second looks and reliable drafts (I25–I27). Existing discussions migrate in place; no scientific confirmation or identity roles added. See CONTRACTS Community / T129.
+
 ## Ideas
 
 Format: `[name] idea — status: new`. Agents don't act on an idea until a human moves it to the Board.

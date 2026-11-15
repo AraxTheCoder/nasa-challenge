@@ -609,6 +609,41 @@ GET  /api/community/counts?pix=1,2,3       {"tiles": {"<pix>": {"views", "commen
   429 + Retry-After after 10 comments in 10 minutes from one address.
 - Stored in SQLite `data/community/community.db`; not a cache (the T58/T97 sweep never touches it).
 
+#### T129: Second-look requests and saved evidence
+
+Community comments add `kind` (`discussion`, the default, or `second_look`), `title` (plain text, at most
+120 characters, default empty), and optional `evidence` (object, default null). These fields are returned
+by tile threads, comment creation and recent activity. Existing SQLite databases migrate in place;
+old comments become discussions and retain their positions, replies and counts.
+
+`POST /api/community/tiles/<pix>/comments` accepts these extra fields. A second-look request must be a
+root comment and include both coordinates and a field of view; replies remain discussions. Attached
+positions must contain both RA and Dec, and FOV requires a position. `parent_id` is a positive integer.
+
+Evidence is a bounded snapshot with only these optional fields:
+
+- Strings (1–180 characters, no control characters): `target_id`, `frame_a`, `frame_b`, `frame_a_time`,
+  `frame_b_time`, `frame_a_obs`, `frame_b_obs`, `release`, `layer`.
+- Finite numbers: `wavelength_um` (0.1–10), `field_ra_deg` ([0,360)), `field_dec_deg` ([-90,90]),
+  `field_size_arcmin` ((0,600]).
+- Booleans: `synthetic`, `flags`. Unknown fields and invalid values return 400.
+
+`GET /api/community/recent?unanswered=true&limit=25` filters `latest` to root second-look requests with
+no replies; the limit is applied after filtering. `most_discussed` and `most_viewed` remain global.
+A reply removes a request from this feed, without declaring the observation verified.
+
+Viewer links `?community=<pix>&comment=<id>` open and highlight that exact comment, including replies.
+Saved evidence opens the cached target through the viewer's normal loading path, restores available
+frame comparisons (checking saved times/observation IDs), wavelength, layer and quality-mask setting.
+Missing cached fields, changed frames or unavailable layers are explained; links do not silently rebuild
+or claim to reproduce unavailable observations. Synthetic evidence is visibly labelled. The snapshot
+contains metadata; it does not pin cached image files or archive their pixels.
+
+Drafts are stored per tile/reply in the browser, with an in-memory fallback when storage is unavailable.
+Background counts update without replacing the composer. In-flight posts remain bound to their original
+tile, and only a successful post clears its matching draft. No identity, scientific verification or
+moderator role is added by this extension.
+
 ### Target id and cache
 
 - The id is derived from the request, so equal requests hit the same cache entry:

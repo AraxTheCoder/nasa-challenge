@@ -514,6 +514,26 @@ async function openOffline(id) {
 // ---------- wiring ----------
 
 function bindPage() {
+  // T129: restore a saved cached field through the same state path as other field loads.
+  document.addEventListener("community:restore", async (event) => {
+    const { targetId, done } = event.detail ?? {};
+    if (typeof done !== "function") return;
+    if (typeof targetId !== "string" || !/^[a-zA-Z0-9_-]{1,180}$/.test(targetId)) { done(false); return; }
+    const { token, signal } = beginLoad();
+    stopBlink();
+    app.explicitLoading = token;
+    clearTimeout(autoField.timer);
+    autoField.building = null;
+    try {
+      await openTarget(`${app.api.replace(/\/$/, "")}/api/targets/${encodeURIComponent(targetId)}/target.json`, targetId, token, signal);
+      if (token !== app.loadToken) { done(false); return; }
+      app.manualMap = true;  // keep the saved comparison until the visitor chooses a new view
+      await showEpochLayers(app.shownTarget);
+      if (token !== app.loadToken) { done(false); return; }
+      await done(app.shownTarget?.id === targetId);
+    } catch { done(false); }
+    finally { if (app.explicitLoading === token) app.explicitLoading = null; }
+  });
   $("#field-form").addEventListener("submit", (e) => {
     e.preventDefault();
     hideTip();

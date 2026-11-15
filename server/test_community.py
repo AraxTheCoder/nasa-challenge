@@ -64,3 +64,63 @@ def test_posting_is_rate_limited(client):
     url = "/api/community/tiles/9/comments"
     codes = [client.post(url, json={"text": f"c{k}"}).status_code for k in range(11)]
     assert codes[:10] == [201] * 10 and codes[10] == 429
+
+
+def test_second_look_evidence_and_unanswered_feed(client):
+    payload = {"kind": "second_look", "title": "A moving red source?", "text": "Can someone compare these epochs?",
+               "ra_deg": 133.79, "dec_deg": -7.24, "fov_arcmin": 15,
+               "evidence": {"target_id": "test-field", "frame_a": "f000", "frame_b": "f003",
+                            "frame_a_time": "2025-01-01T00:00:00Z", "wavelength_um": 4.5, "synthetic": False}}
+    r = client.post("/api/community/tiles/777/comments", json=payload)
+    assert r.status_code == 201
+    saved = r.json()["comment"]
+    assert {key: saved[key] for key in payload} == payload
+    client.post("/api/community/tiles/778/comments", json={"text": "ordinary discussion"})
+    feed = client.get("/api/community/recent?unanswered=true").json()["latest"]
+    assert [c["id"] for c in feed] == [saved["id"]]
+    assert feed[0]["pix"] == 777 and feed[0]["evidence"] == payload["evidence"]
+    assert client.get("/api/community/tiles/777").json()["comments"][0]["evidence"] == payload["evidence"]
+    reply = client.post("/api/community/tiles/777/comments", json={"parent_id": saved["id"], "text": "I will check."})
+    assert reply.status_code == 201
+    assert client.get("/api/community/recent?unanswered=true").json()["latest"] == []
+    assert len(client.get("/api/community/recent").json()["latest"]) == 3
+
+
+@pytest.mark.parametrize("extra", [
+    {"kind": "confirmed"}, {"kind": "second_look"}, {"title": "x" * 121},
+    {"evidence": []}, {"evidence": {"url": "javascript:alert(1)"}},
+    {"evidence": {"frame_a": "x" * 181}}, {"evidence": {"synthetic": "false"}},
+    {"evidence": {"wavelength_um": "nan"}}, {"evidence": {"wavelength_um": True}},
+    {"evidence": {"field_ra_deg": 360}}, {"evidence": {"field_dec_deg": -91}},
+    {"evidence": {"field_size_arcmin": 0}}, {"evidence": {"layer": "bad\x00layer"}},
+    {"parent_id": []}, {"parent_id": {}}, {"parent_id": True}, {"parent_id": "1"},
+    {"ra_deg": 12}, {"fov_arcmin": 15},
+])
+def test_second_look_validation(client, extra):
+    response = client.post("/api/community/tiles/777/comments", json={"text": "check this", **extra})
+    assert response.status_code == 400
+    assert client.get("/api/community/tiles/777").json()["n_comments"] == 0
+
+
+def test_reply_cannot_create_second_look(client):
+    parent = client.post("/api/community/tiles/777/comments", json={"text": "question"}).json()["comment"]["id"]
+    r = client.post("/api/community/tiles/777/comments", json={"text": "reply", "parent_id": parent,
+                    "kind": "second_look", "ra_deg": 10, "dec_deg": 0, "fov_arcmin": 15})
+    assert r.status_code == 400
+
+
+def test_old_database_migrates_without_losing_discussions(client):
+    import sqlite3
+    community.ROOT.mkdir(parents=True)
+    with sqlite3.connect(community.ROOT / "community.db") as db:
+        db.executescript(community.SCHEMA)
+        db.execute("INSERT INTO comments (pix, author, text, created_utc) VALUES (777, 'Ada', 'old comment', '2026-11-14T00:00:00Z')")
+        db.execute("INSERT INTO views (pix, n) VALUES (777, 42)")
+    old = client.get("/api/community/tiles/777").json()
+    assert old["views"] == 42 and old["comments"][0]["text"] == "old comment"
+    assert old["comments"][0]["kind"] == "discussion" and old["comments"][0]["evidence"] is None
+    # Reconnect to exercise the migration twice, as happens on API restarts.
+    community._db.close()
+    community._db = None
+    assert client.get("/api/community/tiles/777").json() == old
+    assert client.post("/api/community/tiles/777/comments", json={"text": "new reply", "parent_id": old["comments"][0]["id"]}).status_code == 201
