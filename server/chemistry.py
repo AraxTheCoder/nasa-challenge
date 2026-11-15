@@ -21,7 +21,7 @@ import traceback
 
 import numpy as np
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import JSONResponse, Response
 
 router = APIRouter()
 _ID = re.compile(r"^[a-z0-9-]+$")
@@ -149,4 +149,10 @@ def chemistry_png(tid: str, name: str, request: Request):
         return missing
     if not (d / "chemistry" / name).is_file():
         return missing
-    return FileResponse(d / "chemistry" / name, media_type="image/png", headers={"Cache-Control": "no-cache"})
+    import io
+    from PIL import Image
+    from pipeline.chemistry import load_map
+    grey, cov = load_map(d / "chemistry" / name)         # T121: the map as shown on the sky map (smoothed)
+    buf = io.BytesIO()
+    Image.fromarray(np.dstack([grey.round().astype(np.uint8), np.where(cov, 255, 0).astype(np.uint8)]), "LA").save(buf, "PNG")
+    return Response(buf.getvalue(), media_type="image/png", headers={"Cache-Control": "no-cache"})
