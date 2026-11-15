@@ -1,7 +1,7 @@
-# T134: Unusual spectra for uncatalogued sources too (SPHEREx-only sources), started only on a click
+# T135: Unusual spectra for uncatalogued sources too (SPHEREx-only sources), started only on a click
 
 - **Owner:** Mati  ·  **Status:** doing
-- **Branch:** `mati/T134-uncatalogued-spectra`
+- **Branch:** `mati/T135-uncatalogued-spectra`
 - **Depends on / feeds:** T85/T86 (Joerg), T130 (Codex), T128 (catalogue check)
 
 ## Goal
