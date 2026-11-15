@@ -174,11 +174,14 @@ def build(root: Path = MIRROR, learn_weeks: bool = True) -> Path:
                     cols[k].append(v)
     out = root / "index.npz"
     prov = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(root.glob("obscore_d*.prov.json"))]
-    np.savez_compressed(
-        out, obs_id=np.array(cols["obs_id"]), collection=np.array(cols["collection"]),
-        detector=np.array(cols["detector"], np.int8),
-        **{k: np.array(cols[k]) for k in ("t_min", "t_max", "exptime", "em_min", "em_max", "s_ra", "s_dec")},
-        provenance=np.array(json.dumps(prov)))
+    tmp = root / "index.npz.part"            # T102: never a half-written index.npz under its final name
+    with open(tmp, "wb") as fh:
+        np.savez_compressed(
+            fh, obs_id=np.array(cols["obs_id"]), collection=np.array(cols["collection"]),
+            detector=np.array(cols["detector"], np.int8),
+            **{k: np.array(cols[k]) for k in ("t_min", "t_max", "exptime", "em_min", "em_max", "s_ra", "s_dec")},
+            provenance=np.array(json.dumps(prov)))
+    tmp.replace(out)
     if learn_weeks:
         learn_all_weeks(root, cols)
     print(f"wrote {out}: {len(cols['obs_id'])} images, {len(learn_versions(root))} week folders with known paths")
@@ -273,8 +276,31 @@ def resolve_urls(dids: list[str]) -> dict[str, str]:
 _INDEX: Index | None = None
 
 
+_checked: dict = {}
+
+
 def available(root: Path = MIRROR) -> bool:
-    return (root / "index.npz").exists()
+    """The index is there and complete. T102: a cut-off file (written by an older version while the server was
+    stopped, or on a full disk) is put aside as index.npz.broken, so it is built again instead of failing
+    every request for good."""
+    import zipfile
+
+    path = root / "index.npz"
+    try:
+        stamp = (path.stat().st_mtime_ns, path.stat().st_size)
+    except OSError:
+        return False
+    if _checked.get(str(path)) == stamp:
+        return True
+    if zipfile.is_zipfile(path):
+        _checked[str(path)] = stamp
+        return True
+    print(f"pipeline.mirror: {path} is cut off or damaged, putting it aside and building it again", flush=True)
+    try:
+        path.replace(path.with_name("index.npz.broken"))
+    except OSError:
+        pass
+    return False
 
 
 class IndexNotReady(RuntimeError):

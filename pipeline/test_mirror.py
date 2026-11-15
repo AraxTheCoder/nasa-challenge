@@ -69,3 +69,19 @@ def test_week_version_prefers_the_plain_folder(monkeypatch):
     resp = type("R", (), {"text": text, "raise_for_status": lambda self: None})()
     monkeypatch.setattr(s3, "_session", lambda: type("S", (), {"get": staticmethod(lambda *a, **k: resp)})())
     assert s3.week_version("dr1", "2025W47_2A") == "l2b-v27-2026-208"
+
+
+def test_cut_off_index_is_put_aside_not_called_ready(tmp_path):
+    """T102: a half-written index.npz made every request fail for good, because 'the file exists' meant ready."""
+    root = tmp_path / "mirror"
+    _write(root)
+    assert not mirror.available(root)                                  # nothing there yet
+    mirror.build(root, learn_weeks=False)
+    assert mirror.available(root) and not (root / "index.npz.part").exists()      # written in one step
+    whole = (root / "index.npz").read_bytes()
+    (root / "index.npz").write_bytes(whole[: len(whole) // 2])         # the server was stopped while writing
+    assert not mirror.available(root)
+    assert not (root / "index.npz").exists() and (root / "index.npz.broken").exists()
+    mirror.build(root, learn_weeks=False)                              # what ensure_background does next
+    assert mirror.available(root)
+    mirror.Index(root / "index.npz")
