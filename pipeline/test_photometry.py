@@ -264,3 +264,28 @@ def test_field_flag_mask_marks_persistent_flags_only(monkeypatch):
     assert tuple(r[1, 1, :3]) == (255, 214, 0) and 0 < r[1, 1, 3] < r[0, 0, 3]
     assert r[2, 2, 3] == 0 and r[2, 3, 3] == 0 and r[0, 1, 3] == 0
     assert m["counts"]["OVERFLOW"] == 10 and m["counts"]["GHOST"] == 3 and m["counts"]["TRANSIENT"] == 1
+
+
+def test_workers_end_when_their_server_is_gone():
+    """T99: a worker whose server process has disappeared exits by itself (no orphans after a restart)."""
+    import multiprocessing
+    import subprocess
+    import sys
+    import time
+    from pipeline import photometry as ph
+    stand_in = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])      # plays the server
+    ctx = multiprocessing.get_context("fork")
+    proc = ctx.Process(target=_worker_body, args=(stand_in.pid,))
+    proc.start()
+    time.sleep(0.5)
+    assert proc.is_alive()
+    stand_in.kill(); stand_in.wait()
+    proc.join(timeout=5)
+    assert not proc.is_alive() and proc.exitcode == 0
+
+
+def _worker_body(server_pid):
+    import time
+    from pipeline import photometry as ph
+    ph._watch_parent(server_pid, poll_s=0.1)
+    time.sleep(30)                                     # would idle on long after the server, without the watchdog

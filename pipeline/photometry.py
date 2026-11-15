@@ -242,10 +242,30 @@ def _pool():
         if _proc_pool is None:
             import multiprocessing
             from concurrent.futures import ProcessPoolExecutor
-            _proc_pool = ProcessPoolExecutor(SPECTRUM_PROCESSES, mp_context=multiprocessing.get_context("forkserver"))
+            _proc_pool = ProcessPoolExecutor(SPECTRUM_PROCESSES, mp_context=multiprocessing.get_context("forkserver"),
+                                             initializer=_watch_parent, initargs=(os.getpid(),))
             threading.Thread(target=_retire_when_idle, args=(_proc_pool,), daemon=True, name="spectrum-pool-idle").start()
         _pool_used = time.monotonic()
         return _proc_pool
+
+
+PARENT_POLL_S = 5.0
+
+
+def _watch_parent(server_pid: int, poll_s: float | None = None) -> None:
+    """T99: runs in each worker. Workers are children of the fork server, not of the Live API, so nothing ends them
+    when the API stops (a restart by the auto-pull left 16 per restart: 324 = 28.7 GB on one host). A daemon thread
+    checks every few seconds that the process that made the pool is still there, and ends this worker if not."""
+    def loop():
+        while True:
+            time.sleep(poll_s if poll_s is not None else PARENT_POLL_S)
+            try:
+                os.kill(server_pid, 0)                # signal 0: only "does it exist"
+            except ProcessLookupError:
+                os._exit(0)
+            except PermissionError:                   # exists, under another user: still alive
+                pass
+    threading.Thread(target=loop, daemon=True, name="watch-server").start()
 
 
 def _retire_when_idle(pool, idle_s: float | None = None, poll_s: float | None = None) -> None:
