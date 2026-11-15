@@ -34,6 +34,7 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `dev.py` | one-command launcher: Live API + viewer, opens the browser (`python web/dev.py --help`) |
 | `warm.py` | pre-builds the five test fields in a Live API cache before a demo (`python web/warm.py --help`) |
 | `tests/browser_test.py` | end-to-end browser test against `python -m server --fixture` (also in CI) |
+| `tests/live_check.py` | exploratory browser check on real data against the running web/dev.py (10 scenarios, report + screenshots, no asserts; T115–T117) |
 | `tests/*.mjs` | Node checks, e.g. HEALPix geometry against astropy-healpix |
 
 ## Page layout (T90)
