@@ -1,4 +1,7 @@
-# Contracts (v0.36)
+# Contracts (v0.37)
+
+v0.37 (T120): `/api/community/...`: a view counter and a discussion thread per map tile (HEALPix order 6),
+recent discussions across the sky. New endpoints and storage (`data/community/`) only. See "Community".
 
 v0.36 (T109): chemistry maps at a redshift: `GET /api/targets/<id>/chemistry?feature=<f>&z=<z>` (0 <= z <= 1, 4
 decimals), map key `<f>_z<z·10⁴>` (files, PNG, layer `x-<key>`; one z per combined picture); the answer adds
@@ -578,6 +581,26 @@ GET /api/targets/<id>/flags.png    RGBA, same size and orientation as the frames
   flags reach that share; opacity grows with the share. One-off flags (a cosmic ray in one frame) are not drawn.
 - `counts`: pixel-frames per flag name (bad and warn kinds). Synthetic targets: `{"status": "no_data"}`; unknown: 404.
 - Computed on first request (~1-12 s), cached next to target.json until the target changes.
+
+### Community (v0.37, T120)
+
+Per map tile = HEALPix order 6, nested `pix` (0 … 49151; the tiles the map builds fields for, ~55′).
+
+```
+GET  /api/community/tiles/<pix>           {"tile": {"order": 6, "pix"}, "center": {"ra_deg", "dec_deg"}, "views",
+                                           "n_comments", "comments": [{id, author, text, ra_deg?, dec_deg?, fov_arcmin?,
+                                           created_utc, replies: [...]}]}
+POST /api/community/tiles/<pix>/view       {"browser": "<random id>"}? -> {"views", "counted"} (one per browser per tile per hour)
+POST /api/community/tiles/<pix>/comments   {"author"?, "text", "parent_id"?, "ra_deg"?, "dec_deg"?, "fov_arcmin"?} -> 201 {"comment"}
+GET  /api/community/recent?limit=          {"latest": [...], "most_discussed": [...], "most_viewed": [...]} (each with "center")
+GET  /api/community/counts?pix=1,2,3       {"tiles": {"<pix>": {"views", "comments"}}}
+```
+
+- Plain text: stored as typed (control characters removed), shown as text, never as HTML. `text` ≤ 2000, `author`
+  ≤ 40 characters (empty = "anonymous"). Replies are one level: a reply to a reply joins the same thread.
+- 400 for a bad tile, empty / too long text, a non-finite or out-of-range position, a `parent_id` from another tile.
+  429 + Retry-After after 10 comments in 10 minutes from one address.
+- Stored in SQLite `data/community/community.db`; not a cache (the T58/T97 sweep never touches it).
 
 ### Target id and cache
 

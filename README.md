@@ -25,6 +25,8 @@ aligns them and the viewer blinks them. What works today:
 - a moving star's motion measured from SPHEREx alone, next to the catalogue value, and its distance when the
   parallax fit is consistent (T91: Barnard's Star 10.46 ± 0.19″/yr vs Gaia 10.39; Epsilon Indi B 3.49 pc vs 3.64)
 - a guided tour of the five official targets: "▶ Tour" on the map or `?tour=1` in a link (T92)
+- a discussion per map tile: "💬" on the map shows how often the tile was viewed and what others wrote; comments,
+  replies and "look here" positions, plus recent discussions across the sky (T120)
 - chemistry maps: where ices, PAH or hydrogen lines absorb or emit, one feature or several as one colour picture,
   presets tried on real fields, and a redshift for galaxies (T93, T96, T107–T109)
 
