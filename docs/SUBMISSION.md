@@ -63,7 +63,8 @@ Our tool is a blink comparator for SPHEREx: the method that found Pluto, in a br
    and explained in plain words (warm dust, cool atmosphere, ices, hydrogen lines). A panel ranks the
    sources of a field by how unusual their spectrum is.
 7. **See the chemistry.** For the shown field, map one chemical feature minus its surroundings: water,
-   CO₂ and CO ice, PAH dust, hydrogen lines. Tick up to three and get one colour picture.
+   CO₂ and CO ice, PAH dust, hydrogen lines. Tick several and get one colour picture, or pick a preset
+   (ionised gas, ices in cold clouds, lit cloud edges), each tried on real fields.
 8. **Explore the whole sky.** A pan-and-zoom map shows the SPHEREx all-sky maps in any of the 102
    channels or in false colour, with 2MASS and AllWISE for comparison, and computes deeper zoom levels
    from the original images while you zoom. "Blink this spot" turns any view into a field.

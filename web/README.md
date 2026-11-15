@@ -17,10 +17,17 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `paths.js`, `paths.css` | names and motion paths on the image, label priority + hover (T22, T34) |
 | `inspector.js` | side panel for a clicked object: what it is, how it moves, frame by frame (T23) |
 | `objects.js` | objects panel: known / unknown / artifact detections, known objects, synthetic badge (T13) |
-| `chemistry.js` | Chemistry (T93): for the shown field, the map of a chemical feature (ices, PAH, hydrogen lines) minus its continuum, as a map layer, with a plain-words note; takes the map from the automatic blink (`map:take`); T96: up to 3 ticked at once = one colour picture |
+| `chemistry.js` | Chemistry (T93): for the shown field, the map of a chemical feature (ices, PAH, hydrogen lines) minus its continuum, as a map layer, with a plain-words note; takes the map from the automatic blink (`map:take`); T96/T108: several ticked at once = one colour picture; T107: presets at the top of the list |
 | `photometry.js` | spectrum + change-at-same-wavelength charts from `/api/targets/<id>/photometry` (T49) |
 | `explore.js`, `sky.js`, `healpix.js` | sky map: own WebGL HiPS renderer, surveys, the field's epochs (T30, T36, T41, T42) |
 | `traces.js` | the field's objects drawn on the sky map (T35) |
+| `skylabels.js` | catalogue labels anywhere on the zoomed-in map from `/api/sky-labels` (T72), follows the Labels switch |
+| `passes.js` | blink SPHEREx's survey passes anywhere on the map (T82): live tiles per pass |
+| `mapframes.js` | the frame viewer's tools act on the map (T81): the shown frame / A − B drawn as its layer |
+| `flagsmap.js` | "Quality flags" in the map bar (T60): where the field's pixels are unreliable, as a mask |
+| `outliers.js` | "Unusual spectra" (T86/T88): sources whose spectral shape stands out, as a panel and rings on the map; T61: "Changes brightness", sources whose flux changes at the same wavelength (dashed V rings) |
+| `motion.js` | a catalogued star's motion measured from SPHEREx alone, in the spectrum panel (T91) |
+| `tour.js` | guided tour of the five official targets (T92, `?tour=1`) |
 | `util.js` | DOM and formatting helpers |
 | `presets.json` | the five official test fields (SIMBAD positions moved to epoch 2026.0, with query + timestamp) |
 | `discover.json`, `make_discover.py` | more quick picks (T65): fastest-moving stars + brown dwarfs SPHEREx covers in ≥ 2 epochs, with a reason each; "Surprise me" picks one. Regenerate: `python web/make_discover.py` (needs the local image index) |
