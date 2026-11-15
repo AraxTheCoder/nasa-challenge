@@ -540,3 +540,10 @@ body.map-only #ph-measure { display: none !important; }
 .tour-x { margin-left: auto; font-size: 20px; line-height: 1; padding: 0 4px; }
 .tour-nav { display: flex; justify-content: space-between; margin-top: 10px; }
 @media (max-width: 600px) { .tour-start { top: auto; right: auto; bottom: 12px; left: 12px; } }
+/* T60: quality flags */
+.ph-flag-list { margin: 6px 0; padding-left: 0; list-style: none; display: grid; gap: 4px; }
+.ph-flag { display: inline-block; font-family: ui-monospace, monospace; font-size: 0.85em; padding: 1px 6px; border-radius: 4px;
+  border: 1px solid var(--border); margin-right: 4px; }
+.ph-flag-bad { border-color: var(--error); color: var(--error); }
+.ph-flag-warn { border-color: var(--warn); color: var(--warn); }
+.ph-flag-info { color: var(--muted); }

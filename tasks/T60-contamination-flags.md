@@ -1,7 +1,7 @@
 # T60: A/C: Contamination flags in the viewer: per-frame FLAGS bits exported with the frame, overlay toggle, flag names at the inspected pixel
 
-- **Owner:** –  ·  **Status:** open
-- **Branch:** –
+- **Owner:** Joerg  ·  **Status:** doing
+- **Branch:** `joerg/T60-flags`
 - **Depends on / feeds:** T04
 
 ## Goal
@@ -13,6 +13,11 @@ The viewer can show SPHEREx quality flags (challenge consideration: "display met
 - [ ] Browser test on the fixture
 
 ## Findings
+- 2026-11-15 step 1 (merged): `pipeline/flags.py` has the 22 mask planes of the FLAGS header (MSKNnnnn, read from a
+  DR1 image) with kind (bad / warn / info) and plain words. Photometry returns `frames[].flags` + `flag_meanings`
+  (CONTRACTS); the spectrum panel shows "SPHEREx quality flags at this spot". Barnard's Star: TRANSIENT, BLOOM in
+  298 of 298 exposures, OVERFLOW (saturated) in 297, PERSIST in 21.
+- Still open: overlay on the map (which pixels of the shown frame are flagged), browser test on the fixture.
 From idea I5 in TEAM.md (moved to the Board by Mati, 2026-11-14). A ~1.5 h + C ~1 h.
 
 ## Questions / needs from others

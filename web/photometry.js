@@ -204,6 +204,7 @@ function render() {
     }
     if (st.context) parts.push(contextBox(ana));
     if (d.anomalies) parts.push(anomalyBox(d.anomalies));
+    parts.push(flagsBox(d));
     const legend = [...new Set(changes.map((c) => c.transition))].map((k) => {
       const c = changes.find((x) => x.transition === k);
       const sub = changes.filter((x) => x.transition === k).map((x) => x.pct);
@@ -247,6 +248,28 @@ function anomalyBox(an) {
       el("li", {}, el("strong", { class: a.known?.length ? "ph-anom-known" : "" }, `${kindWord[a.type] ?? a.type}: `), a.reason))) : null,
     items.length > 8 ? el("p", { class: "muted small" }, `${items.length - 8} more.`) : null,
     el("p", { class: "muted small" }, "Red rings in the spectrum: the exposures of a spike or dip. " + (an.method ?? "")));
+}
+
+/** T60: SPHEREx's own quality flags at this spot: which ones, in how many exposures, and what they mean. */
+function flagsBox(d) {
+  const frames = d.frames ?? [];
+  if (!frames.some((f) => Array.isArray(f.flags))) return null;      // measured before T60: no flags stored
+  const count = new Map();
+  for (const f of frames) for (const n of f.flags ?? []) count.set(n, (count.get(n) ?? 0) + 1);
+  const mean = d.flag_meanings ?? {};
+  const order = { bad: 0, warn: 1, info: 2 };
+  const rows = [...count.entries()].sort((a, b) => (order[mean[a[0]]?.kind] ?? 1) - (order[mean[b[0]]?.kind] ?? 1) || b[1] - a[1]);
+  const word = { bad: "unreliable", warn: "look twice", info: "note" };
+  return el("div", { class: "ph-context ph-flags" },
+    el("h4", {}, "SPHEREx quality flags at this spot"),
+    rows.length ? el("ul", { class: "ph-flag-list" }, ...rows.map(([n, c]) => {
+      const m = mean[n] ?? { kind: "warn", meaning: "" };
+      return el("li", {}, el("span", { class: `ph-flag ph-flag-${m.kind}`, title: word[m.kind] ?? "" }, n),
+        ` ${m.meaning}: ${c} of ${frames.length} exposure${frames.length === 1 ? "" : "s"}`);
+    })) : el("p", { class: "muted" }, `No flag set within the aperture in any of the ${frames.length} exposures.`),
+    el("p", { class: "muted small" }, "Flags come with every SPHEREx image, one bit per reason a pixel may be unreliable; " +
+      "listed if set anywhere in the measuring circle. Red = the value can't be trusted (left out of the checks above), " +
+      "amber = look twice, grey = information."));
 }
 
 function contextBox(ana) {

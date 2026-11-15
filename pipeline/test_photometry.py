@@ -186,3 +186,16 @@ def test_measure_all_every_exposure_retry_moved_path_and_cache(tmp_path, monkeyp
     assert all(size == photometry.SPECTRUM_CUT_DEG for _, size in fetched)     # tiny cutouts, not the 0.4 deg default
     fetched.clear()
     assert photometry.measure_all(10.0, 20.0, processes=0)["frames"] == res["frames"] and not fetched   # cached
+
+
+def test_flags_in_the_aperture_are_named(tmp_path):
+    """T60: every quality flag set in the aperture comes back by name, with its meaning."""
+    from pipeline import flags
+    write_cutout(tmp_path / "c.fits", flag_core=True)          # bit 0 on the star's core
+    m = measure_cutout(tmp_path / "c.fits", RA0, DEC0)
+    assert m["flags"] == ["TRANSIENT"] and m["masked_fraction"] > 0
+    write_cutout(tmp_path / "d.fits")
+    assert measure_cutout(tmp_path / "d.fits", RA0, DEC0)["flags"] == []
+    assert flags.names((1 << 1) | (1 << 21)) == ["OVERFLOW", "SOURCE"]
+    mean = flags.meanings([m, {"flags": ["SOURCE"]}])
+    assert mean["TRANSIENT"]["kind"] == "bad" and mean["SOURCE"]["kind"] == "info" and "cosmic ray" in mean["TRANSIENT"]["meaning"]

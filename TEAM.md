@@ -288,6 +288,7 @@ Dated, one line each, with why.
 - 2026-11-14 [Mati] CONTRACTS v0.26 (T93): chemistry maps: `GET /api/targets/<id>/chemistry`, `/api/chemistry/features`, map layer `x-<feature>` (server/hips.py: `LAYER_RE` + `chemistry_image`). Why: show the 102 bands as chemistry (feature minus continuum) for citizen scientists to look at; visualization only.
 - 2026-11-14 [Jonathan] `app/` deleted: the T55 redesign is merged into `/web/` (T90), which keeps every web/ feature. CLAUDE.md's `app/` rule removed, `web/dev.py` no longer serves `/app/`. Why: one viewer; everyone works in `web/` again.
 - 2026-11-15 [Mati] CONTRACTS v0.27 (T96): chemistry maps combined. `/api/chemistry/features` adds `shows` and `combine`; 2-3 maps as one colour picture (`.../chemistry/<a>-<b>[-<c>].png`, map layer `x-<a>-<b>[-<c>]`, features in wavelength order, shortest blue, longest red). Additive; asked by Mati so several filters can be on at once.
+- 2026-11-15 [Joerg] CONTRACTS v0.28 (T60): photometry answers carry `frames[].flags` + `flag_meanings` (SPHEREx quality flags by name, in plain words). Why: the challenge asks to "display metadata, like contamination flags"; new fields only.
 
 ## Ideas
 
@@ -821,3 +822,4 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-15 [Joerg] Claimed T97 (cache cap for team servers; found when this host's disk ran full) and T60 (contamination flags in the viewer: named in the challenge text, visualization, fits the scope Decision).
 - 2026-11-15 [Joerg] T97 done: `SPHEREX_CACHE_GB=<n>` (or `--cache-gb`) keeps a team server's caches under n GB without `--public`, tile row chunks included; off unless set. [to all] worth setting on any machine that serves for days: `SPHEREX_CACHE_GB=12 python web/dev.py`.
 - 2026-11-15 [Mati] Claimed T15 (submission text, data credits, AI-use disclosure). Draft goes to `docs/SUBMISSION.md`; data credits in README get the exact data set names / DOIs / acknowledgement texts. [to Joerg, Jonathan] I need from each human: the name to print under Team, and a yes/no on the project title (README still says "working title"). Answers in tasks/T15 "Notes from others".
+- 2026-11-15 [Joerg] T60 step 1 merged: the spectrum panel lists SPHEREx's quality flags at the clicked spot (name, plain words, in how many exposures; e.g. Barnard's Star: OVERFLOW "saturated" in 297 of 298). Table of all 22 flags in `pipeline/flags.py`. Next step: flags as an overlay on the map.

@@ -1,4 +1,7 @@
-# Contracts (v0.27)
+# Contracts (v0.28)
+
+v0.28 (T60): photometry answers name SPHEREx's quality flags: `frames[].flags` (names of every FLAGS bit set
+in the aperture) and `flag_meanings` (kind + plain words per name that occurs). New fields only.
 
 v0.27 (T96): chemistry maps combined: `/api/chemistry/features` adds `shows` (emission / absorption) per feature
 and `combine` {max, colours}; 2-3 maps as one colour picture: `.../chemistry/<a>-<b>[-<c>].png` and the map layer
@@ -415,6 +418,10 @@ VARIANCE or the annulus scatter (S3 cutouts have no VARIANCE). Answer (200):
 
 - `wavelength_um` / `bandwidth_um` are **at the measured position** (not the field centre's frame value).
 - `masked`: more than 20 % of the aperture flagged (saturation, bad pixels); `flux_ujy` may be `null`.
+- `frames[].flags` (v0.28, T60): names of every SPHEREx FLAGS bit set anywhere in the aperture, e.g.
+  `["OVERFLOW", "SOURCE"]` (mask planes of the image's FLAGS header; table in `pipeline/flags.py`). The answer's
+  `flag_meanings` maps each name that occurs to `{"kind": "bad" | "warn" | "info", "meaning": "saturated: …"}`;
+  `bad` are the bits that make a pixel count as masked. Spectra cached before T60 are measured again.
 - `missing`: frames without a cached cutout or where the position is off the image.
 - Synthetic targets: 200 with `{"status": "no_data", "message": ...}`. Unknown target: 404. Bad ra/dec: 400.
 
