@@ -30,6 +30,8 @@ aligns them and the viewer blinks them. What works today:
 - chemistry maps: where ices, PAH or hydrogen lines absorb or emit, one feature or several as one colour picture,
   presets tried on real fields, and a redshift for galaxies (T93, T96, T107–T109)
 
+Demo video (30 s): [plays in the browser](https://cdn.jsdelivr.net/gh/AraxTheCoder/nasa-challenge@d901d0b4d890120b0b9de85ed95056c172eed3b4/docs/demo/spherex-blink-demo-30s.mp4), file `docs/demo/spherex-blink-demo-30s.mp4`.
+
 Synthetic data appears only in fixture mode and tests, and is labelled as such everywhere. Plan and task board:
 `TEAM.md`.
 

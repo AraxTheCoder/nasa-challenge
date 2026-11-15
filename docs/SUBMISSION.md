@@ -7,12 +7,9 @@ challenge". Deadline: **Sunday, November 15, 2026, 23:59 local time** (CET, 22:5
 
 ## Still open before submitting (humans)
 
-1. **Demo link:** upload `spherex-blink-showcase-v8-30s-ai-audio-marked.mp4` (in Mati's Downloads: the 30.0 s
-   video with a visible "Audio: AI-generated" mark; the unmarked original must not be used) to a public link
-   (YouTube "unlisted" or Google Drive "anyone with the link") and paste it below.
-2. **Live tool URL** (T14 is still open). Without one, judges can only run the tool from the README. Judges who
+1. **Live tool URL** (T14 is still open). Without one, judges can only run the tool from the README. Judges who
    cannot open a link cannot judge the project, so a public URL matters most.
-3. **On the live form:** required fields, character limits, and the exact name of the AI field.
+2. **On the live form:** required fields, character limits, and the exact name of the AI field.
 
 ## Project name
 
@@ -33,7 +30,11 @@ can inspect. Volunteers comparing images in this way have already found most kno
 
 ## Link to project demo
 
-**OPEN:** public link to the 30-second video `spherex-blink-showcase-v8-30s-ai-audio-marked.mp4`.
+<https://cdn.jsdelivr.net/gh/AraxTheCoder/nasa-challenge@d901d0b4d890120b0b9de85ed95056c172eed3b4/docs/demo/spherex-blink-demo-30s.mp4>
+
+The 30-second video (1920×1080, sound AI-generated and marked in the video) plays in the browser. It is
+`docs/demo/spherex-blink-demo-30s.mp4` in the repository, served by jsDelivr from the public GitHub repository and
+pinned to one commit, so the link never changes. Checked 2026-11-15: HTTP 200, `video/mp4`, identical bytes.
 
 ## Link to final project
 
