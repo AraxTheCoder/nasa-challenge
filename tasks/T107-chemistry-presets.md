@@ -1,6 +1,6 @@
 # T107: C: Chemistry presets: tested feature combinations for kinds of objects
 
-- **Owner:** Mati  ·  **Status:** review (not yet seen in a browser)
+- **Owner:** Mati  ·  **Status:** done (checked in a browser by Joerg, 2026-11-15)
 - **Branch:** `mati/T107-chemistry-presets`
 - **Depends on / feeds:** T93 (chemistry maps), T96 (combined maps)
 

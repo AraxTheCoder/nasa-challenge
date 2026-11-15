@@ -21,13 +21,14 @@ def setup(tmp_path, monkeypatch):
                                                "image": {"width": 49, "height": 49, "pixel_scale_arcsec": 6.15},
                                                "frames": [{"id": "f000", "epoch": 1, "mjd": 1.0}]}))
 
-    def fake(target_dir, feature, progress=None, refresh=False):
+    def fake(target_dir, feature, progress=None, refresh=False, z=0.0):
         progress and progress(1, 1)
+        key = chemistry.map_key(feature, z)
         (target_dir / "chemistry").mkdir(exist_ok=True)
         Image.fromarray(np.dstack([np.full((49, 49), 200, np.uint8), np.full((49, 49), 255, np.uint8)]), "LA").save(
-            target_dir / "chemistry" / f"{feature}.png")
-        stats = {"version": chemistry.VERSION, "feature": feature, "name": "Br-α", "exposures_used": 7}
-        (target_dir / "chemistry" / f"{feature}.json").write_text(json.dumps(stats))
+            target_dir / "chemistry" / f"{key}.png")
+        stats = {"version": chemistry.VERSION, "feature": feature, "key": key, "z": z, "name": "Br-α", "exposures_used": 7}
+        (target_dir / "chemistry" / f"{key}.json").write_text(json.dumps(stats))
         return stats
     monkeypatch.setattr(chemistry, "compute", fake)
     return TestClient(create_app(cache_root=root, fixture=True)), d
@@ -140,3 +141,25 @@ def test_more_than_three_features(setup):
     rgba = np.asarray(Image.open(io.BytesIO(r.content)).convert("RGBA"))
     assert (rgba[rgba[..., 3] > 0][:, :3] == 255).all()           # all of them: white
     assert c.get("/api/hips/c1-p1-s5/x-pa_beta-br_gamma-pah-br_alpha/properties").status_code == 200
+
+
+def test_redshifted_map_and_picture(setup):
+    """T109: ?z= makes the map at a redshift under its own key; a picture takes maps of one z only."""
+    c, d = setup
+    url = "/api/targets/c1-p1-s5/chemistry"
+    r = c.get(url, params={"feature": "br_alpha", "z": 0.00524, "start": 1})
+    for _ in range(200):
+        if r.status_code == 200:
+            break
+        time.sleep(0.02)
+        r = c.get(url, params={"feature": "br_alpha", "z": 0.00524})
+    body = r.json()
+    assert body["status"] == "ready" and body["key"] == "br_alpha_z52" and body["layer"] == "x-br_alpha_z52"
+    assert (d / "chemistry" / "br_alpha_z52.png").is_file() and not (d / "chemistry" / "br_alpha.png").exists()
+    assert c.get(f"{url}/br_alpha_z52.png").status_code == 200
+    assert c.get("/api/hips/c1-p1-s5/x-br_alpha_z52/properties").status_code == 200
+    assert c.get(url, params={"feature": "br_alpha", "z": -0.5}).status_code == 400
+    _grey(d, "pah_z52", 255)
+    assert c.get(f"{url}/pah_z52-br_alpha_z52.png").status_code == 200
+    _grey(d, "pah", 255)
+    assert c.get(f"{url}/pah-br_alpha_z52.png").status_code == 404                    # two redshifts in one picture
