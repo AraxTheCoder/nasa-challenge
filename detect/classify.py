@@ -29,7 +29,7 @@ from pathlib import Path
 
 from pipeline.motion import summarize
 
-RULES_VERSION = "1"
+RULES_VERSION = "2"
 MATCH_PX = 2.0                   # ~12": JPL positions (~1") + SPHEREx PSF/centroid + trailing
 STILL_PX = 0.5                   # less than this over the whole track = not a mover
 LOOKUP_SERVICES = ("SB Identification", "SkyBoT", "MPC orbit catalogue")  # known-object lookup (T07, T51)
@@ -150,6 +150,14 @@ def classify_one(det: dict, target: dict) -> dict:
         if lclass and lclass != "still":
             return result("known", f"follows the catalogued star {lname} ({lclass}) within {lmed:.1f} px", 0.95 - 0.3 * lmed / MATCH_PX, lname)
         return result("artifact", f"sits on the catalogued star {lname}, which does not move", 0.1)
+
+    # 3b. T06: there at one moment in both simultaneous detectors, gone at other times. No motion to judge yet.
+    ev = det.get("evidence") or {}
+    if ev.get("moments") == 1 and ev.get("images", 0) >= 2 and ev.get("absent_in", 0) >= 2:
+        sn = float(ev.get("sn") or 0.0)
+        return result("unknown", f"in both detectors' images of one moment (S/N {sn:.0f}) and not there in "
+                      f"{ev['absent_in']} images of the same spot at other times: it moved on, flared or passed by; "
+                      "one moment gives no motion", 0.35 + min(0.2, sn / 100))
 
     # 4.-7. not a believable mover
     if len(points) < 2:
