@@ -30,7 +30,7 @@ aligns them and the viewer blinks them. What works today:
 - chemistry maps: where ices, PAH or hydrogen lines absorb or emit, one feature or several as one colour picture,
   presets tried on real fields, and a redshift for galaxies (T93, T96, T107–T109)
 
-Demo video (30 s): [plays in the browser](https://cdn.jsdelivr.net/gh/AraxTheCoder/nasa-challenge@d901d0b4d890120b0b9de85ed95056c172eed3b4/docs/demo/spherex-blink-demo-30s.mp4), file `docs/demo/spherex-blink-demo-30s.mp4`.
+Demo video (30 s): [plays in the browser](https://cdn.jsdelivr.net/gh/AraxTheCoder/nasa-challenge@725e92de1f5096d53af127496fad0ee5df47f2c9/docs/demo/spherex-blink-demo-30s.mp4), file `docs/demo/spherex-blink-demo-30s.mp4`.
 
 Synthetic data appears only in fixture mode and tests, and is labelled as such everywhere. Plan and task board:
 `TEAM.md`.
@@ -210,7 +210,7 @@ The code, tests and documentation were written by AI coding assistants under the
 (Anthropic) through Claude Code, one session per team member, and OpenAI Codex for some tasks (T129–T140,
 marked "Codex" in `TEAM.md`). The rules the Claude Code sessions follow are in `CLAUDE.md`. The team decided
 what to build, reviewed the results and checked them on real data. The tool contains no AI-generated images,
-video or audio; the sound of the demo video is AI-generated and marked as such in the video.
+video or audio; the demo video (picture and sound) is AI-generated and marked as such in the video.
 
 ## Team
 
