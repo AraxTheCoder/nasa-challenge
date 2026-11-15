@@ -1,7 +1,7 @@
 # T67: B: "Follows the detector, not the sky" artifact rule: a detection fixed in detector pixels while its sky position jumps (ghost, persistence, hot pixel) is an artifact
 
-- **Owner:** –  ·  **Status:** open
-- **Branch:** –
+- **Owner:** Mati  ·  **Status:** doing
+- **Branch:** `mati/T67-detector-artifacts`
 - **Depends on / feeds:** T06, T08
 
 ## Goal
