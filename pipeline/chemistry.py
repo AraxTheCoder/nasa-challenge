@@ -47,6 +47,36 @@ FEATURES = {
     "co2_ice": ("CO₂ ice", 4.27, 0.03, "ice", "carbon-dioxide ice on cold dust grains (one of SPHEREx's main science goals)"),
     "co_ice": ("CO", 4.67, 0.03, "ice", "carbon-monoxide ice on very cold grains; CO gas absorbs here in cool atmospheres"),
 }
+# T107: ready-made combinations for kinds of places, each tried on real fields (tasks/T107). Visualization only
+# (Decision 2026-11-14): `looks_for` says where to look, `read` what the colours mean, `caveats` what fools it;
+# nothing is classified. Features in wavelength order = colour order (blue, green, red).
+PRESETS = [
+    {"id": "ionised_gas", "name": "Ionised gas", "features": ["pa_beta", "br_gamma", "br_alpha"],
+     "looks_for": "hot hydrogen gas around young or hot stars: emission nebulae, H II regions",
+     "read": "Three hydrogen lines. White = gas in the open. Dust dims the short wavelengths most, so the more dust "
+             "lies in front, the redder: red alone (Br-α) = gas deep inside a cloud, invisible to the eye.",
+     "caveats": "A one-colour halo around a very bright star is the star's light, not gas; the brightest nebula "
+                "cores saturate (black).",
+     "try": {"name": "Orion Nebula (M42 and M43)", "ra": 83.8221, "dec": -5.3911, "size": 20},
+     "tested": "Orion: M42 white, M43 redder; ρ Oph: only Br-α (red) around the embedded star S1"},
+    {"id": "cloud_ices", "name": "Ices in cold clouds", "features": ["h2o_ice", "co2_ice", "co_ice"],
+     "looks_for": "ice on dust grains in dark clouds, seen against the light behind them",
+     "read": "Brighter = deeper absorption. CO₂ (green) and CO (red) together = yellow: the cold dense parts of a "
+             "cloud; white = all three ices.",
+     "caveats": "Blue alone (water ice) inside a bright nebula is the PAH glow, not ice: trust it where green or "
+                "red show too. Straight stripes are exposure edges. A cloud with nothing bright behind it shows nothing.",
+     "try": {"name": "ρ Ophiuchi dark cloud (L1688)", "ra": 246.79, "dec": -24.54, "size": 30},
+     "tested": "ρ Oph: green/yellow along the dense filaments of the dark cloud; Orion and NGC 7023: blue or green "
+               "over the bright nebula (PAH, the caveat)"},
+    {"id": "cloud_edge", "name": "Lit cloud edges", "features": ["pah", "br_alpha", "co2_ice"],
+     "looks_for": "the layers where starlight meets a cloud: the glowing surface, ionised gas, the icy inside",
+     "read": "Blue = PAH glowing in UV light on the lit surfaces, green = ionised gas (Br-α), red = CO₂ ice in the "
+             "shielded inside. Blue + green = cyan close to the stars.",
+     "caveats": "In the bright cores of big H II regions (Orion) the colours mix and saturate.",
+     "try": {"name": "Iris Nebula (NGC 7023)", "ra": 315.40, "dec": 68.17, "size": 20},
+     "tested": "NGC 7023: PAH (blue) fills the reflection nebula, ice (red) in the cloud beside it; ρ Oph: ice "
+               "inside the cloud, PAH on the side facing the bright stars; Orion: unclear"},
+]
 CONT_CHANNELS = 3.0          # continuum reaches this many channel widths beyond the feature (+ half a channel gap)
 SIGMA_SPAN = 5.0             # ±this many sigma = black / white
 THREADS = 8

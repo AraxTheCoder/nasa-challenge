@@ -91,6 +91,8 @@ def test_features_say_direction_and_colours(setup):
     shows = {f["id"]: f["shows"] for f in body["features"]}
     assert shows["br_alpha"] == "emission" and shows["h2o_ice"] == "absorption"
     assert body["combine"] == {"max": 3, "colours": {"2": ["#00ffff", "#ff0000"], "3": ["#0000ff", "#00ff00", "#ff0000"]}}
+    known = set(shows)                                                  # T107: presets use only listed features
+    assert body["presets"] and all(set(p["features"]) <= known and p["try"]["name"] for p in body["presets"])
 
 
 def test_combined_png_and_layer(setup):

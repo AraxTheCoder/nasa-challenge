@@ -98,3 +98,14 @@ def test_combined_map_colours_and_coverage(tmp_path):
         assert "PAH" in str(e)
     else:
         raise AssertionError("missing map not reported")
+
+
+def test_presets_are_valid_combinations():
+    """T107: every preset is a combination the server can make, in colour order, with its reading guide."""
+    from pipeline import chemistry as C
+    ids = [p["id"] for p in C.PRESETS]
+    assert len(ids) == len(set(ids)) and ids
+    for p in C.PRESETS:
+        assert C.combo(p["features"]) == p["features"]            # valid, 2-3 features, already in wavelength order
+        assert all(p[k] for k in ("name", "looks_for", "read", "caveats", "tested"))
+        assert -90 <= p["try"]["dec"] <= 90 and 0 <= p["try"]["ra"] < 360 and 5 <= p["try"]["size"] <= 210

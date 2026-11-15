@@ -1,6 +1,6 @@
 """T93: chemistry maps for a built field (CONTRACTS "Chemistry maps").
 
-    GET /api/chemistry/features                                 the features (id, name, µm, kind, what)
+    GET /api/chemistry/features                                 the features (id, name, µm, kind, what), T107 presets
     GET /api/targets/<id>/chemistry?feature=<f>                 cached result, else {"status": "not_started"}
     GET /api/targets/<id>/chemistry?feature=<f>&start=1         start; 202 {"status": "building", done, total},
                                                                 then 200 {"status": "ready", ...stats, "layer"}
@@ -34,12 +34,13 @@ def _features():
 
 @router.get("/api/chemistry/features")
 def features():
-    from pipeline.chemistry import COMBINE_COLOURS, COMBINE_MAX, SHOWS
+    from pipeline.chemistry import COMBINE_COLOURS, COMBINE_MAX, PRESETS, SHOWS
     hexes = lambda cs: ["#" + "".join(f"{round(255 * v):02x}" for v in c) for c in cs]
     return {"features": [{"id": k, "name": n, "um": um, "half_width_um": hw, "kind": kind, "what": what,
                           "shows": SHOWS[k]}                                  # T96: its direction in a combination
                          for k, (n, um, hw, kind, what) in _features().items()],
-            "combine": {"max": COMBINE_MAX, "colours": {str(k): hexes(v) for k, v in COMBINE_COLOURS.items()}}}
+            "combine": {"max": COMBINE_MAX, "colours": {str(k): hexes(v) for k, v in COMBINE_COLOURS.items()}},
+            "presets": PRESETS}                                                 # T107
 
 
 def _run(target_dir, tid: str, feature: str, job: dict) -> None:
