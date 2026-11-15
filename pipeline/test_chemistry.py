@@ -156,3 +156,18 @@ def test_redshift_keys_and_limits(tmp_path):
         raise AssertionError("beyond 5 µm not reported")
     others = [um for um, _ in C._other_features(4.052 * 1.0052, 0.0052)]       # the galaxy's own lines move too
     assert any(abs(um - 3.29 * 1.0052) < 1e-9 for um in others) and all(abs(um - 4.052 * 1.0052) > 1e-6 for um in others)
+
+
+def test_redshift_lookup_keeps_only_galaxies(monkeypatch):
+    """T112: a Milky Way object with a SIMBAD velocity (ρ Oph: the molecular cloud, otype SFR, z 0.028) is not a
+    galaxy: it must not set the field's redshift."""
+    import numpy as np
+    from pipeline import chemistry as C
+    from pipeline import labels as L
+    rows = {"main_id": ["NAME Ophiuchus Molecular Cloud", "NGC 6240", "V* XX Oph"], "otype": ["SFR", "SyG", "*"],
+            "ra": [247.0, 246.8, 246.7], "dec": [-24.5, -24.5, -24.6], "rvz_redshift": [0.028, 0.02472, 0.002],
+            "rvz_qual": ["D", "A", "C"], "galdim_majaxis": [600.0, 2.1, np.nan]}
+    monkeypatch.setattr(L, "_tap", lambda url, adql: {k: np.ma.masked_invalid(np.array(v)) if k in ("galdim_majaxis",)
+                                                      else np.ma.asarray(np.array(v)) for k, v in rows.items()})
+    out = C.galaxy_redshifts({"center": {"ra_deg": 246.79, "dec_deg": -24.54}, "size_arcmin": 30})
+    assert [g["name"] for g in out["galaxies"]] == ["NGC 6240"]
