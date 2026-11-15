@@ -19,7 +19,7 @@ export const PASS_ORDER = 6;     // the pass layers' first live order: they blin
 const STEP_MS = 800;
 const DATES_MOVE_DEG = 0.3;      // ask for the dates again once the centre moved this far
 
-const st = { mode: "passes", passes: [], layers: false, colour: false, paused: false, shown: -1, labels: [], note: null, listeners: [],
+const st = { mode: "passes", passes: [], layers: false, colour: false, paused: false, still: false, shown: -1, labels: [], note: null, listeners: [],
   dates: null, datesAt: null, datesTimer: null };
 
 export const mode = () => st.mode;
@@ -28,6 +28,9 @@ export const passesOn = () => (explore.wantedOrder() ?? 0) >= PASS_ORDER;
 export function onModeChange(fn) { st.listeners.push(fn); }
 export const colour = () => st.colour;
 export const paused = () => st.paused;
+
+/** T100: the Blink switch is off: the shown pass stays until a date label is clicked. */
+export function setStill(on) { st.still = !!on; }
 
 /** T90: the map tools / frame viewer below drive the map: leave the overlays alone until resumed. */
 export async function setPaused(on) {
@@ -115,7 +118,7 @@ function update() {
 }
 
 function step() {
-  if (st.mode !== "passes" || st.paused || !passesOn()) return;
+  if (st.mode !== "passes" || st.paused || st.still || !passesOn()) return;
   const ready = readyOf(states());
   if (ready.length < 2) return;
   show(ready[(ready.indexOf(st.shown) + 1) % ready.length]);
@@ -190,6 +193,10 @@ export async function initPasses() {
   st.passes = explore.surveyPasses();
   const box = $("#blink-passes");
   st.labels = st.passes.map((n) => el("span", { class: "pass-label" }, `pass ${n}`));
+  // T100: a click shows that pass (if it is loaded here); with the Blink switch off it then stays
+  st.labels.forEach((b, i) => b.addEventListener("click", () => {
+    if (st.mode === "passes" && !st.paused && passesOn() && states()[i].state === "ready") show(i);
+  }));
   st.note = el("span", { class: "muted small" });
   box.replaceChildren(...st.labels, st.note);
   st.mode = null;                                    // force a full setMode
