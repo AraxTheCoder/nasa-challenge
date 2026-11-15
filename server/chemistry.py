@@ -110,11 +110,13 @@ def redshift(tid: str, request: Request):
     target = json.loads((d / "target.json").read_text(encoding="utf-8"))
     if target.get("synthetic"):
         return {"status": "ready", "id": tid, "galaxies": [], "provenance": None}
+    from pipeline.chemistry import REDSHIFT_VERSION, galaxy_redshifts
     cache = d / "chemistry" / "redshift.json"
     if cache.is_file():
-        return {"status": "ready", "id": tid, **json.loads(cache.read_text(encoding="utf-8"))}
-    from pipeline.chemistry import galaxy_redshifts
-    out = galaxy_redshifts(target)
+        hit = json.loads(cache.read_text(encoding="utf-8"))
+        if hit.get("version") == REDSHIFT_VERSION:     # T112: answers from before the galaxy-only filter are redone
+            return {"status": "ready", "id": tid, **hit}
+    out = {**galaxy_redshifts(target), "version": REDSHIFT_VERSION}
     if out["provenance"] is not None:                  # SIMBAD answered: keep it (no answer: ask again next time)
         cache.parent.mkdir(exist_ok=True)
         cache.write_text(json.dumps(out, indent=1, ensure_ascii=False), encoding="utf-8")

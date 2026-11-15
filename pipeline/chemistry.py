@@ -294,6 +294,13 @@ Z_MIN_GALAXY = 0.001         # below this (cz < 300 km/s) a redshift is a Milky 
 Z_LIST = 8
 
 
+REDSHIFT_VERSION = 2     # T112: 2 = galaxies only (cached answers of version 1 are asked again)
+# SIMBAD object types that are galaxies, quasars or groups / clusters of galaxies (condensed otype codes)
+GALAXY_OTYPES = {"G", "G?", "GiC", "GiG", "GiP", "BiC", "IG", "PaG", "PoG", "SBG", "SyG", "Sy1", "Sy2", "AGN", "AG?",
+                 "LIN", "QSO", "Q?", "Bla", "Bz?", "BLL", "BL?", "rG", "H2G", "LSB", "bCG", "EmG", "ClG", "C?G", "GrG",
+                 "CGG", "LeG", "LeQ", "LeI", "LI?"}
+
+
 def galaxy_redshifts(target: dict) -> dict:
     """Galaxies with a measured redshift in the field, biggest first (they dominate the map), from SIMBAD
     `basic.rvz_redshift`: {"galaxies": [{name, otype, z, cz_km_s, quality, major_arcmin, sep_arcmin, ra_deg,
@@ -312,6 +319,10 @@ def galaxy_redshifts(target: dict) -> dict:
         except Exception:  # noqa: BLE001 - next mirror
             continue
         prov = {"service": "SIMBAD TAP " + url, "query": adql, "retrieved_utc": _now()}
+        # T112: galaxies only. SIMBAD gives velocities to Milky Way objects too (on ρ Oph the "Ophiuchus Molecular
+        # Cloud", otype SFR, z = 0.028 quality D, set z for the whole field and shifted every chemistry map by 2.8 %)
+        keep = [i for i, o in enumerate(cols.get("otype", [])) if str(o).strip() in GALAXY_OTYPES]
+        cols = {k: v[keep] for k, v in cols.items()}
         n = len(cols.get("main_id", []))
         if not n:
             return {"galaxies": [], "provenance": prov}
