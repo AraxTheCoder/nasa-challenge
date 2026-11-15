@@ -42,6 +42,8 @@ Mati). When you finish a task, move its row to Done in the same commit.
 
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
+| T145 | A/C: The page shows which commit it runs ("build 1b889a6" next to the title, linked to GitHub), so a deployment can be checked for being up to date | Mati | doing | `mati/T145-T146-build-moderation` | [tasks/T145](tasks/T145-build-commit.md). Asked by Jonathan (team chat) |
+| T146 | A/C: Delete community notes: admin-only `DELETE /api/community/comments/{id}` (T58 admin token); `?admin=<token>` once shows "Delete" on every comment in that browser | Mati | doing | `mati/T145-T146-build-moderation` | [tasks/T146](tasks/T146-community-delete.md). Asked by Jonathan (trolling on the public site); touches Joerg's / Codex's community code |
 | T139 | C: Field blink freezes once the labels or known asteroids/comets arrive (a fresh copy of the field replaces the old one without a hand-over; T134's checks compare the exact copy): hand the fresh copy over everywhere the field is remembered | Mati | review | `mati/T139-blink-refresh` | [tasks/T139](tasks/T139-blink-refresh.md). Found by Mati; keeps T134's checks |
 | T137 | C: Chemistry list scrolls inside the window (it ran past the bottom since T124); the floating panels fold to one line (– next to the grip, remembered); a moved panel stays fully on screen | Mati | review | `mati/T137-fold-panels` | [tasks/T137](tasks/T137-fold-panels.md). Asked by Mati; touches Jonathan's web/hud.js (note in tasks/T124) |
 | T94 | C: Missing tiles on the map: failed tiles never asked again (holes until reload), false-colour field epochs 422, holes near the poles when zooming in | Jonathan | doing | `main` | [tasks/T94](tasks/T94-missing-tiles.md) |
