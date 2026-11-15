@@ -340,6 +340,9 @@ body.map-only .viewer:has(> #viewer-body[hidden]) { display: none; }
    play, λ filter, timeline, frame panels) drive the map instead (T81, mapframes.js). ?frames=1 shows it. */
 body.map-only #empty, body.map-only #stage, body.map-only #paths-controls, body.map-only #trail-controls,
 body.map-only #ph-measure { display: none !important; }
+/* T144: a stack is drawn on the frame image, so while one is chosen the map view shows the image (and the objects
+   on it, for "along the selected object"). Two classes beat the rule above. */
+body.map-only.stack-on #stage { display: block !important; }
 
 /* ---------- frame tools ---------- */
 .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }

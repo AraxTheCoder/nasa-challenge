@@ -124,6 +124,7 @@ async function draw() {
 function setMode(mode) {
   st.mode = mode;
   $("#stack-mode").value = mode;
+  document.body.classList.toggle("stack-on", mode !== "off");   // T144: the map view shows the frame image then
   $("#stack-motion").hidden = mode !== "motion";
   if (mode !== "off") {
     if ($("#btn-diff").getAttribute("aria-pressed") === "true") $("#btn-diff").click(); // one overlay at a time
