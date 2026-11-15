@@ -163,3 +163,44 @@ def test_redshifted_map_and_picture(setup):
     assert c.get(f"{url}/pah_z52-br_alpha_z52.png").status_code == 200
     _grey(d, "pah", 255)
     assert c.get(f"{url}/pah-br_alpha_z52.png").status_code == 404                    # two redshifts in one picture
+
+
+def test_candidates_route(setup):
+    """T128: GET .../chemistry/candidates?maps=... (not taken by the .../chemistry/<name>.png route)."""
+    client, d = setup
+    (d / "chemistry").mkdir(exist_ok=True)
+    g = np.full((49, 49), 128, np.uint8)
+    g[22:27, 22:27] = 255                                       # Br-α glowing at one spot
+    Image.fromarray(np.dstack([g, np.full((49, 49), 255, np.uint8)]), "LA").save(d / "chemistry" / "br_alpha.png")
+    r = client.get("/api/targets/c1-p1-s5/chemistry/candidates?maps=br_alpha")
+    assert r.status_code == 200 and r.json()["status"] == "ready"
+    items = r.json()["items"]
+    assert len(items) == 1 and (items[0]["x"], items[0]["y"]) == (24, 24) and items[0]["sigma"]["br_alpha"] > 3
+    assert client.get("/api/targets/c1-p1-s5/chemistry/candidates?maps=br_alpha-pah").json()["status"] == "not_made"
+    assert client.get("/api/targets/c1-p1-s5/chemistry/candidates?maps=br_alpha-pah").status_code == 404
+    assert client.get("/api/targets/c1-p1-s5/chemistry/candidates?maps=nope").status_code == 400
+    assert client.get("/api/targets/c1-p1-s5/chemistry/candidates").status_code == 400
+    assert client.get("/api/targets/nope-x/chemistry/candidates?maps=br_alpha").status_code == 404
+
+
+def test_candidates_with_catalogues(setup, monkeypatch):
+    """T128: cats=... looks the spots up (faked here) and tags them; unknown catalogue: 400; the features list
+    names the catalogues."""
+    from pipeline import catcheck
+    client, d = setup
+    (d / "chemistry").mkdir(exist_ok=True)
+    g = np.full((49, 49), 128, np.uint8)
+    g[22:27, 22:27] = 255
+    Image.fromarray(np.dstack([g, np.full((49, 49), 255, np.uint8)]), "LA").save(d / "chemistry" / "br_alpha.png")
+    seen = {}
+
+    def fake(target_dir, spots, cats, year):
+        seen.update(cats=cats, n=len(spots))
+        return {"matches": [{"simbad": None} for _ in spots], "failed": ["gaia"]}
+    monkeypatch.setattr(catcheck, "check", fake)
+    r = client.get("/api/targets/c1-p1-s5/chemistry/candidates?maps=br_alpha&cats=simbad,gaia&preset=young_stars").json()
+    assert seen == {"cats": ["simbad", "gaia"], "n": 1}
+    assert r["items"][0]["tag"] == "new" and r["checked"] == ["simbad"] and r["failed"] == ["gaia"]
+    assert client.get("/api/targets/c1-p1-s5/chemistry/candidates?maps=br_alpha&cats=nope").status_code == 400
+    cats = client.get("/api/chemistry/features").json()["catalogues"]
+    assert {c["id"] for c in cats} == set(catcheck.CATALOGUES) and [c["id"] for c in cats if c["default"]] == list(catcheck.DEFAULT)

@@ -60,8 +60,10 @@ FEATURES = {
 # (Decision 2026-11-14): `looks_for` says where to look, `read` what the colours mean, `caveats` what fools it;
 # nothing is classified. Features in wavelength order = colour order (blue, green, red).
 # T127: `group` "object" (a kind of object, tasks/T127) or "place" (T107); `needs_z`: only at the object's redshift.
+# T128: `expects`: the SIMBAD types a known one has ("galaxies" = GALAXY_OTYPES); candidates of another type or
+# none at all are listed first.
 PRESETS = [
-    {"id": "brown_dwarfs", "group": "object", "name": "Brown dwarfs", "features": ["h2o_14", "h2o_19", "ch4"],
+    {"id": "brown_dwarfs", "group": "object", "expects": ["BD*", "BD?", "LM*", "LM?"], "name": "Brown dwarfs", "features": ["h2o_14", "h2o_19", "ch4"],
      "looks_for": "brown dwarfs: too cool to be stars, with water and methane in their atmospheres",
      "read": "A dot dark at all three = white: water (1.4 and 1.9 µm) and methane, a T or Y dwarf. Water only "
              "(blue + green = cyan): an M or L dwarf, or a cool giant. Red alone: methane only shows, as for the "
@@ -71,7 +73,7 @@ PRESETS = [
      "try": {"name": "Epsilon Indi B (two brown dwarfs)", "ra": 331.0966, "dec": -56.8007, "size": 15},
      "tested": "Epsilon Indi B: a white dot at the centre (dark at all three); the bright star Eps Ind A beside it "
                "leaves a big cyan halo (its light). WISE 0855: nothing, too faint for these maps"},
-    {"id": "young_stars", "group": "object", "name": "Young stars still growing", "features": ["pa_beta", "pa_alpha", "br_alpha"],
+    {"id": "young_stars", "group": "object", "expects": ["TT*", "TT?", "Y*O", "Y*?", "Or*", "Ae*", "Ae?", "pr*", "pr?", "Em*"], "name": "Young stars still growing", "features": ["pa_beta", "pa_alpha", "br_alpha"],
      "looks_for": "young stars that still pull in gas from their disk (T Tauri stars): it glows in hydrogen lines "
                   "as it falls onto the star",
      "read": "A bright dot in all three (white) = hydrogen glowing at the star; often only Pa-α, the strongest, "
@@ -80,7 +82,7 @@ PRESETS = [
                 "can be weaker in some exposures.",
      "try": {"name": "RW Aurigae", "ra": 76.9566, "dec": 30.4013, "size": 15},
      "tested": "RW Aurigae: a green dot (Pa-α) on the star; some other bright stars leave small green dots too"},
-    {"id": "cool_giants", "group": "object", "name": "Pulsating cool giants", "features": ["h2o_14", "h2o_19", "co_23"],
+    {"id": "cool_giants", "group": "object", "expects": ["Mi*", "Mi?", "LP*", "LP?", "AB*", "AB?", "C*", "C*?", "S*", "S*?", "RG*", "OH*", "OH?", "sr*", "s*r"], "name": "Pulsating cool giants", "features": ["h2o_14", "h2o_19", "co_23"],
      "looks_for": "cool giant stars near the end of their lives (Miras): water and carbon monoxide in their huge "
                   "atmospheres",
      "read": "A dot dark in all three = white: water (blue, green) and CO (red). A Mira is one of the brightest "
@@ -91,7 +93,7 @@ PRESETS = [
      "try": {"name": "R Draconis", "ra": 248.1672, "dec": 66.755, "size": 15},
      "tested": "R Draconis: the core saturates (hole); the glow of its light around it is green / cyan (deep water "
                "absorption); CO (red) unclear there"},
-    {"id": "protostars", "group": "object", "name": "Protostars in ice clouds", "features": ["h2o_ice", "br_alpha", "co2_ice"],
+    {"id": "protostars", "group": "object", "expects": ["Y*O", "Y*?", "TT*", "TT?", "Or*", "pr*", "pr?", "Ae*", "Ae?", "HH", "IR", "MIR", "FIR", "smm"], "name": "Protostars in ice clouds", "features": ["h2o_ice", "br_alpha", "co2_ice"],
      "looks_for": "stars being born deep inside a cold cloud: ice in the envelope around them absorbs their "
                   "light, gas falling onto them glows",
      "read": "Blue + red = magenta: water and CO₂ ice toward the star; green: hydrogen glowing at it (Br-α, which "
@@ -101,7 +103,7 @@ PRESETS = [
      "try": {"name": "ρ Ophiuchi dark cloud (L1688)", "ra": 246.79, "dec": -24.54, "size": 30},
      "tested": "ρ Oph: red (CO₂ ice) along the dark filaments with magenta dots on them: stars seen through or inside "
                "the ice; the nebula at the top right white (Br-α with the others); blue stripes are exposure edges"},
-    {"id": "starburst", "group": "object", "name": "Star-forming galaxies", "features": ["pa_beta", "pah", "br_alpha"],
+    {"id": "starburst", "group": "object", "expects": "galaxies", "name": "Star-forming galaxies", "features": ["pa_beta", "pah", "br_alpha"],
      "needs_z": True,
      "looks_for": "galaxies forming many stars: young stars light up hydrogen gas and PAH molecules",
      "read": "Blue = Pa-β, green = PAH, red = Br-α, at the galaxy's redshift (filled in from SIMBAD). White = all "
@@ -109,7 +111,7 @@ PRESETS = [
      "caveats": "Needs the galaxy's redshift (the z box). A galaxy smaller than a few pixels is one dot.",
      "try": {"name": "NGC 6240 (two merging galaxies)", "ra": 253.2454, "dec": 2.4009, "size": 15},
      "tested": "NGC 6240 at z = 0.0247 (filled in from SIMBAD): a yellow-green dot (PAH and Br-α), Pa-β weak"},
-    {"id": "quasars", "group": "object", "name": "Quasars", "features": ["h_alpha", "pa_beta", "pa_alpha"],
+    {"id": "quasars", "group": "object", "expects": ["QSO", "Q?", "Bla", "Bz?", "BLL", "BL?", "AGN", "AG?", "Sy1", "Sy2", "SyG", "LIN", "LeQ"], "name": "Quasars", "features": ["h_alpha", "pa_beta", "pa_alpha"],
      "needs_z": True,
      "looks_for": "quasars: hot gas swirling around a giant black hole shines in broad hydrogen lines, shifted to "
                   "longer wavelengths by the expansion of the universe",
@@ -520,6 +522,124 @@ def combined_map(target_dir: Path, features) -> tuple[np.ndarray, np.ndarray]:
         rgb += s[..., None] * np.asarray(colour, np.float32)
         cov &= has
     return np.clip(rgb * 255.0, 0, 255).round().astype(np.uint8), cov
+
+
+# ---------- T128: candidates, the spots where a picture's features show ----------
+
+CAND_MAX = 25                # spots listed
+CAND_SHOW = 2.0              # a feature "shows" at a spot from this many noise levels (its direction)
+CAND_SINGLE = 3.0            # one map alone: from this many
+CAND_PAIR = 0.6              # the opposite direction this strong (relative) within CAND_R px: a sharpness pair
+CAND_R = 3                   # px (6.15″): the spot's neighbourhood for pairs, compactness, duplicates
+CAND_EDGE = 3                # px kept away from the coverage edge and from empty (saturated) holes, whose rims ring
+MATCH_ARCSEC = 10.0          # a catalogue source this close names the spot
+CAND_COMPACT = 0.2           # compact: under this share of the 11 × 11 px around a spot is above half its strength
+CAND_EXT_WEIGHT = 0.7        # extended spots rank with this share of their strength (a halo below the dwarf beside it)
+CAND_EXT = 5                 # extended spots (a bright star's halo, a nebula) merge over CAND_EXT × the radius (~1.5′)
+NEAR_ARCMIN, NEAR_MAG = 3.0, 9.0   # an unnamed extended spot this close to a star this bright: "near" it (its halo)
+
+
+def sigmas(grey: np.ndarray) -> np.ndarray:
+    """T128: noise levels from a grey map (the inverse of to_grey's asinh stretch; black / white = about ±5)."""
+    return np.sinh((np.asarray(grey, np.float32) - 128.0) / 127.0 * math.asinh(SIGMA_SPAN))
+
+
+def _label_positions(target: dict):
+    """(name, kind, otype, mag, ra, dec) per catalogue label of the field (median over its frame positions)."""
+    out = []
+    for lab in target.get("labels") or []:
+        pos = lab.get("positions") or []
+        if not pos:
+            continue
+        ra = float(np.median([p["ra_deg"] for p in pos]))
+        dec = float(np.median([p["dec_deg"] for p in pos]))
+        out.append((lab.get("name"), lab.get("kind"), lab.get("otype"), lab.get("mag"), ra, dec))
+    return out
+
+
+def candidates(target_dir: Path, keys, limit: int = CAND_MAX) -> dict:
+    """T128: the spots of a chemistry picture (one map or several, as made by compute()) where its features show,
+    for a list next to the picture. Visualization only (Decision 2026-11-14): spots to look at, nothing classified.
+
+    Per map the strength in noise levels in the feature's own direction (emission up, absorption down), from the
+    map as shown (smoothed, load_map). Spots = local peaks of the summed strength, CAND_EDGE px inside the coverage
+    (saturated cores leave empty holes with bright / dark rims). Left out: sharpness pairs at bright stars (the
+    opposite direction nearly as strong right beside the peak in most of the features that show). Spots need two
+    features showing (>= CAND_SHOW) or one at CAND_SINGLE; ranked by how many show, then strength (extended
+    ones, part of a halo / nebula / cloud, at CAND_EXT_WEIGHT of theirs). Each spot is named after the best-ranked catalogue label of the field
+    within MATCH_ARCSEC (labels come ranked, T38: "3C 273" before its X-ray knot). LookupError: a map not made yet."""
+    from scipy.ndimage import binary_erosion, maximum_filter
+
+    keys = list(dict.fromkeys(keys))
+    fs = combo(keys) if len(keys) > 1 else [parse_key(keys[0])[0] and keys[0]]
+    target = json.loads((Path(target_dir) / "target.json").read_text(encoding="utf-8"))
+    dirs, cover = [], None
+    for k in fs:
+        p = Path(target_dir) / "chemistry" / f"{k}.png"
+        feat = parse_key(k)[0]
+        if not p.is_file():
+            raise LookupError(f"no {FEATURES[feat][0]} map made yet")
+        grey, cov = load_map(p)
+        z = sigmas(grey)
+        dirs.append(z if SHOWS[feat] == "emission" else -z)
+        if cover is not None and cov.shape != cover.shape:
+            raise LookupError("the maps were made on different grids (field rebuilt?): make them again")
+        cover = cov.copy() if cover is None else cover & cov
+    d = np.stack(dirs)                                            # (features, h, w), + = the feature shows
+    strength = np.clip(d, 0.0, SIGMA_SPAN)
+    score = strength.sum(axis=0)
+    nshow = (d >= CAND_SHOW).sum(axis=0)
+    need = (nshow >= 2) | (d.max(axis=0) >= CAND_SINGLE)          # two features, or one strongly (Pa-α at RW Aur)
+    inner = binary_erosion(cover, iterations=CAND_EDGE)
+    peak = (score >= maximum_filter(score, size=2 * CAND_R - 1)) & inner & need
+    rows, cols = np.nonzero(peak)
+    out_w, npix = _grid(target)
+    labels = _label_positions(target)
+    found, pairs = [], 0
+    for r, c in zip(rows.tolist(), cols.tolist()):
+        r0, r1, c0, c1 = max(r - CAND_R, 0), r + CAND_R + 1, max(c - CAND_R, 0), c + CAND_R + 1
+        showing = [i for i in range(len(fs)) if d[i, r, c] >= CAND_SHOW] or [0]
+        n_pair = sum(1 for i in showing if (-d[i, r0:r1, c0:c1]).max() >= CAND_PAIR * d[i, r, c])
+        if 2 * n_pair >= len(showing) + (len(showing) > 1):       # most of what shows is a pair: a bright star's edge
+            pairs += 1
+            continue
+        # compact: little of the 11 × 11 px around it is above half its strength (a point source ~10 %; the corner
+        # of a cloud or a star's halo 30 % and more)
+        win = score[max(r - 5, 0):r + 6, max(c - 5, 0):c + 6]
+        compact = bool((win >= 0.5 * score[r, c]).mean() < CAND_COMPACT)
+        found.append((int(nshow[r, c]), compact, float(score[r, c]), r, c))
+    found.sort(key=lambda t: (-t[0], -t[2] * (1.0 if t[1] else CAND_EXT_WEIGHT)))
+    items = []
+    for n_s, compact, sc, r, c in found:
+        if any((r - it["_r"]) ** 2 + (c - it["_c"]) ** 2 <= (2 * CAND_R * (1 if compact and it["compact"] else CAND_EXT)) ** 2
+               for it in items):
+            continue                                              # the same spot (a flat top; a halo, a nebula)
+        ra, dec = (float(v) for v in out_w.all_pix2world(c, npix - 1 - r, 0))
+        best = None
+        for name, kind, otype, mag, lra, ldec in labels:
+            sep = 3600 * math.hypot(((lra - ra + 180) % 360 - 180) * math.cos(math.radians(dec)), ldec - dec)
+            if sep <= MATCH_ARCSEC:                               # labels come ranked (T38): the first one
+                best = (sep, name, kind, otype, mag)              # within reach is the object, not a component
+                break
+        near = None
+        if best is None and not compact:                         # a halo's spots: name the bright star they ring
+            for name, kind, otype, mag, lra, ldec in labels:
+                sep = 60 * math.hypot(((lra - ra + 180) % 360 - 180) * math.cos(math.radians(dec)), ldec - dec)
+                if mag is not None and mag <= NEAR_MAG and sep <= NEAR_ARCMIN and (near is None or sep < near[1]):
+                    near = (name, round(sep, 1))
+        items.append({"_r": r, "_c": c, "ra_deg": round(ra % 360, 6), "dec_deg": round(dec, 6), "x": c, "y": r,
+                      "score": round(sc, 1), "n_show": n_s, "compact": compact,
+                      "sigma": {k: round(float(d[i, r, c]), 1) for i, k in enumerate(fs)},
+                      "name": best[1] if best else None, "kind": best[2] if best else None,
+                      "otype": best[3] if best else None, "mag": best[4] if best else None,
+                      "sep_arcsec": round(best[0], 1) if best else None,
+                      "near": {"name": near[0], "sep_arcmin": near[1]} if near else None})
+        if len(items) >= limit:
+            break
+    for it in items:
+        del it["_r"], it["_c"]
+    return {"maps": fs, "items": items, "found": len(found), "left_out_pairs": pairs,
+            "show_sigma": CAND_SHOW if len(fs) > 1 else CAND_SINGLE, "sigma_cap": SIGMA_SPAN}
 
 
 def main(argv=None) -> int:

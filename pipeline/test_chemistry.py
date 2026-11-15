@@ -243,3 +243,45 @@ def test_redshift_lookup_puts_the_centre_object_first(monkeypatch):
     out = C.galaxy_redshifts({"center": {"ra_deg": 187.2779, "dec_deg": 2.0524}, "size_arcmin": 15})
     assert out["galaxies"][0]["name"] == "3C 273" and out["galaxies"][0]["z"] == 0.158
     assert len(out["galaxies"]) == C.Z_LIST
+
+
+def test_candidates_find_the_absorber_and_skip_pairs_edges_and_patches(tmp_path):
+    """T128: a dot dark in all three brown-dwarf maps is spot 1, named after the catalogue label on it; a bright
+    star's sharpness pair (dark beside bright) is left out; a dark patch is listed as extended, after the dot; a dot
+    at the coverage edge is not listed."""
+    import json
+    from pipeline.build import output_wcs
+    n = 60
+    wcs = output_wcs(10.0, 1.0, n)
+    ra, dec = (float(v) for v in wcs.all_pix2world(20, n - 1 - 20, 0))          # the dot at row 20, col 20
+    (tmp_path / "target.json").write_text(json.dumps({
+        "center": {"ra_deg": 10.0, "dec_deg": 1.0}, "image": {"width": n}, "size_arcmin": 6,
+        "labels": [{"name": "Far star", "kind": "star", "otype": "*", "mag": 12.0,
+                    "positions": [{"ra_deg": 10.05, "dec_deg": 1.05}]},
+                   {"name": "Test BD", "kind": "brown dwarf", "otype": "BD*", "mag": None,
+                    "positions": [{"ra_deg": ra, "dec_deg": dec + 2 / 3600}]}]}))
+    rng = np.random.default_rng(3)
+    for f in ("h2o_14", "h2o_19", "ch4"):
+        g = 128 + rng.integers(-3, 4, (n, n))
+        g[19:22, 19:22] = 0                                  # the absorber (all three absorb)
+        g[39:42, 39:42] = 0                                  # a sharpness pair: dark ...
+        g[39:42, 42:45] = 255                                # ... beside bright
+        g[5:20, 38:53] = 20                                  # an extended dark patch (a cloud)
+        g[0:3, 28:31] = 0                                    # a dot at the edge of the coverage
+        _map(tmp_path, f, g)
+    out = C.candidates(tmp_path, ["ch4", "h2o_14", "h2o_19"])
+    assert out["maps"] == ["h2o_14", "h2o_19", "ch4"]                         # wavelength order
+    first = out["items"][0]
+    assert (first["x"], first["y"]) == (20, 20) and first["compact"] and first["n_show"] == 3
+    assert first["name"] == "Test BD" and first["otype"] == "BD*" and first["sep_arcsec"] < 3
+    assert all(v > 2 for v in first["sigma"].values())                        # + = the feature shows (absorbs)
+    assert not any(abs(it["x"] - 41) <= 3 and abs(it["y"] - 40) <= 3 for it in out["items"])   # the pair: out
+    assert not any(it["y"] < 3 for it in out["items"])                       # the edge
+    ext = [it for it in out["items"] if not it["compact"]]
+    assert ext and all(5 <= it["y"] < 20 and 38 <= it["x"] < 53 for it in ext)
+    try:
+        C.candidates(tmp_path, ["h2o_14", "pah"])
+    except LookupError as e:
+        assert "PAH" in str(e)
+    else:
+        raise AssertionError("missing map not reported")
