@@ -54,3 +54,9 @@ describe what is already visible are gone.
   `#blink-status` are still in your index.html, so region.js / activity.js work unchanged. Only look: "▭ Select region"
   is `position: absolute; top: 100px; right: 12px` in `#explore` (under 💬; on phones `bottom: 100px`): move it if
   your floating layout puts something there.
+
+- 2026-11-15 [Mati] T137 (on Mati's word, Decision in TEAM.md) added folding to `web/hud.js`: `makeGrip()` (your grip
+  + dblclick, now also used by the folded tab) and `makeFoldable()` (a `.hud-fold` – after the grip; folded =
+  `.hud-folded` on the group, which hides everything but a `.hud-tab` panel, `.messages` and `.job`); `place()` doesn't
+  freeze the width of a folded group. style.css: the T137 block after `.hud-dragging`, and `.hud-fold` added to the
+  "nothing to show yet" row rule. Drag, dock and saved positions are unchanged. Details: tasks/T137.
