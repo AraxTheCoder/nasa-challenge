@@ -54,7 +54,7 @@ def main() -> None:
         args.cache_gb = float(env) if env else (20.0 if args.public else 0.0)
     limits.configure(args.public, cache_gb=args.cache_gb, max_active=args.max_jobs, trust_proxy=args.trust_proxy)
     if args.cache_gb and not args.public:
-        print(f"cache cap {args.cache_gb:g} GB (least recently used evicted)", flush=True)
+        print(f"cache cap {args.cache_gb:g} GB (least recently used evicted; also while < {limits.CFG.min_free_gb:g} GB disk free)", flush=True)
     if args.public:
         print(f"public mode: per-IP limits, {args.max_jobs} jobs at once, cache cap {args.cache_gb:g} GB, "
               f"admin token {'set' if limits.CFG.token else 'NOT set (refresh and settings disabled)'}", flush=True)

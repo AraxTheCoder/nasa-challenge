@@ -29,6 +29,8 @@ import "./outliers.js";  // T86: sources in the field with unusual spectra
 import "./tour.js";      // T92: guided tour of the official targets ("▶ Tour", ?tour=1)
 import "./flagsmap.js";  // T60: SPHEREx quality flags as an overlay on the map
 import "./community.js"; // T120: views + discussion per map tile ("💬" on the map)
+import "./region.js";    // T122: drag a rectangle on the map to choose the analysed field
+import "./activity.js";  // T123: one progress bar for everything that is loading or running
 import { initLamPick, lamFromUrl, setLamUrl } from "./lampick.js";
 import { initStack } from "./stackview.js";
 import { nearestBand, parseLam } from "./lambda.js";
@@ -244,6 +246,10 @@ async function loadField(req, { quiet = false } = {}) {
   // T111: while an asked-for field (link, Show, Go with size) builds, no automatic tile build may start: it took
   // the load token, and the asked-for field was then dropped as stale (a link opened the default view's tile)
   if (!quiet) app.explicitLoading = token;
+  // T122: the red square shows the asked-for field from the start, not only once it is built
+  if (!quiet) {
+    try { explore.markField(parseRa(req.ra), parseDec(req.dec), clampSize(Number(req.size) || SIZE_DEFAULT)); } catch { /* odd input: the server says so */ }
+  }
   try {
     const onProgress = (progress, id) => {
       if (token !== app.loadToken) return;
@@ -825,7 +831,10 @@ function showBlinkStatus() {
   else if (app.manualMap) text = "Blink paused: the frame tools or another map are in use (move to another tile to resume)";
   else if (!passes.passesOn()) text = "Blink: zoom in to level 6";
   else if (key === null) text = "Blink: survey passes · field epochs at level 7";
-  else if (passes.mode() === "epochs") text = "Blink: field epochs";
+  else if (passes.mode() === "epochs") {
+    // T126: a field the zoom built is the map tile in the shown band only (~6 images, to blink); say how to get more
+    text = explicitHere() ? "Blink: field epochs" : "Blink: field epochs, this band only · ▭ Select region to analyse all bands";
+  }
   else {
     text = "Blink: survey passes";
     if (autoField.building === key) {

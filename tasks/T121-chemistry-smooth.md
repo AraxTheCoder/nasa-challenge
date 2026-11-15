@@ -38,3 +38,7 @@ by Mati in the running viewer fixed.
   exposure sets, not pixel noise.
 
 ## Notes from others
+- 2026-11-15 [Joerg] Review: passed. pytest (chemistry + server) 73 passed. `smooth()` on a synthetic map (step edge 128→200,
+  60 hot pixels, coverage hole of 1 px and of 10 × 10 px, uncovered border): 0 hot pixels left, max error away from the
+  edge 1 grey level, edge spread over ~4 px (σ 0.8), 1-px hole filled, 10-px hole and border stay uncovered. Not checked
+  visually on Orion: its chemistry maps were evicted from the cache (disk full, LRU sweep); worth one look after a rebuild.

@@ -641,3 +641,26 @@ body.no-map #show-btn { background: var(--accent); color: #fff; border-color: va
   .focus-ring { animation: none; }
   .wheel-tag, .cursor-pin { transition: none; }
 }
+
+/* ---------- T122: the analysed field drawn with the mouse (third button top right, under 💬) ---------- */
+.region-btn { position: absolute; right: 12px; top: 96px; z-index: 7; background: var(--glass); color: var(--text);
+  border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-weight: 600; box-shadow: var(--lift); }
+.region-btn.active { background: #ff453a; border-color: #ff453a; color: #fff; }
+.sky-stage.region-drawing, .sky-stage.region-drawing canvas { cursor: crosshair; }
+.region-hint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 7; max-width: calc(100% - 32px);
+  background: var(--glass); color: var(--text); border: 1px solid #ff453a; border-radius: 999px; padding: 6px 14px;
+  font-size: 13px; pointer-events: none; text-align: center; box-shadow: var(--lift); }
+@media (min-width: 1280px) { .mapstage .region-hint { position: fixed; } }
+@media (max-width: 600px) { .region-btn { top: auto; right: 8px; bottom: 92px; } .region-hint { bottom: 140px; border-radius: 12px; } }
+
+/* ---------- T123: one progress bar for everything that loads or runs ---------- */
+.activity { position: fixed; top: 0; left: 0; right: 0; z-index: 60; pointer-events: none; }
+.activity[hidden] { display: none; }
+.activity-track { height: 3px; background: rgb(255 255 255 / 0.08); overflow: hidden; }
+.activity-fill { height: 100%; width: 0; background: var(--accent); transition: width 0.4s ease; }
+.activity-fill.activity-busy { width: 30%; animation: activity-move 1.3s ease-in-out infinite; }
+@keyframes activity-move { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+.activity-text { display: inline-block; margin: 6px 0 0 50%; transform: translateX(-50%); max-width: calc(100vw - 32px);
+  background: var(--glass); color: var(--text); border: 1px solid var(--border); border-radius: 999px;
+  padding: 3px 14px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: var(--lift); }
+@media (prefers-reduced-motion: reduce) { .activity-fill.activity-busy { animation: none; width: 100%; opacity: 0.5; } }
