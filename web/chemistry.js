@@ -94,6 +94,7 @@ function choosePreset(p) {
 }
 
 const atZ = (um) => um * (1 + st.z);
+const RETRY_S = 90;          // T110: how long a measurement waits for a restarting Live API
 const zText = () => (st.z > 0 ? ` at z = ${st.z} (seen at λ × ${fmtNum(1 + st.z, 4)})` : "");
 
 /** Make (or reuse) one feature's map at the current z; resolves with the ready body or an error body. */
@@ -103,14 +104,31 @@ async function ensure(id, token, k, n) {
   const f = byId(id);
   const which = n > 1 ? ` (${k + 1} of ${n})` : "";
   const url = `${base()}?feature=${encodeURIComponent(id)}${st.z > 0 ? `&z=${st.z}` : ""}`;
-  note([el("strong", {}, `${label(f)}${which}: `), "measuring the field's SPHEREx exposures around this wavelength…"]);
-  let res = await fetch(`${url}&start=1`);
-  let body = await res.json();
-  while (res.status === 202 && token === st.token) {
-    note([el("strong", {}, `${label(f)}${which}: `), `measuring… ${body.done ?? 0} of ${body.total || "?"} exposures`]);
+  const head = el("strong", {}, `${label(f)}${which}: `);
+  note([head, "measuring the field's SPHEREx exposures around this wavelength…"]);
+  // T110: a Live API restart (or a dropped connection) mid-measurement must not end it: the job is gone after a
+  // restart, so ask with start=1 again, for up to RETRY_S; give up only after that.
+  let res, body, start = true, lost = null;
+  for (;;) {
+    try {
+      res = await fetch(start ? `${url}&start=1` : url);
+      body = await res.json();
+      if (res.status >= 500 && body?.status !== "error") throw new Error(`HTTP ${res.status}`);
+      lost = null;
+    } catch (err) {
+      if (token !== st.token) return { status: "cancelled" };
+      lost ??= Date.now();
+      if (Date.now() - lost > RETRY_S * 1000) throw err;
+      note([head, "the Live API is not answering (restarting?), trying again…"]);
+      start = true;
+      await new Promise((r) => setTimeout(r, 3000));
+      continue;
+    }
+    if (body?.status === "not_started" && !start) { start = true; continue; }   // restarted between two polls
+    start = false;
+    if (res.status !== 202 || token !== st.token) break;
+    note([head, `measuring… ${body.done ?? 0} of ${body.total || "?"} exposures`]);
     await new Promise((r) => setTimeout(r, 1500));
-    res = await fetch(url);
-    body = await res.json();
   }
   if (body.status === "ready") st.ready.set(ck, body);
   return body;
