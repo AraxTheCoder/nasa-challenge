@@ -1,6 +1,6 @@
 # T110: C: Bug: a Live API restart during a chemistry measurement leaves "Failed to fetch"
 
-- **Owner:** Mati  ·  **Status:** review (not yet seen in a browser)
+- **Owner:** Mati  ·  **Status:** done (checked in a browser by Joerg, 2026-11-15)
 - **Branch:** `main` (one function)
 - **Depends on / feeds:** T93, T107
 
