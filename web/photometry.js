@@ -16,6 +16,8 @@ import { getApiBase, getSky } from "./explore.js";
 import { nearestLabel } from "./skylabels.js";
 import { analyse, FEATURES, FIT_MAX_UM, fmtT } from "./spectrum.js";
 import { motionBox } from "./motion.js";
+import { analysisNote } from "./analysisnote.js";
+import { anomalyCopy, LIMITS } from "./analysiscopy.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const TRANSITION_COLOURS = ["#3987e5", "#d95926", "#199e70"]; // categorical slots 1-3, dark mode, validated
@@ -187,20 +189,17 @@ function render() {
   const changes = matchedChanges(steady);
   const at = `(RA ${fmtNum(d.ra_deg, 4)}°, Dec ${fmtNum(d.dec_deg, 4)}°)`;
   const where = st.sky?.name ? `at ${st.sky.name} ${at}` : st.sky ? `at the point clicked on the map ${at}` : st.pos ? `at the clicked star ${at}` : `at the field centre ${at}`;
-  const what = d.all_exposures ? `exposures (all SPHEREx images of this spot)` : "frames";
+  const what = d.all_exposures ? "exposures" : "frames";
   const parts = [el("p", { class: "ph-where small" }, `${good.length} of ${frames.length} ${what} measured ${where}.`)];
   if (frames.length && !good.length) {
-    parts.push(el("p", { class: "msg msg-warn" }, "Every frame is flagged at this position: the star is saturated " +
-      "(too bright for SPHEREx) or sits on bad pixels, so aperture photometry can't measure it."));
+    parts.push(analysisNote("No clean measurements here", "All frames are flagged at this position. Saturation, bad pixels or other quality issues can prevent measurement; the cause is not established from flags alone.", "msg msg-warn"));
   }
   if (good.length) {
     const ana = analyse(steady);
     parts.push(el("h4", {}, "Spectrum (brightness vs. wavelength)"), spectrumToggles(), spectrumChart(frames, w, ana),
-      el("p", { class: "muted small" }, "One panel per epoch; grey dots are the other epochs, × marks flagged frames." +
-        (st.context ? " Line: what a plain star would give (dashed where extrapolated); ringed points leave it." : "")));
+      analysisNote("Dots: measurements · ×: flagged", "One panel per epoch; grey dots show other epochs. The line is a simplified stellar baseline, dashed where extrapolated. Rings mark deviations from that model, not confirmed physical features.", "muted small"));
     if (st.features) {
-      parts.push(el("p", { class: "muted small ph-features-key" }, "Feature markers (hover a dotted line): " +
-        FEATURES.map((f) => `${f.name} ${f.um}`).join(" · ") + " µm"));
+      parts.push(analysisNote("Feature markers: hover a dotted line", "Reference wavelengths: " + FEATURES.map((f) => `${f.name} ${f.um}`).join("; ") + " µm. A marker near a deviation does not confirm that feature.", "muted small ph-features-key"));
     }
     if (st.context) parts.push(contextBox(ana));
     if (d.anomalies) parts.push(anomalyBox(d.anomalies));
@@ -216,12 +215,11 @@ function render() {
     parts.push(el("h4", {}, "Change at the same wavelength (light curve)"),
       changes.length ? changeChart(changes, w) : el("p", { class: "muted small" }, "No frames of different epochs at the same wavelength here."),
       changes.length ? el("p", { class: "ph-legend small" }, ...legend) : null,
-      el("p", { class: "muted small" }, "Each dot compares two frames of different epochs whose wavelengths at the star match " +
-        "(within half a channel). Near 0% = constant; clearly above or below at several wavelengths = the star changed." +
-        (changes.omitted ? ` ${changes.omitted} more epoch pair(s) with fewer matches not shown.` : "")));
+      analysisNote("Same-wavelength comparison · changes may be instrumental", "Each dot compares two exposures from different epochs within half a channel in wavelength. Repeated differences may indicate variability, but calibration and blending can also contribute." +
+        (changes.omitted ? ` ${changes.omitted} epoch pairs with fewer matches omitted.` : ""), "muted small"));
   }
   parts.push(motionBox(d.ra_deg, d.dec_deg));      // T91: a moving catalogued star: its motion measured by SPHEREx
-  parts.push(el("p", { class: "muted small" }, d.note ?? ""));
+  if (d.note) parts.push(analysisNote("Measurement details", d.note, "muted small"));
   body.replaceChildren(...parts.filter(Boolean));     // null = a box with nothing to say (T91)
   box.hidden = false;
 }
@@ -240,14 +238,15 @@ function spectrumToggles() {
 /** T84: what changed in a non-continuous way (server-side, all exposures only). */
 function anomalyBox(an) {
   const items = an.items ?? [];
-  const kindWord = { spike: "Spike", dip: "Dip", level: "Brightness change", shape: "Shape change" };
   return el("div", { class: "ph-context ph-anomalies" },
-    el("h4", {}, "What changed in a non-continuous way"),
-    el("p", { class: items.length ? "" : "muted" }, an.summary ?? ""),
-    items.length ? el("ul", { class: "ph-anom-list" }, ...items.slice(0, 8).map((a) =>
-      el("li", {}, el("strong", { class: a.known?.length ? "ph-anom-known" : "" }, `${kindWord[a.type] ?? a.type}: `), a.reason))) : null,
-    items.length > 8 ? el("p", { class: "muted small" }, `${items.length - 8} more.`) : null,
-    el("p", { class: "muted small" }, "Red rings in the spectrum: the exposures of a spike or dip. " + (an.method ?? "")));
+    el("h4", {}, "Possible changes"),
+    analysisNote(items.length ? `${items.length} change${items.length === 1 ? "" : "s"} flagged · cause uncertain` : "No changes passed this check",
+      `These comparisons can flag intrinsic changes or measurement effects. Non-detection does not establish a constant source. ${an.method ?? ""}`, "muted small"),
+    items.length ? el("ul", { class: "ph-anom-list" }, ...items.slice(0, 8).map((a) => {
+      const copy = anomalyCopy(a);
+      return el("li", {}, analysisNote(copy.brief, copy.detail));
+    })) : null,
+    items.length > 8 ? el("p", { class: "muted small" }, `${items.length - 8} more.`) : null);
 }
 
 /** T60: SPHEREx's own quality flags at this spot: which ones, in how many exposures, and what they mean. */
@@ -265,43 +264,29 @@ function flagsBox(d) {
     rows.length ? el("ul", { class: "ph-flag-list" }, ...rows.map(([n, c]) => {
       const m = mean[n] ?? { kind: "warn", meaning: "" };
       return el("li", {}, el("span", { class: `ph-flag ph-flag-${m.kind}`, title: word[m.kind] ?? "" }, n),
-        ` ${m.meaning}: ${c} of ${frames.length} exposure${frames.length === 1 ? "" : "s"}`);
+        analysisNote(`${c}/${frames.length} exposures`, `${m.meaning || "Quality flag reported by SPHEREx."} Set somewhere in the measuring aperture; this does not necessarily describe the source itself.`));
     })) : el("p", { class: "muted" }, `No flag set within the aperture in any of the ${frames.length} exposures.`),
-    el("p", { class: "muted small" }, "Flags come with every SPHEREx image, one bit per reason a pixel may be unreliable; " +
-      "listed if set anywhere in the measuring circle. Red = the value can't be trusted (left out of the checks above), " +
-      "amber = look twice, grey = information."));
+    analysisNote("Flags indicate measurement quality", "Flags are supplied with the images. Red flags exclude measurements from these checks; amber asks for caution; grey is information. A flag can belong to background or another source in the aperture.", "muted small"));
 }
 
 function contextBox(ana) {
-  const out = [el("h4", {}, "What this spectrum says")];
-  const eps = (list) => (list.length === 1 ? `epoch ${list[0]}` : `epochs ${list.join(", ")}`);
-  if (ana.saturated) {
-    out.push(el("p", { class: "small" }, `No baseline: the points below ${FIT_MAX_UM} µm are flagged (saturated or bad pixels), ` +
-      "so there is nothing to tell what a plain star of this colour would give."));
-    return el("div", { class: "ph-context" }, ...out);
-  }
-  if (ana.noFit) {
-    out.push(el("p", { class: "small" }, `No baseline: no epoch has 3 or more good points below ${FIT_MAX_UM} µm.`));
+  const out = [el("h4", {}, "Spectrum hints")];
+  const eps = (list) => `epoch${list.length === 1 ? "" : "s"} ${list.join(", ")}`;
+  if (ana.saturated || ana.noFit) {
+    out.push(analysisNote("Baseline unavailable · interpretation uncertain", ana.saturated
+      ? `Short-wavelength measurements below ${FIT_MAX_UM} µm are flagged. A reliable baseline cannot be fitted.`
+      : `At least 3 usable short-wavelength measurements spanning 0.3 µm are needed. Missing coverage limits interpretation.`));
     return el("div", { class: "ph-context" }, ...out);
   }
   const fitted = [...ana.perEpoch.entries()].filter(([, e]) => e.fit);
-  out.push(el("p", { class: "small" }, `Baseline: a blackbody fitted to each epoch's points below ${FIT_MAX_UM} µm, i.e. what a ` +
-    "plain star of that colour would give (" + fitted.map(([ep, e]) => `epoch ${ep}: ${e.fit.poor ? "no good fit" : fmtT(e.fit).replace(/^a /, "")}`).join("; ") + ")."));
-  if (ana.poorEpochs.length) {
-    out.push(el("p", { class: "small ph-hint" }, el("strong", {}, `In ${eps(ana.poorEpochs)} the short-wavelength points don't follow one star shape. `),
-      "Absorption bands (water, methane: a cool atmosphere such as a brown dwarf's), two sources blended in one aperture, " +
-      "or the source changed while it was observed?"));
-  }
-  for (const r of ana.regions) {
-    out.push(el("p", { class: "small ph-hint" }, el("span", { class: "ph-hint-mark", "aria-hidden": "true" }, r.sign > 0 ? "▲ " : "▼ "),
-      el("strong", {}, `${r.hint.title}. `), r.hint.text, el("span", { class: "muted" }, ` (${eps(r.epochs)}, ${r.n} points)`)));
-  }
-  if (!ana.regions.length && !ana.poorEpochs.length) {
-    out.push(el("p", { class: "small" }, "No group of points leaves the baseline by more than 3σ and 30 %: up to 5 µm this looks " +
-      "like a plain star (within the ~10 % calibration)."));
-  }
-  out.push(el("p", { class: "muted small" }, "Hints, not results: they say what usually causes such a shape, not what this source is. " +
-    "Each SPHEREx point is a different exposure, so a variable source can bend the spectrum too."));
+  out.push(analysisNote("Baseline: simplified stellar model", `A blackbody is fitted below ${FIT_MAX_UM} µm in each epoch: ` +
+    fitted.map(([ep, e]) => `${eps([ep])}: ${e.fit.poor ? "poor fit" : fmtT(e.fit)}`).join("; ") +
+    ". This fitted colour temperature is not a measured stellar temperature. The model can misrepresent galaxies, cool atmospheres, extinction and blends.", "muted small"));
+  if (ana.poorEpochs.length) out.push(analysisNote("Poor baseline fit · hints less reliable", `${eps(ana.poorEpochs)} do not follow the simple stellar model. No particular cause is established. ${LIMITS}`));
+  for (const r of ana.regions) out.push(analysisNote(r.hint.title + " · tentative",
+    `${r.hint.text} ${eps(r.epochs)}; ${r.n} points. These exposures were not all taken at the same time.`));
+  if (!ana.regions.length && !ana.poorEpochs.length) out.push(analysisNote("No deviations passed this check",
+    "No consistent group exceeded the baseline thresholds. This does not confirm a normal star or rule out weak features. The fit uses an approximate 10% calibration floor."));
   return el("div", { class: "ph-context" }, ...out);
 }
 

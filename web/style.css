@@ -765,3 +765,18 @@ body:not(.community-workspace) .cm-coverage-summary { grid-template-columns: rep
   .app-header .brand { font-size: 12px; gap: 5px; }
   .workspace-tabs button { padding: 5px 7px; font-size: 12px; }
 }
+
+/* T136: brief analysis labels; evidence/caveats on hover, focus or tap. Popovers escape panel clipping. */
+.analysis-note { display: inline-block; max-width: 100%; vertical-align: baseline; }
+.analysis-label { border: 0; border-radius: 3px; padding: 0; background: transparent; color: inherit;
+  font: inherit; text-align: left; line-height: inherit; cursor: help; box-shadow: none; }
+.analysis-label:hover { background: transparent; text-decoration: underline dotted; text-underline-offset: 3px; }
+.analysis-info { color: var(--muted); white-space: nowrap; }
+.analysis-detail { position: fixed; inset: auto; margin: 0; z-index: 1000; box-sizing: border-box;
+  width: max-content; max-height: 45vh; overflow: auto; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--panel); color: var(--text); font: 400 13px/1.5 var(--font-din);
+  text-align: left; white-space: normal; overflow-wrap: anywhere; box-shadow: 0 4px 24px rgb(0 0 0 / .35); }
+.analysis-detail[hidden] { display: none; }
+.ph-context > .analysis-note, .ol-item > .analysis-note { margin: 4px 0; }
+
+.ph-context > .analysis-note { display: block; }

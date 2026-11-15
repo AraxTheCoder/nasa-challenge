@@ -1,5 +1,5 @@
 // T63: checks for web/spectrum.js on synthetic spectra with known answers. Run: node web/tests/spectrum_check.mjs
-import { analyse, fitBaseline, planckNu } from "../spectrum.js";
+import { analyse, fitBaseline, planckNu, hint } from "../spectrum.js";
 
 let fails = 0;
 const check = (ok, msg) => { console.log(`${ok ? "PASS" : "FAIL"} ${msg}`); if (!ok) fails++; };
@@ -47,7 +47,13 @@ check(a5.noFit && a5.saturated, "short wavelengths flagged: no baseline, marked 
 const ep2 = star(3000, 1e9, (um) => 1 + (60 * planckNu(um, 700)) / planckNu(um, 3000)).map((f) => ({ ...f, epoch: 2, frame_id: f.frame_id + "b" }));
 const a6 = analyse(dusty.concat(ep2));
 const r6 = a6.regions.find((r) => r.sign > 0);
-check(r6 && r6.epochs.length === 2 && /plain star/.test(r6.hint.title), `variable: regions merged over epochs, no temperature named (${r6 && r6.hint.title})`);
+check(r6 && r6.epochs.length === 2 && !/ K/.test(r6.hint.title) && /not an identification/.test(r6.hint.text), `variable: regions merged over epochs, no temperature named (${r6 && r6.hint.title})`);
 
+// Emission and absorption at similar wavelengths must not be confused.
+const methane = hint({ sign: -1, umMin: 3.28, umMax: 3.32, ratio: .5, n: 2 }, null);
+check(/Possible methane absorption/.test(methane.text) && !/PAH absorbs/.test(methane.text), "3.3 µm dip is a possible methane feature, not PAH absorption");
+const pah = hint({ sign: 1, umMin: 3.28, umMax: 3.32, ratio: 1.8, n: 2 }, null);
+check(/Possible PAH emission/.test(pah.text), "3.3 µm excess is a possible PAH emission feature");
+check([methane, pah].every((h) => /not an identification/.test(h.text)), "feature interpretations state their uncertainty");
 console.log(fails ? `${fails} failure(s)` : "all spectrum checks passed");
 process.exit(fails ? 1 : 0);
