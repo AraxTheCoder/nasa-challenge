@@ -242,6 +242,9 @@ async function loadField(req, { quiet = false } = {}) {
   $("#empty-default").hidden = true;
   app.request = req;
   if (!quiet) { app.manualMap = false; passes.setPaused(false); }   // an explicit field takes the map again
+  // T111: while an asked-for field (link, Show, Go with size) builds, no automatic tile build may start: it took
+  // the load token, and the asked-for field was then dropped as stale (a link opened the default view's tile)
+  if (!quiet) app.explicitLoading = token;
   try {
     const onProgress = (progress, id) => {
       if (token !== app.loadToken) return;
@@ -262,6 +265,7 @@ async function loadField(req, { quiet = false } = {}) {
     } else showLoadError(err);
   } finally {
     if (token === app.loadToken) hideJob();
+    if (app.explicitLoading === token) app.explicitLoading = null;
   }
 }
 
@@ -817,6 +821,7 @@ function decideSource() {
 
 function buildTile(key) {
   if (fieldKey() !== key || app.manualMap) return;
+  if (app.explicitLoading) { autoField.key = null; return; }   // T111: asked-for field first; decided again on arrival
   const [pix, variant] = key.split("|");
   const req = { ...tileField(Number(pix)), auto: true, detector: Number(variant.slice(1)) };
   autoField.building = key;
