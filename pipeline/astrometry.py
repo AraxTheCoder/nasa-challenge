@@ -39,7 +39,7 @@ REF_MIN = 5
 REF_ISOLATION_ARCSEC = 30.0
 MIN_SNR = 5.0
 STAR_CUT_DEG = 0.3       # cutout around the star when the field is a big one (reference stars within it)
-VERSION = 1
+VERSION = 2                  # 2: deep-stack fallback (T119); cached "not_found" answers are measured again
 ROOT = Path("data/motion")
 
 
@@ -148,6 +148,100 @@ def _references(sources: list[dict], target: dict) -> list[dict]:
     return out
 
 
+STACK_DETECTORS = (5, 6)     # T119: 3.8–5 µm, where cold brown dwarfs shine (WISE 0855: invisible below ~3 µm)
+STACK_N = 25                  # grid side, native pixels (2.6′)
+STACK_MIN_SNR = 5.0
+STACK_MIN_EXPOSURES = 3
+SINGLE_MIN_SNR = 10.0         # median S/N of the single-exposure fits below this: the deep stacks are tried first
+
+
+def _stacked_epochs(star: dict, results, corrs: dict, ra0: float, dec0: float, size_deg: float) -> list[dict]:
+    """T119: each epoch's long-wavelength exposures, pointing-corrected, stacked on one grid around the star; the
+    star fitted in each stack. Same epoch entries as the single-exposure path (east / north from the star's
+    reference position, arcsec), plus "stacked": number of exposures."""
+    from astropy.io import fits
+    from astropy.wcs import WCS, FITSFixedWarning
+    from scipy.ndimage import map_coordinates
+
+    scale = 6.15 / 3600
+    g = WCS(naxis=2)
+    g.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+    g.wcs.crval = [star["ra_deg"], star["dec_deg"]]
+    g.wcs.crpix = [(STACK_N + 1) / 2, (STACK_N + 1) / 2]
+    g.wcs.cdelt = [-scale, scale]
+    yy, xx = np.mgrid[0:STACK_N, 0:STACK_N]
+    gra, gdec = g.all_pix2world(xx, yy, 0)
+    cosd = math.cos(math.radians(star["dec_deg"]))
+    acc: dict[int, list] = {}
+    for e, m in results:
+        if e.detector not in STACK_DETECTORS or id(e) not in corrs:
+            continue
+        try:
+            path = photometry._spectrum_cutout(e.fits_url, ra0, dec0, size_deg)
+            with fits.open(path) as hd, warnings.catch_warnings():
+                warnings.simplefilter("ignore", FITSFixedWarning)
+                img = hd["IMAGE"].data.astype(float)
+                bad = ((hd["FLAGS"].data.astype(np.int64) & build.HW_MASK) != 0) | ~np.isfinite(img)
+                w = WCS(hd["IMAGE"].header)
+        except Exception:  # noqa: BLE001 - one exposure less
+            continue
+        ce, cn = corrs[id(e)]           # this exposure puts a true position T at T + corr: sample there
+        ix, iy = w.all_world2pix(gra + ce / 3600 / cosd, gdec + cn / 3600, 0)
+        val = map_coordinates(np.where(bad, 0.0, img), [iy, ix], order=1, cval=np.nan)
+        holes = map_coordinates(bad.astype(float), [iy, ix], order=1, cval=1.0) > 0.01
+        val[holes] = np.nan
+        if np.isfinite(val).sum() < STACK_N * STACK_N / 2:
+            continue
+        val -= np.nanmedian(val)        # local sky (zodiacal light differs per exposure)
+        acc.setdefault(e.epoch, []).append((e.mjd_mid, val))
+    def fit(vals, px, py):
+        """(grid x, grid y, snr, fit error px) of the star in the mean of `vals`, or None."""
+        stack = np.nanmean(np.array(vals), axis=0)
+        xi, yi = int(round(px)), int(round(py))
+        if not (STAMP_PX <= xi < STACK_N - STAMP_PX and STAMP_PX <= yi < STACK_N - STAMP_PX):
+            return None
+        sl = (slice(yi - STAMP_PX, yi + STAMP_PX + 1), slice(xi - STAMP_PX, xi + STAMP_PX + 1))
+        sub = stack[sl]
+        f = _gauss_fit(sub, ~np.isfinite(sub), px - (xi - STAMP_PX), py - (yi - STAMP_PX))
+        if f is None:
+            return None
+        fx, fy, ex, ey, snr, _ = f
+        gx, gy = fx + xi - STAMP_PX, fy + yi - STAMP_PX
+        if snr < STACK_MIN_SNR or math.hypot(gx - px, gy - py) > SEARCH_PX or not math.isfinite(ex):
+            return None
+        return gx, gy, snr, math.hypot(ex, ey) / math.sqrt(2)
+
+    def sky(gx, gy):
+        ra, dec = (float(v) for v in g.all_pix2world(gx, gy, 0))
+        return _offset_arcsec(ra, dec, star["ra_deg"], star["dec_deg"])
+
+    out = []
+    for ep, items in sorted(acc.items()):
+        if len(items) < STACK_MIN_EXPOSURES:
+            continue
+        mjds = [mj for mj, _ in items]
+        mjd = float(np.mean(mjds))
+        (pra, pdec), = fieldspectra.positions_at([star], mjd)
+        px, py = (float(v) for v in g.all_world2pix(pra, pdec, 0))
+        whole = fit([v for _, v in items], px, py)
+        if whole is None:
+            continue
+        east, north = sky(whole[0], whole[1])
+        # The fit's own error is too optimistic on a stack (averaging and resampling make the pixel noise look
+        # smaller than it is): the two halves of the epoch (alternate exposures) fitted apart give an honest one.
+        err_e = err_n = max(whole[3] * 6.15, 0.1)
+        if len(items) >= 2 * STACK_MIN_EXPOSURES:
+            a, b = fit([v for _, v in items[0::2]], px, py), fit([v for _, v in items[1::2]], px, py)
+            if a and b:
+                (ae, an), (be, bn) = sky(a[0], a[1]), sky(b[0], b[1])
+                err_e, err_n = max(err_e, abs(ae - be) / 2), max(err_n, abs(an - bn) / 2)
+            else:
+                err_e, err_n = err_e * 3, err_n * 3        # a half too faint to fit: the whole is marginal
+        out.append({"epoch": ep, "mjd": mjd, "east": east, "north": north, "err_east": err_e, "err_north": err_n,
+                    "n": len(items), "stacked": len(items), "snr": round(whole[2], 1), "mjds": mjds})
+    return out
+
+
 def _one(e, ra0, dec0, size_deg, track):
     try:
         path = photometry._spectrum_cutout(e.fits_url, ra0, dec0, size_deg)
@@ -235,9 +329,9 @@ def measure_motion_uncached(target: dict, name: str, processes: int | None = Non
             if progress:
                 progress(len(results), total)
 
-    rows = []
+    rows, corrs = [], {}
     for e, m in results:
-        if not m or m[0] is None:
+        if not m:
             continue
         # this exposure's pointing error: median offset of the reference stars from their catalogue positions
         offs = []
@@ -251,17 +345,14 @@ def measure_motion_uncached(target: dict, name: str, processes: int | None = Non
         offs = np.array(offs)
         corr = np.median(offs, axis=0)
         corr_err = 1.2533 * offs.std(axis=0) / math.sqrt(len(offs))
+        corrs[id(e)] = (float(corr[0]), float(corr[1]))          # T119: the deep stacks use it too
+        if m[0] is None:
+            continue
         ra, dec, err, snr = m[0]
         east, north = _offset_arcsec(ra, dec, star["ra_deg"], star["dec_deg"])
         rows.append({"frame_id": f"{e.obs_id}-D{e.detector}", "epoch": e.epoch, "mjd": e.mjd_mid,
                      "east": east - corr[0], "north": north - corr[1], "err": math.hypot(err, float(np.hypot(*corr_err))),
                      "snr": snr, "n_ref": len(offs)})
-    if len({r["epoch"] for r in rows}) < 2:
-        return {"version": VERSION, "name": star["name"], "status": "not_enough",
-                "message": f"the star was measured in {len(rows)} exposures of "
-                           f"{len({r['epoch'] for r in rows})} epoch(s); a motion needs two or more epochs",
-                "n_exposures": len(exposures), "n_measured": len(rows)}
-
     epochs = []
     for ep in sorted({r["epoch"] for r in rows}):
         rs = [r for r in rows if r["epoch"] == ep]
@@ -272,25 +363,45 @@ def measure_motion_uncached(target: dict, name: str, processes: int | None = Non
         se = max(float(np.std(E[keep])), 0.05) / math.sqrt(n) if n > 1 else float(rs[0]["err"])
         sn = max(float(np.std(N[keep])), 0.05) / math.sqrt(n) if n > 1 else float(rs[0]["err"])
         epochs.append({"epoch": ep, "mjd": float(t[keep].mean()), "east": float(E[keep].mean()), "north": float(N[keep].mean()),
-                       "err_east": se, "err_north": sn, "n": n})
+                       "err_east": se, "err_north": sn, "n": n, "mjds": [float(x) for x in t[keep]]})
 
     # Offsets are from the star's catalogue track at each moment, so a real measurement sits near 0. A source that
     # stays several arcsec away in every epoch is a neighbour the fit locked onto (WISE 0855: invisible in single
-    # exposures, a field star 7.6″ away was fitted instead); say so instead of reporting its motion.
-    track_off = [math.hypot(e["east"] - _track_offset(star, e["mjd"])[0], e["north"] - _track_offset(star, e["mjd"])[1])
-                 for e in epochs]
-    if min(track_off) > LOCKED_ARCSEC:
-        return {"version": VERSION, "name": star["name"], "status": "not_found",
-                "message": (f"{star['name']} itself was not found in single SPHEREx exposures: the nearest source the "
-                            f"fit could lock onto stays {np.median(track_off):.1f}″ from where the star is, so its "
-                            "motion can't be measured here (too faint; deep stacks would be needed)."),
-                "n_exposures": len(exposures), "n_measured": len(rows), "offset_arcsec": round(float(np.median(track_off)), 1)}
+    # exposures, a field star 7.6″ away was fitted instead).
+    def off_track(eps):
+        return [math.hypot(e["east"] - _track_offset(star, e["mjd"])[0], e["north"] - _track_offset(star, e["mjd"])[1])
+                for e in eps]
+    mode = "single exposures"
+    singles_ok = len(epochs) >= 2 and min(off_track(epochs)) <= LOCKED_ARCSEC
+    weak = not rows or float(np.median([r["snr"] for r in rows])) < SINGLE_MIN_SNR
+    if not singles_ok or weak:
+        # T119: too faint for one exposure (WISE 0855: not found; or found only in noise-dominated fits, which bias
+        # the motion): stack each epoch's long-wavelength exposures, then fit; a weak singles result is kept only
+        # when the stacks don't give two epochs
+        stacked = _stacked_epochs(star, results, corrs, ra0, dec0, size_deg)
+        if len(stacked) >= 2 and min(off_track(stacked)) <= LOCKED_ARCSEC:
+            epochs, mode = stacked, "deep stacks"
+        elif singles_ok:
+            pass
+        elif len(epochs) >= 2:
+            track_off = off_track(epochs)
+            return {"version": VERSION, "name": star["name"], "status": "not_found",
+                    "message": (f"{star['name']} itself was not found, neither in single SPHEREx exposures (the nearest "
+                                f"source stays {np.median(track_off):.1f}″ from where the star is) nor in deep per-epoch "
+                                "stacks at 3.8–5 µm, so its motion can't be measured here."),
+                    "n_exposures": len(exposures), "n_measured": len(rows),
+                    "offset_arcsec": round(float(np.median(track_off)), 1)}
+        else:
+            return {"version": VERSION, "name": star["name"], "status": "not_enough",
+                    "message": f"the star was measured in {len(rows)} exposures of "
+                               f"{len({r['epoch'] for r in rows})} epoch(s) and in {len(stacked)} deep epoch stack(s); "
+                               "a motion needs two or more epochs",
+                    "n_exposures": len(exposures), "n_measured": len(rows)}
     t = np.array([e["mjd"] for e in epochs]); t0 = float(t.mean()); yrs = (t - t0) / 365.25
     # parallax factors (AU) per epoch: the mean over its exposures of where Earth was (SPHEREx is in low orbit)
     fac = []
     for e in epochs:
-        mj = [r["mjd"] for r in rows if r["epoch"] == e["epoch"]]
-        fac.append(np.mean([parallax_factors(star["ra_deg"], star["dec_deg"], m) for m in mj], axis=0))
+        fac.append(np.mean([parallax_factors(star["ra_deg"], star["dec_deg"], m) for m in e["mjds"]], axis=0))
     fac = np.array(fac)
     y = np.concatenate([[e["east"] for e in epochs], [e["north"] for e in epochs]])
     s = np.concatenate([[e["err_east"] for e in epochs], [e["err_north"] for e in epochs]])
@@ -356,12 +467,18 @@ def measure_motion_uncached(target: dict, name: str, processes: int | None = Non
             "difference_arcsec_yr": round(diff, 3), "difference_sigma": round(sig, 1), "verdict": verdict,
             "summary": (f"SPHEREx: {total:.2f} ± {total_err:.2f}″/yr toward PA {pa:.0f}°; catalogue "
                         f"{cat_total:.2f}″/yr toward {math.degrees(math.atan2(cat_e, cat_n)) % 360:.0f}°: {verdict}."),
-            "epochs": [{k: (round(v, 4) if isinstance(v, float) else v) for k, v in e.items()} for e in epochs],
+            "epochs": [{k: (round(v, 4) if isinstance(v, float) else v) for k, v in e.items() if k != "mjds"} for e in epochs],
+            "measured_in": mode,
             "parallax": plx, "chi2_dof": round(chi2, 2) if chi2 is not None else None,
-            "span_years": round(span, 2), "n_exposures": len(exposures), "n_measured": len(rows),
+            "span_years": round(span, 2), "n_exposures": len(exposures),
+            "n_measured": len(rows) if mode == "single exposures" else int(sum(e["n"] for e in epochs)),
             "n_references": len(refs),
-            "method": ("Gaussian fit per exposure (flagged pixels left out), each exposure's pointing corrected with "
-                       f"up to {REF_MAX} isolated Gaia stars, robust mean per epoch, weighted line through the epochs. "
+            "method": (("Gaussian fit per exposure (flagged pixels left out), each exposure's pointing corrected with "
+                        f"up to {REF_MAX} isolated Gaia stars, robust mean per epoch, weighted line through the epochs. ")
+                       if mode == "single exposures" else
+                       ("Too faint for one exposure: each epoch's exposures of detectors 5–6 (3.8–5 µm), each corrected "
+                        f"for its pointing with up to {REF_MAX} isolated Gaia stars, stacked on one grid; a Gaussian fit "
+                        "per epoch stack, weighted line through the epochs. ") +
                        "With 3+ epochs the parallax is fitted too (Earth's position at each exposure).")}
 
 
@@ -380,8 +497,10 @@ def main(argv=None) -> int:
         p = r["parallax"]
         print(f"  parallax fit {p['parallax_arcsec']:.3f} ± {p['parallax_err']:.3f}″ (χ²/dof {p['chi2_dof']}): "
               + (f"distance {p['distance_pc']} pc" if p["reliable"] else p["note"]))
-    print(f"  measured in {r['n_measured']} of {r['n_exposures']} exposures over {r['span_years']} yr, "
-          f"{r['n_references']} reference stars")
+    how = (f"measured in {r['n_measured']} of {r['n_exposures']} exposures" if r.get("measured_in") != "deep stacks" else
+           f"too faint for single exposures: deep stacks of {' / '.join(str(e['stacked']) for e in r['epochs'])} "
+           "exposures at 3.8–5 µm")
+    print(f"  {how} over {r['span_years']} yr, {r['n_references']} reference stars")
     for e in r["epochs"]:
         print(f"  epoch {e['epoch']}: MJD {e['mjd']:.1f}  E {e['east']:+.2f} ± {e['err_east']:.2f}″  "
               f"N {e['north']:+.2f} ± {e['err_north']:.2f}″  ({e['n']} exposures)")

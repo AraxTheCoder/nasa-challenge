@@ -30,7 +30,9 @@ function body(r, label) {
       el("p", {}, `Catalogue (${cat.source === "simbad" ? "SIMBAD / Gaia" : cat.source ?? "catalogue"}): ${fmtNum(cat.pm_total_arcsec_yr, 2)}″ per year toward the ${dir(cat.pa_deg)}. SPHEREx ${r.verdict}.`),
       plx?.reliable ? el("p", {}, `Its yearly wobble from Earth's orbit (parallax ${fmtNum(plx.parallax_arcsec, 3)} ± ${fmtNum(plx.parallax_err, 3)}″) puts it at `,
         el("strong", {}, `${fmtNum(plx.distance_pc, 2)} parsec`), ` (${fmtNum(plx.distance_pc * 3.2616, 1)} light years).`) : null,
-      el("p", { class: "muted small" }, `Measured in ${r.n_measured} of ${r.n_exposures} exposures over ${fmtNum(r.span_years, 1)} years, ` +
+      el("p", { class: "muted small" }, (r.measured_in === "deep stacks"
+        ? `Too faint for a single exposure: measured in deep stacks of ${(r.epochs ?? []).map((e) => e.stacked).join(" / ")} exposures at 3.8–5 µm (one per epoch) over ${fmtNum(r.span_years, 1)} years, `
+        : `Measured in ${r.n_measured} of ${r.n_exposures} exposures over ${fmtNum(r.span_years, 1)} years, `) +
         `${r.epochs?.length ?? 0} epochs, ${r.n_references} reference stars. ${plx && !plx.reliable ? `Distance: ${plx.note}. ` : ""}${r.method ?? ""}`),
     ];
   }
