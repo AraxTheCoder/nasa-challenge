@@ -14,6 +14,12 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Res
 import json
 import threading
 
+# T105: imported here, once, before any request: the pipeline imports these inside functions, and two request
+# threads doing the first import at the same moment made one fail ("cannot import name ... partially initialized
+# module", a 500 on the first spectrum after a start)
+import scipy.interpolate  # noqa: F401
+import scipy.ndimage  # noqa: F401
+
 from . import hips, limits
 from .skycache import SkyCache
 from .builder import REPO, Builder
