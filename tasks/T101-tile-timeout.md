@@ -1,6 +1,6 @@
 # T101: Map tile downloads get a time limit
 
-- **Owner:** Mati  ·  **Status:** doing
+- **Owner:** Mati  ·  **Status:** review (not yet seen working in a browser)
 - **Branch:** `mati/T101-tile-timeout`
 - **Depends on / feeds:** T94 (missing tiles; this was a note there)
 
@@ -20,6 +20,13 @@ asked for no tile at all afterwards. `fetch` has no time limit of its own.
 ## Questions / needs from others
 
 ## Handoff
+- `web/sky.js` `load()`: a timer aborts the download after 45 s (150 s for live-rendered tiles: deep zoom and
+  survey passes) and marks the job `timedOut`; the abort then goes down the normal failure path (retry with
+  back-off, after 5 tries the T94 pause and a fresh start) instead of "left the screen".
+- Checked: `node --check`, the six node tests. Not checked in a browser (no working Chromium on Mati's
+  machine); CI's browser test covers regressions, not the hang itself.
+- To see it by hand: zoom to level 6+, stop the Live API while tiles are loading, start it again: tiles must
+  come back within about a minute without a reload.
 
 ## Notes from others
 (anyone may append here, dated and signed)
