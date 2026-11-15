@@ -531,7 +531,8 @@ Only when the server runs with `--public` (or `SPHEREX_PUBLIC=1`); otherwise non
 - `refresh=1` is ignored and `POST /api/settings` answers **403** unless the request carries the admin token
   (`SPHEREX_ADMIN_TOKEN`) as `?token=` or header `X-Admin-Token`.
 - The field / cutout / spectra caches are kept under `--cache-gb` (default 20) by evicting the least recently
-  used; a field that is being built is never evicted.
+  used; a field that is being built is never evicted. While a cap is set, free disk space is checked every minute
+  and LRU entries are evicted right away while less than 5 GB is free (T125), even under the cap.
 
 ### Measured motion (v0.24, T91)
 

@@ -112,3 +112,27 @@ def test_cache_cap_without_public_mode_and_tile_chunks(tmp_path):
     assert [p.name for p in chunks.iterdir()] == ["c2.npy"]
     client = TestClient(create_app(data / "targets", fixture=True))
     assert all(client.get("/api/targets").status_code == 200 for _ in range(40))   # no rate limit without --public
+
+
+def test_sweep_frees_disk_space_beyond_the_cap(tmp_path, monkeypatch):
+    """T125: with too little free disk space the sweep evicts LRU entries even under the size cap."""
+    import os
+    import shutil as sh
+    data = tmp_path / "data"
+    for k, name in enumerate(["old", "mid", "new"]):
+        d = data / "targets" / name
+        d.mkdir(parents=True)
+        (d / "x.bin").write_bytes(b"x" * 1000)
+        os.utime(d / "x.bin", (1000 + k, 1000 + k))
+        os.utime(d, (1000 + k, 1000 + k))
+    limits.configure(False, cache_gb=1.0, min_free_gb=1.0)        # cap far above 3000 bytes
+    usage = sh.disk_usage(tmp_path)
+    monkeypatch.setattr(limits.shutil, "disk_usage", lambda p: usage._replace(free=int(1e9) - 1500))
+    short = limits.free_shortfall(data)
+    assert short == 1500
+    r = limits.sweep(data, int(1e9), frozenset(), short)
+    assert r["removed"] == 2 and sorted(p.name for p in (data / "targets").iterdir()) == ["new"]
+    monkeypatch.setattr(limits.shutil, "disk_usage", lambda p: usage._replace(free=int(5e9)))
+    assert limits.free_shortfall(data) == 0
+    limits.configure(False, cache_gb=1.0, min_free_gb=0)
+    assert limits.free_shortfall(data) == 0
