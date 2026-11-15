@@ -72,7 +72,7 @@ https://github.com/AraxTheCoder/nasa-challenge
 3. **Compare like with like.** SPHEREx takes every image at a slightly different wavelength, so a star can look
    different between two images even when nothing changed. The tool pairs images from different visits that have
    matching wavelengths, and jumps to the images closest to a wavelength you type.
-4. **See fainter.** In the frame view (add `&frames=1` to a link), you can add together all images of one visit
+4. **See fainter.** For a built field, you can add together all images of one visit
    (all six detectors) or all images of one detector. You can also shift the images along a selected object or a
    guessed motion before adding them (shift-and-stack). A faint mover then adds up while the stars smear. A stack of
    n images shows sources about √n times fainter.
