@@ -1,4 +1,8 @@
-# Contracts (v0.41)
+# Contracts (v0.42)
+
+v0.42 (T133): community coverage from distinct visiting browser IDs, a coverage overview endpoint and
+coverage metadata on tiles/views/counts. The viewer adds a separate Community workspace and optional
+map overlay. See Community / T133 below.
 
 v0.41 (T129): community comments add optional kind/title/evidence and recent activity accepts
 `unanswered=true`. Existing discussions migrate in place; saved evidence and direct discussion links
@@ -655,6 +659,38 @@ Drafts are stored per tile/reply in the browser, with an in-memory fallback when
 Background counts update without replacing the composer. In-flight posts remain bound to their original
 tile, and only a successful post clears its matching draft. No identity, scientific verification or
 moderator role is added by this extension.
+
+#### T133: Community workspace and attention coverage
+
+The viewer has persistent **Explore / Community** navigation. `?view=community` opens the Community
+workspace without waiting for map tiles; Recent, Unanswered, Coverage and This tile reuse the existing
+discussions and drafts. Newly copied discussion links include `view=community`. An explicit View on map
+or Open saved evidence action returns to Explore. Navigation keeps the mounted explorer and its field;
+Community owns the keyboard while active. Hidden/background community browsing does not count map visits.
+
+Coverage counts distinct stored browser identifiers per tile (`seen` rows), independently of hourly visit
+totals. It does not expose those identifiers. These are heuristic attention levels, not a calibrated
+probability of completeness, scientific reviews, or a count of verified people. Multiple devices, storage
+resets and shared browsers can affect the estimate. Comments do not change the tier.
+
+| `level` | `label` | Distinct browsers |
+|---|---|---|
+| `unvisited` | Unvisited | 0 |
+| `light` | Light attention | 1–2 |
+| `moderate` | Some attention | 3–9 |
+| `high` | High attention | 10+ |
+
+- `GET /api/community/tiles/<pix>` and `POST .../<pix>/view` add `coverage: {level, label, browsers}`.
+- `GET /api/community/counts?pix=...` adds a parallel `coverage` map keyed by tile ID; existing `tiles`
+  view/comment counts keep their format. Requested unvisited tiles receive coverage with zero browsers.
+- `GET /api/community/coverage?limit=40&sort=least` returns `status`, `order` (6), `total_tiles` (49152),
+  `basis` (`distinct_browser_ids`), `tiers` (level/label/min_browsers/max_browsers, null for the open upper
+  bound), `summary` (tile count per tier), and `tiles` (`pix`, `center`, `views`, `n_comments`, `coverage`).
+  `sort=least` includes unvisited sky, with ties distributed by a fixed coprime stride. `sort=most` lists
+  recorded active tiles by descending distinct browsers. Limit is clamped to 1–100; bad sort returns 400.
+- Optional **Community coverage** on the map draws labelled tier colours for visible order-6 tiles using
+  counts batches (up to 200 IDs). At wide zoom it asks the visitor to zoom in (view up to 8°). It clears
+  stale colours during navigation, explains API failures and never infers unvisited from a failed request.
 
 ### Target id and cache
 

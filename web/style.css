@@ -696,3 +696,57 @@ body.no-map #show-btn { background: var(--accent); color: #fff; border-color: va
 .cm-highlight { outline: 2px solid var(--accent, #8cb8ff); outline-offset: 3px; border-radius: 3px; }
 .cm-tabs { flex-wrap: wrap; gap: 12px; }
 .cm-x { align-self: flex-start; }
+
+/* T133: a separate Community workspace, with persistent Explore / Community navigation. */
+.app-header { position: fixed; inset: 0 0 auto; height: 54px; z-index: 55; display: flex; align-items: center;
+  justify-content: space-between; gap: 12px; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--border); }
+.workspace-tabs { display: flex; gap: 4px; padding: 3px; background: var(--panel); border-radius: 11px; }
+.workspace-tabs button { padding: 5px 14px; background: transparent; color: var(--muted); }
+.workspace-tabs button[aria-selected=true] { color: var(--text); background: var(--panel-2); }
+body:has(.app-header) .sky-stage { top: 54px; }
+body:has(.app-header) .hud-dock { top: 66px; }
+body:has(.app-header) .hud-moved { margin-top: 54px; }
+body:has(.app-header) .tour-start { top: 66px; }
+body:has(.app-header) .community-btn { top: 108px; }
+body:has(.app-header) .region-btn { top: 150px; }
+body:has(.app-header) .tour-card, body:has(.app-header) .community { max-height: calc(100dvh - 78px); }
+body:has(.app-header) .community { top: 66px; }
+body.no-map:has(.app-header) .deck { padding-top: 70px; }
+body.community-workspace { overflow: hidden; }
+body.community-workspace #explore-workspace { visibility: hidden; }
+body.community-workspace .tour-card, body.community-workspace .ol-card { visibility: hidden; }
+body.community-workspace #community { inset: 54px 0 0; width: 100%; max-height: none; border: none; border-radius: 0;
+  background: var(--bg); padding: 28px max(20px, calc((100vw - 960px) / 2)) 48px; overflow-y: auto; box-shadow: none; }
+.cm-workspace-head { margin-bottom: 20px; }
+.cm-workspace-head h2 { font-size: 28px; }
+.cm-workspace-head p { margin: 8px 0 0; max-width: 65ch; }
+.community-workspace .cm-top { position: sticky; top: -28px; z-index: 1; padding: 12px 0; margin-bottom: 12px; background: var(--bg); border-bottom: 1px solid var(--border); }
+.community-workspace .cm-item { padding: 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+.community-workspace .cm-form { padding: 20px; margin-top: 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+.cm-thread-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.cm-coverage { display: inline-block; font-size: 12px; padding: 3px 7px; border: 1px solid currentColor; border-radius: 6px; margin: 6px 0; }
+.cm-coverage-unvisited { color: #a4acba; }
+.cm-coverage-light { color: #68b9ff; }
+.cm-coverage-moderate { color: #e2b859; }
+.cm-coverage-high { color: #78d2a5; }
+.cm-coverage-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 20px 0; }
+.cm-coverage-card { display: grid; gap: 5px; padding: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+.cm-coverage-card strong { font-size: 26px; }
+.cm-coverage-list { grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }
+.cm-coverage-list .cm-coverage { display: table; }
+.cm-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0; }
+body:not(.community-workspace) .cm-coverage-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.community-coverage-label { flex-wrap: wrap; }
+#community-coverage-note { flex-basis: 100%; max-width: 400px; }
+@media (max-width: 600px) {
+  .app-header { padding: 8px; gap: 6px; }
+  .app-header .brand { font-size: 14px; }
+  .workspace-tabs button { padding: 5px 9px; font-size: 13px; }
+  body:has(.app-header) .hud-dock { top: 62px; }
+  body:has(.app-header) .tour-start, body:has(.app-header) .community-btn, body:has(.app-header) .region-btn { top: auto; }
+  body:has(.app-header):not(.community-workspace) .community { top: auto; max-height: calc(100dvh - 70px); }
+  body.community-workspace #community { padding: 18px 12px 32px; }
+  .community-workspace .cm-top { top: -18px; }
+  .cm-coverage-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .community-workspace .cm-item, .community-workspace .cm-form { padding: 12px; }
+}

@@ -28,6 +28,7 @@ import "./mapframes.js"; // T81: the frame viewer's A/B, blink, play and A − B
 import "./outliers.js";  // T86: sources in the field with unusual spectra
 import "./tour.js";      // T92: guided tour of the official targets ("▶ Tour", ?tour=1)
 import "./flagsmap.js";  // T60: SPHEREx quality flags as an overlay on the map
+import "./community-coverage.js"; // T133: optional tile attention overlay
 import "./community.js"; // T120: views + discussion per map tile ("💬" on the map)
 import "./region.js";    // T122: drag a rectangle on the map to choose the analysed field
 import "./activity.js";  // T123: one progress bar for everything that is loading or running
@@ -86,6 +87,8 @@ const app = {
   blinkOff: false,   // T100: the Blink switch is off: passes and epochs stand still, a date label picks one
 };
 
+let navigationLocation = location.href;
+const exploreLocation = (href) => { const url = new URL(href); url.searchParams.delete("view"); return url.href; };
 const params = () => new URLSearchParams(location.search);
 const withSlash = (s) => (s.endsWith("/") ? s : `${s}/`);
 const clampSize = (n) => Math.min(SIZE_MAX, Math.max(SIZE_MIN, Math.round(n)));
@@ -206,6 +209,7 @@ function setPageUrl(req, push, build = true) {
   if (url.href === location.href) return;
   if (push) history.pushState(null, "", url);
   else history.replaceState(null, "", url);
+  navigationLocation = location.href;
 }
 
 /** Without the map (?explore=0, offline ?data=) its screen is hidden: the form with the synthetic badge, build
@@ -506,6 +510,7 @@ async function openOffline(id) {
     const url = new URL(location.href);
     url.searchParams.set("target", id);
     history.replaceState(null, "", url);
+    navigationLocation = location.href;
   } catch (err) {
     if (err.name !== "AbortError" && token === app.loadToken) showMessage(err.message);
   }
@@ -602,11 +607,15 @@ function bindPage() {
   document.addEventListener("map:give", () => setManual(false));  // T96: Chemistry cleared: the automatic blink again
   setupBlinkSwitch();
   document.addEventListener("keydown", (e) => {
-    if (e.target.closest?.("input, select, textarea, .sky-stage")) return;
+    if (document.body.classList.contains("community-workspace") || e.target.closest?.("input, select, textarea, .sky-stage")) return;
     if ([" ", "p", "P", "x", "X", "m", "M", "d", "D", "ArrowLeft", "ArrowRight"].includes(e.key) && app.shownTarget) setManual(true);
   }, true);
 
+  document.addEventListener("workspace:navigate", () => { navigationLocation = location.href; });
   window.addEventListener("popstate", () => {
+    const previous = navigationLocation;
+    navigationLocation = location.href;
+    if (exploreLocation(previous) === exploreLocation(navigationLocation)) return;
     if (app.dataRoot) {
       if (app.index) openOfflineFromUrl();
     } else if (!loadFromUrl()) {

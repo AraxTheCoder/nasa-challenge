@@ -27,6 +27,7 @@ export function discussionLink(href, pix, id) {
   const source = new URL(href), url = new URL(source.pathname, source.origin);
   // Keep a custom API endpoint; drop unrelated navigation, debug and analysis state.
   if (source.searchParams.has("api")) url.searchParams.set("api", source.searchParams.get("api"));
+  url.searchParams.set("view", "community");
   url.searchParams.set("community", String(pix));
   url.searchParams.set("comment", String(id));
   return url.href;

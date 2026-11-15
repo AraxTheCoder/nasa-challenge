@@ -40,6 +40,8 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
 def run():
     with tempfile.TemporaryDirectory(prefix="community-test-") as tmp:
+        screenshots = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tmp)
+        screenshots.mkdir(parents=True, exist_ok=True)
         with socket.socket() as sock:
             sock.bind(("127.0.0.1", 0))
             api_port = sock.getsockname()[1]
@@ -205,9 +207,52 @@ def run():
                     expect(app_page.locator("#viewer-body")).to_be_visible()
                     missing = app_page.evaluate("() => new Promise(done => document.dispatchEvent(new CustomEvent('community:restore', {detail: {targetId: 'missing-field', done}})))")
                     assert missing is False
+                    # Dedicated Community navigation works before a map is available, preserving the loaded field.
+                    field_name = app_page.locator("#target-name").text_content()
+                    app_page.get_by_role("tab", name="Community", exact=True).click()
+                    expect(app_page.get_by_role("tab", name="Community", exact=True)).to_have_attribute("aria-selected", "true")
+                    expect(app_page.locator("#community")).to_have_attribute("role", "tabpanel")
+                    assert app_page.locator("#explore-workspace").evaluate("node => node.inert") is True
+                    assert "view=community" in app_page.url
+                    app_page.get_by_role("button", name="Coverage", exact=True).click()
+                    expect(app_page.locator(".cm-coverage-card")).to_have_count(4)
+                    expect(app_page.locator(".cm-coverage-list .cm-item")).to_have_count(24)
+                    expect(app_page.locator("#community")).to_contain_text("do not measure the chance")
+                    app_page.locator("#community-coverage-sort").select_option("most")
+                    expect(app_page.locator(".cm-coverage-list .cm-item").first).to_contain_text("1 browser")
+                    app_page.locator(".cm-coverage-list .cm-item").first.get_by_role("button", name="Discuss tile").click()
+                    expect(app_page.locator("#community-tile-coverage")).to_contain_text("Light attention")
+                    app_page.locator("#community-text").fill("Community workspace draft")
+                    app_page.get_by_role("tab", name="Explore", exact=True).click()
+                    expect(app_page.locator("#target-name")).to_have_text(field_name)
+                    app_page.go_back()
+                    expect(app_page.get_by_role("tab", name="Community", exact=True)).to_have_attribute("aria-selected", "true")
+                    app_page.go_forward()
+                    expect(app_page.get_by_role("tab", name="Explore", exact=True)).to_have_attribute("aria-selected", "true")
+                    expect(app_page.locator("#target-name")).to_have_text(field_name)
+                    # Arrow navigation changes workspace without triggering viewer shortcuts.
+                    app_page.get_by_role("tab", name="Explore", exact=True).focus()
+                    app_page.keyboard.press("ArrowRight")
+                    expect(app_page.get_by_role("tab", name="Community", exact=True)).to_be_focused()
+                    app_page.get_by_role("button", name="Coverage", exact=True).click()
+                    app_page.locator("#community-coverage-sort").select_option("most")
+                    app_page.locator(".cm-coverage-list .cm-item").first.get_by_role("button", name="Discuss tile").click()
+                    expect(app_page.locator("#community-text")).to_have_value("Community workspace draft")
+                    app_page.set_viewport_size({"width": 390, "height": 844})
+                    app_page.screenshot(path=str(screenshots / "community-before-mobile-check.png"))
+                    assert app_page.evaluate("document.documentElement.scrollWidth") <= 390, app_page.evaluate("[...document.querySelectorAll('body *')].filter(n=>n.getBoundingClientRect().right>390).map(n=>[n.tagName,n.id,n.className,n.getBoundingClientRect().width]).slice(0,20)")
+                    app_page.get_by_role("button", name="Recent", exact=True).click()
+                    app_page.screenshot(path=str(screenshots / "community-mobile.png"))
+                    app_page.reload()
+                    expect(app_page.get_by_role("tab", name="Community", exact=True)).to_have_attribute("aria-selected", "true")
+                    expect(app_page.locator("#community")).to_contain_text("Recent discussions")
+                    # New shared links land in the separate workspace and focus the exact comment.
+                    app_page.goto(f"{origin}/web/?explore=0&api={api}&view=community&community={pix}&comment={posted['id']}")
+                    expect(app_page.locator(f"#cm-comment-{posted['id']}")).to_be_visible()
+                    expect(app_page.get_by_role("tab", name="Community", exact=True)).to_have_attribute("aria-selected", "true")
                     assert not errors, errors
                     browser.close()
-                    print("Community browser checks passed: drafts, reply/tile isolation, counts/focus, failures, second looks, links, saved evidence, feed, delayed posts and phone layout.")
+                    print("Community browser checks passed: drafts, reply/tile isolation, counts/focus, failures, second looks, links, saved evidence, feed, delayed posts and phone layout, Community workspace/coverage navigation, history and deep links.")
             finally:
                 proc.terminate()
                 proc.wait(timeout=10)

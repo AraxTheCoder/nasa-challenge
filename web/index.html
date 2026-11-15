@@ -8,6 +8,14 @@
   <script type="module" src="app.js"></script>
 </head>
 <body>
+  <header class="app-header">
+    <h1 class="brand">SPHEREx Blink</h1>
+    <nav class="workspace-tabs" role="tablist" aria-label="Workspace">
+      <button id="workspace-explore" type="button" role="tab" aria-selected="true" aria-controls="explore-workspace">Explore</button>
+      <button id="workspace-community" type="button" role="tab" aria-selected="false" aria-controls="community" tabindex="-1">Community</button>
+    </nav>
+  </header>
+  <div id="explore-workspace" role="tabpanel" aria-labelledby="workspace-explore">
   <!-- T124: the sky map stays behind the whole page (fixed); everything else floats over it as panels.
        First screen: the controls (hud.js: drag a panel by its grip). Scrolling (the thumbwheel on the right
        edge, wheel.js; the mouse wheel over the map zooms the map) brings up the analysis panels. -->
@@ -18,7 +26,6 @@
       <!-- where: one form. Go moves the map (no build); Build field asks the Live API for that field. -->
       <div class="hud" data-hud="field">
         <header class="hud-panel search">
-          <h1 class="brand">SPHEREx Blink</h1>
           <form id="field-form" class="field-form" autocomplete="off" aria-describedby="form-tip-text">
             <label title="Right ascension: decimal degrees (133.795) or hours (08h55m10.8s, 08:55:10.8)">RA
               <input name="ra" type="text" required placeholder="08h55m10.8s or 133.795" spellcheck="false"></label>
@@ -314,5 +321,6 @@
     <button id="wheel-wide" type="button" class="wheel-btn wheel-wide" aria-pressed="false"
             title="Wider analysis panels" aria-label="Wider analysis panels">⇤</button>
   </nav>
+  </div>
 </body>
 </html>

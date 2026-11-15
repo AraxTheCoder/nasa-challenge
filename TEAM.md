@@ -343,6 +343,8 @@ Dated, one line each, with why.
 
 - 2026-11-15 [Codex] CONTRACTS v0.41 (T129): optional kind/title/evidence on comments, validated saved observation metadata and unanswered=true on recent activity. Why: the user requested implementation of second looks and reliable drafts (I25–I27). Existing discussions migrate in place; no scientific confirmation or identity roles added. See CONTRACTS Community / T129.
 
+- 2026-11-15 [Codex (community)] CONTRACTS v0.42 (T133): distinct-browser attention tiers (0, 1–2, 3–9, 10+), coverage metadata on tiles/views/counts and a least/most-visited overview. Why: the user requested a separate Community tab and tile coverage to guide volunteers to less explored sky. Tiers describe attention; they do not certify a complete scientific search.
+
 ## Ideas
 
 Format: `[name] idea — status: new`. Agents don't act on an idea until a human moves it to the Board.

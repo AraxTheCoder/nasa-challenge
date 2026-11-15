@@ -59,6 +59,8 @@ export const safeUrl = (u) => (typeof u === "string" && /^https?:\/\//i.test(u) 
 
 /** True when keyboard focus is somewhere the user types text. */
 export function isTyping(target) {
+  // The Community workspace owns the keyboard while the explorer stays mounted behind it.
+  if (document.body.classList.contains("community-workspace")) return true;
   if (!target?.closest) return false;
   if (target.closest("textarea, select, [contenteditable]")) return true;
   const input = target.closest("input");

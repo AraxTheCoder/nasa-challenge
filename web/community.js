@@ -1,4 +1,5 @@
 // Per-tile discussion, saved second-look evidence and drafts. All community content is plain text.
+import { DEFAULT_API } from "./api.js";
 import { $, el, releasesOf } from "./util.js";
 import * as explore from "./explore.js";
 import { currentTarget, currentPair, selectPair } from "./viewer.js";
@@ -11,7 +12,7 @@ let storage;
 try { storage = localStorage; } catch { /* private mode */ }
 const drafts = draftStore(storage);
 const st = { pix: null, counts: null, open: false, tab: "tile", thread: null, viewed: new Set(),
-  hooked: false, replyTo: null, request: 0, posting: new Set(), focusId: null, notice: "", restoring: null };
+  workspace: false, mapPix: null, coverageSort: "least", linked: false, hooked: false, replyTo: null, request: 0, posting: new Set(), focusId: null, notice: "", restoring: null };
 const store = {
   get(k) { try { return storage?.getItem(k); } catch { return null; } },
   set(k, v) { try { storage?.setItem(k, v); } catch { /* not remembered */ } },
@@ -21,7 +22,7 @@ function browserId() {
   if (!id) { id = Math.random().toString(36).slice(2) + Date.now().toString(36); store.set(ID_KEY, id); }
   return id;
 }
-const api = (path) => `${(explore.getApiBase() ?? "").replace(/\/$/, "")}/api/community${path}`;
+const api = (path) => `${(explore.getApiBase() ?? new URLSearchParams(location.search).get("api") ?? DEFAULT_API).replace(/\/$/, "")}/api/community${path}`;
 async function read(path, opts = {}) {
   const res = await fetch(api(path), { cache: "no-cache", signal: AbortSignal.timeout(15000), ...opts });
   const body = await res.json().catch(() => ({}));
@@ -57,7 +58,7 @@ async function refreshCounts() {
   if (pix == null || !explore.getApiBase()) return;
   try {
     const r = await read(`/counts?pix=${pix}`);
-    if (pix === st.pix) { st.counts = r.tiles?.[String(pix)] ?? null; showCounts(); }
+    if (pix === st.pix) { st.counts = r.tiles?.[String(pix)] ?? null; st.coverage = r.coverage?.[String(pix)]; showCounts(); }
   } catch { /* discussion remains accessible */ }
 }
 function setTile(pix) {
@@ -66,10 +67,15 @@ function setTile(pix) {
   showCounts();
 }
 function onMove() {
-  if (st.restoring != null) return;
   const v = explore.view();
   if (!v) return;
   const pix = ang2pix(ORDER, v.ra, v.dec);
+  st.mapPix = pix;
+  if (st.restoring != null) return;
+  if (st.workspace) {
+    if (st.pix == null) { setTile(pix); if (st.open && st.tab === "tile") loadThread(); }
+    return;
+  }
   if (pix === st.pix) return;
   setTile(pix);
   clearTimeout(st.moveTimer);
@@ -80,15 +86,19 @@ function onMove() {
 }
 async function countView(pix) {
   const v = explore.view();
-  if (pix !== st.pix || st.viewed.has(pix) || !v || v.fovArcmin > 360) return;
+  if (document.hidden || st.workspace || pix !== st.pix || st.viewed.has(pix) || !v || v.fovArcmin > 360) return;
   try {
     const r = await read(`/tiles/${pix}/view`, { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ browser: browserId() }) });
     st.viewed.add(pix);
-    if (pix === st.pix) { if (st.counts) st.counts.views = r.views; showCounts(); }
+    if (pix === st.pix) { if (st.counts) st.counts.views = r.views; st.coverage = r.coverage; showCounts(); }
+    document.dispatchEvent(new CustomEvent("community:coverage-changed"));
     // Update only the count. Replacing the composer here used to erase drafts and move focus.
     if (pix === st.pix && st.thread?.tile.pix === pix) {
       st.thread.views = r.views;
+      st.thread.coverage = r.coverage;
+      const badge = $("#community-tile-coverage");
+      if (badge && r.coverage) badge.replaceWith(coverageBadge(r.coverage, "community-tile-coverage"));
       const count = $("#community-views");
       if (count) count.textContent = `👁 ${r.views} visits`;
     }
@@ -102,19 +112,69 @@ function panel() {
   }
   return p;
 }
-function close() { st.open = false; ++st.request; panel().hidden = true; showCounts(); button()?.focus(); }
+function setWorkspace(active, { push = true } = {}) {
+  if (active && !st.workspace) st.exploreScroll = scrollY;
+  st.workspace = active;
+  document.body.classList.toggle("community-workspace", active);
+  const world = $("#explore-workspace");
+  if (world) { world.inert = active; world.setAttribute("aria-hidden", String(active)); }
+  for (const name of ["explore", "community"]) {
+    const tab = $(`#workspace-${name}`), selected = (name === "community") === active;
+    tab?.setAttribute("aria-selected", String(selected));
+    if (tab) tab.tabIndex = selected ? 0 : -1;
+  }
+  panel().setAttribute("role", active ? "tabpanel" : "dialog");
+  if (active) panel().setAttribute("aria-labelledby", "workspace-community");
+  else panel().removeAttribute("aria-labelledby");
+  if (push) {
+    const url = new URL(location.href);
+    if (active) url.searchParams.set("view", "community"); else url.searchParams.delete("view");
+    if (url.href !== location.href) history.pushState(null, "", url);
+    document.dispatchEvent(new CustomEvent("workspace:navigate"));
+  }
+  if (active) { scrollTo(0, 0); openPanel("recent"); }
+  else {
+    st.open = false; ++st.request; panel().hidden = true;
+    if (st.mapPix != null) { setTile(st.mapPix); clearTimeout(st.restTimer); st.restTimer = setTimeout(() => countView(st.mapPix), REST_MS); }
+    showCounts(); scrollTo(0, st.exploreScroll ?? 0);
+  }
+}
+function close() {
+  if (st.workspace) { setWorkspace(false); $("#workspace-explore")?.focus(); }
+  else { st.open = false; ++st.request; panel().hidden = true; showCounts(); button()?.focus(); }
+}
+function initWorkspace() {
+  const tabs = [$("#workspace-explore"), $("#workspace-community")].filter(Boolean);
+  for (const tab of tabs) {
+    tab.addEventListener("click", () => setWorkspace(tab.id === "workspace-community"));
+    tab.addEventListener("keydown", (e) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+      e.preventDefault(); e.stopPropagation();
+      const target = e.key === "Home" ? tabs[0] : e.key === "End" ? tabs.at(-1) : tabs.find((t) => t !== tab);
+      target.click(); target.focus();
+    });
+  }
+  const applyUrl = () => {
+    const p = new URLSearchParams(location.search);
+    const active = p.get("view") === "community";
+    if (active !== st.workspace) setWorkspace(active, { push: false });
+  };
+  addEventListener("popstate", applyUrl);
+  applyUrl();
+  if (new URLSearchParams(location.search).get("explore") === "0" || new URLSearchParams(location.search).has("data")) openLinked();
+}
 async function openPanel(tab) {
   st.open = true; st.tab = tab; panel().hidden = false; showCounts();
-  await (tab === "tile" ? loadThread() : loadRecent());
+  await (tab === "tile" ? loadThread() : tab === "coverage" ? loadCoverage() : loadRecent());
 }
 async function loadThread() {
-  if (st.pix == null) return;
+  if (st.pix == null) { render(); return; }
   const pix = st.pix, request = ++st.request;
   render(el("p", { class: "muted small", role: "status" }, "Loading discussion…"));
   try {
     const r = await read(`/tiles/${pix}`);
     if (request !== st.request || pix !== st.pix || st.tab !== "tile" || !st.open) return;
-    st.thread = r; st.counts = { views: r.views, comments: r.n_comments }; showCounts(); render();
+    st.thread = r; st.coverage = r.coverage; st.counts = { views: r.views, comments: r.n_comments }; showCounts(); render();
     if (st.focusId) {
       const item = $(`#cm-comment-${st.focusId}`);
       if (item) { item.scrollIntoView({ block: "nearest" }); item.focus({ preventScroll: true }); }
@@ -131,6 +191,27 @@ async function loadRecent() {
     st.recent = r; render();
   } catch (err) { if (request === st.request) render(el("p", { class: "msg msg-warn", role: "alert" }, err.message)); }
 }
+function coverageBadge(c, id) {
+  if (!c) return null;
+  return el("span", { id, class: `cm-coverage cm-coverage-${c.level}`, title: "Based on distinct visiting browser IDs, not confirmed scientific reviews" },
+    `${c.label} · ${c.browsers} browser${c.browsers === 1 ? "" : "s"}`);
+}
+async function loadCoverage() {
+  const request = ++st.request;
+  render(el("p", { class: "muted small", role: "status" }, "Loading community coverage…"));
+  try {
+    const r = await read(`/coverage?limit=24&sort=${st.coverageSort}`);
+    if (request !== st.request || st.tab !== "coverage" || !st.open) return;
+    st.coverageOverview = r; render();
+  } catch (err) { if (request === st.request) render(el("p", { class: "msg msg-warn", role: "alert" }, err.message)); }
+}
+function viewOnMap(c) {
+  const pix = c.pix ?? st.pix, pos = position(c);
+  if (st.workspace) setWorkspace(false);
+  if (pos) explore.goTo(...pos);
+  setTile(pix); st.focusId = c.id ?? null;
+  openPanel("tile");
+}
 function position(c) {
   const center = c.center ?? st.thread?.center;
   return c.ra_deg != null && c.dec_deg != null ? [c.ra_deg, c.dec_deg, (c.fov_arcmin ?? 90) / 60]
@@ -140,7 +221,7 @@ async function openDiscussion(c) {
   const pix = c.pix ?? st.pix;
   // Move before choosing the thread: old comments may pin a position outside their parent tile.
   const pos = position(c);
-  if (pos) explore.goTo(...pos);
+  if (pos && !st.workspace) explore.goTo(...pos);
   setTile(pix); st.focusId = c.id; st.notice = "";
   await openPanel("tile");
 }
@@ -183,13 +264,14 @@ async function restoreEvidence(c) {
   document.dispatchEvent(new CustomEvent("community:restore", { detail: { targetId: e.target_id, done } }));
 }
 function snapshot() {
-  const v = explore.view();
+  const v = st.workspace && st.thread && st.mapPix !== st.pix
+    ? { ra: st.thread.center.ra_deg, dec: st.thread.center.dec_deg, fovArcmin: 90 } : explore.view();
   if (!v) return null;
   const saved = { ra_deg: ((v.ra % 360) + 360) % 360, dec_deg: v.dec, fov_arcmin: Math.min(v.fovArcmin, 600), evidence: {} };
   const e = saved.evidence, t = currentTarget(), pair = currentPair();
   const wave = explore.bandWavelengths()[explore.getSky()?.base?.slice];
   if (Number.isFinite(wave)) e.wavelength_um = wave;
-  if (t?.center && ang2pix(ORDER, t.center.ra_deg, t.center.dec_deg) === st.pix) {
+  if ((!st.workspace || st.mapPix === st.pix) && t?.center && ang2pix(ORDER, t.center.ra_deg, t.center.dec_deg) === st.pix) {
     Object.assign(e, { target_id: t.id, field_ra_deg: t.center.ra_deg, field_dec_deg: t.center.dec_deg,
       field_size_arcmin: t.size_arcmin, synthetic: t.synthetic !== false, flags: Boolean($("#flags-toggle")?.checked) });
     if (pair) {
@@ -231,7 +313,11 @@ function commentEl(c, isReply = false) {
   const reply = isReply ? null : el("button", { type: "button", class: "link small" }, "Reply");
   reply?.addEventListener("click", () => { st.replyTo = c; render(); $("#community-text")?.focus(); });
   const look = c.ra_deg == null ? null : el("button", { type: "button", class: "link small" }, c.evidence?.target_id ? "Open saved evidence" : "📍 Look here");
-  look?.addEventListener("click", () => restoreEvidence(c));
+  look?.addEventListener("click", async () => {
+    const pix = st.pix;
+    if (st.workspace) { setWorkspace(false); setTile(pix); await openPanel("tile"); }
+    restoreEvidence(c);
+  });
   return el("li", { id: `cm-comment-${c.id}`, tabindex: "-1", class: `${isReply ? "cm-reply" : "cm-item"}${st.focusId === c.id ? " cm-highlight" : ""}` },
     el("div", { class: "cm-head small" }, el("strong", {}, c.author), el("span", { class: "muted" }, ` · ${ago(c.created_utc)}`),
       c.kind === "second_look" ? el("span", { class: "cm-badge" }, "Second look") : null),
@@ -308,21 +394,50 @@ function form() {
     el("div", { class: "cm-actions" }, send, cancel), msg);
 }
 function render(extra) {
-  const tabs = el("div", { class: "cm-tabs" }, ...[["tile", "This tile"], ["unanswered", "Unanswered"], ["recent", "Recent"]].map(([key, label]) => {
+  const tabs = el("div", { class: "cm-tabs" }, ...[["recent", "Recent"], ["unanswered", "Unanswered"], ["coverage", "Coverage"], ["tile", "This tile"]].map(([key, label]) => {
     const b = el("button", { type: "button", class: `link${st.tab === key ? " active" : ""}`, "aria-pressed": String(st.tab === key) }, label);
     b.addEventListener("click", () => openPanel(key)); return b;
   }));
   const x = el("button", { type: "button", class: "link cm-x", "aria-label": "Close discussion" }, "×");
   x.addEventListener("click", close);
-  const parts = [el("div", { class: "cm-top" }, tabs, x)];
+  const parts = [];
+  if (st.workspace) parts.push(el("header", { class: "cm-workspace-head" }, el("h2", {}, "Community"),
+    el("p", { class: "muted" }, "Compare observations, ask for a second look, and find sky that needs more attention.")));
+  parts.push(el("div", { class: "cm-top" }, tabs, st.workspace ? null : x));
   if (st.notice) parts.push(el("p", { class: "small", role: "status" }, st.notice));
   if (extra) parts.push(extra);
   else if (st.tab === "tile" && st.thread?.tile.pix === st.pix) {
     const t = st.thread;
-    parts.push(el("h3", {}, `Tile ${t.tile.pix}`),
+    const map = el("button", { type: "button", class: "link small" }, "View tile on map →");
+    map.addEventListener("click", () => viewOnMap(t.tile));
+    parts.push(el("div", { class: "cm-thread-head" }, el("h3", {}, `Tile ${t.tile.pix}`), map),
+      coverageBadge(t.coverage, "community-tile-coverage"),
       el("p", { class: "small muted" }, el("span", { id: "community-views" }, `👁 ${t.views} visits`), ` · 💬 ${t.n_comments} comments`),
       t.comments.length ? el("ul", { class: "cm-list" }, ...t.comments.map((c) => commentEl(c)))
         : el("p", { class: "muted" }, "No discussion yet. Ask a question or invite someone to take a second look."), form());
+  } else if (st.tab === "tile") {
+    parts.push(el("h3", {}, "Discuss a sky tile"), el("p", { class: "muted" }, "Choose a tile from Coverage or explore the sky to start a discussion."));
+  } else if (st.tab === "coverage" && st.coverageOverview) {
+    const overview = st.coverageOverview;
+    const sort = el("select", { id: "community-coverage-sort", "aria-label": "Sort tiles by community attention" },
+      el("option", { value: "least" }, "Less visited first"), el("option", { value: "most" }, "Most visited first"));
+    sort.value = st.coverageSort;
+    sort.addEventListener("change", () => { st.coverageSort = sort.value; loadCoverage(); });
+    parts.push(el("h3", {}, "Community coverage"), el("p", { class: "muted" },
+      "More independent visits mean more attention. These levels count browser IDs, not verified people, and do not measure the chance that a tile is fully explored."),
+      el("div", { class: "cm-coverage-summary" }, ...overview.tiers.map((tier) => el("div", { class: `cm-coverage-card cm-coverage-${tier.level}` },
+        el("strong", {}, overview.summary[tier.level].toLocaleString()), el("span", {}, tier.label),
+        el("small", { class: "muted" }, tier.max_browsers == null ? `${tier.min_browsers}+ browsers` : tier.min_browsers === 0 ? "No recorded visits" : `${tier.min_browsers}–${tier.max_browsers} browsers`)))),
+      el("label", { class: "cm-sort small" }, "Find sky to explore ", sort),
+      overview.tiles.length ? el("ul", { class: "cm-list cm-coverage-list" }, ...overview.tiles.map((t) => {
+        const go = el("button", { type: "button", class: "link small" }, "View on map →");
+        go.addEventListener("click", () => viewOnMap(t));
+        const discuss = el("button", { type: "button", class: "link small" }, "Discuss tile");
+        discuss.addEventListener("click", () => openDiscussion(t));
+        return el("li", { class: "cm-item" }, el("strong", {}, `Tile ${t.pix}`), coverageBadge(t.coverage),
+          el("p", { class: "small muted" }, `${t.views} visits · ${t.n_comments} comments · RA ${t.center.ra_deg.toFixed(2)}°, Dec ${t.center.dec_deg.toFixed(2)}°`),
+          el("div", { class: "cm-actions" }, go, discuss));
+      })) : el("p", { class: "muted" }, "No recorded visits yet. Choose Less visited first to find a starting point."));
   } else if (st.recent && st.tab !== "tile") {
     const items = st.recent.latest ?? [];
     parts.push(el("h3", {}, st.tab === "unanswered" ? "Needs a second look" : "Recent discussions"),
@@ -344,13 +459,14 @@ function render(extra) {
 }
 async function openLinked() {
   const params = new URLSearchParams(location.search), pix = Number(params.get("community")), id = Number(params.get("comment"));
-  if (!params.has("community") || !Number.isInteger(pix) || pix < 0 || pix >= 49152) return;
+  if (st.linked || !params.has("community") || !Number.isInteger(pix) || pix < 0 || pix >= 49152) return;
+  st.linked = true;
   setTile(pix); st.focusId = Number.isInteger(id) && id > 0 ? id : null;
   await openPanel("tile");
   const comments = st.thread?.comments.flatMap((c) => [c, ...(c.replies ?? [])]) ?? [];
   const c = comments.find((c) => c.id === id);
-  if (c) await restoreEvidence(c);
-  else if (st.thread) explore.goTo(st.thread.center.ra_deg, st.thread.center.dec_deg, 1.5);
+  if (c && !st.workspace) await restoreEvidence(c);
+  else if (st.thread && !st.workspace) explore.goTo(st.thread.center.ra_deg, st.thread.center.dec_deg, 1.5);
 }
 function hook() {
   const sky = explore.getSky();
@@ -358,6 +474,6 @@ function hook() {
   st.hooked = true; button(); sky.on("change", onMove); onMove(); openLinked();
 }
 document.addEventListener("explore:ready", hook);
-hook();
+setTimeout(() => { initWorkspace(); hook(); }, 0);
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && st.open) { e.stopPropagation(); close(); } });
 globalThis.spherexCommunity = { tile: () => st.pix, counts: () => st.counts };

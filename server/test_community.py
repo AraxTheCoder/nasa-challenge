@@ -18,7 +18,8 @@ def client(tmp_path, monkeypatch):
 
 def test_views_count_once_per_browser_per_hour(client):
     url = "/api/community/tiles/12345/view"
-    assert client.post(url, json={"browser": "a"}).json() == {"status": "ready", "views": 1, "counted": True}
+    assert client.post(url, json={"browser": "a"}).json() == {"status": "ready", "views": 1, "counted": True,
+        "coverage": {"level": "light", "label": "Light attention", "browsers": 1}}
     assert client.post(url, json={"browser": "a"}).json()["counted"] is False
     assert client.post(url, json={"browser": "b"}).json()["views"] == 2
     t = client.get("/api/community/tiles/12345").json()
@@ -124,3 +125,47 @@ def test_old_database_migrates_without_losing_discussions(client):
     community._db = None
     assert client.get("/api/community/tiles/777").json() == old
     assert client.post("/api/community/tiles/777/comments", json={"text": "new reply", "parent_id": old["comments"][0]["id"]}).status_code == 201
+
+
+
+def test_coverage_uses_distinct_browsers_not_repeat_visits(client, monkeypatch):
+    now = 1000000.
+    monkeypatch.setattr(community.time, "time", lambda: now)
+    url = "/api/community/tiles/777/view"
+    assert client.post(url, json={"browser": "a"}).json()["coverage"]["browsers"] == 1
+    for _ in range(12):
+        now += 3601
+        response = client.post(url, json={"browser": "a"}).json()
+    assert response["views"] == 13 and response["coverage"]["level"] == "light"
+    assert response["coverage"]["browsers"] == 1
+    client.post(url, json={"browser": "b"})
+    third = client.post(url, json={"browser": "c"}).json()["coverage"]
+    assert third == {"level": "moderate", "label": "Some attention", "browsers": 3}
+    for i in range(7):
+        client.post(url, json={"browser": f"other-{i}"})
+    tile = client.get("/api/community/tiles/777").json()
+    assert tile["coverage"] == {"level": "high", "label": "High attention", "browsers": 10}
+    counts = client.get("/api/community/counts?pix=777,778").json()
+    assert counts["coverage"]["777"] == tile["coverage"]
+    assert counts["coverage"]["778"] == {"level": "unvisited", "label": "Unvisited", "browsers": 0}
+
+
+def test_coverage_overview_summary_and_exploration_order(client):
+    fresh = client.get("/api/community/coverage?limit=4").json()
+    assert fresh["summary"] == {"unvisited": community.NPIX, "light": 0, "moderate": 0, "high": 0}
+    assert len(fresh["tiles"]) == 4 and all(t["coverage"]["browsers"] == 0 for t in fresh["tiles"])
+    assert len({t["pix"] for t in fresh["tiles"]}) == 4
+    assert client.get("/api/community/coverage?sort=most").json()["tiles"] == []
+    for pix, n in ((777, 1), (778, 3), (779, 10)):
+        for i in range(n):
+            client.post(f"/api/community/tiles/{pix}/view", json={"browser": str(i)})
+    popular = client.get("/api/community/coverage?sort=most&limit=2").json()
+    assert [t["pix"] for t in popular["tiles"]] == [779, 778]
+    assert popular["summary"] == {"unvisited": community.NPIX - 3, "light": 1, "moderate": 1, "high": 1}
+    assert sum(popular["summary"].values()) == community.NPIX
+    assert popular["basis"] == "distinct_browser_ids"
+    least = client.get("/api/community/coverage?sort=least&limit=5").json()["tiles"]
+    assert all(t["coverage"]["browsers"] == 0 for t in least)
+    assert all(-90 <= t["center"]["dec_deg"] <= 90 for t in least)
+    assert len(client.get("/api/community/coverage?limit=1000").json()["tiles"]) == 100
+    assert client.get("/api/community/coverage?sort=unknown").status_code == 400

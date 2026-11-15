@@ -147,6 +147,23 @@ def _thread(pix: int) -> list[dict]:
     return top
 
 
+COVERAGE_TIERS = (
+    {"level": "unvisited", "label": "Unvisited", "min_browsers": 0, "max_browsers": 0},
+    {"level": "light", "label": "Light attention", "min_browsers": 1, "max_browsers": 2},
+    {"level": "moderate", "label": "Some attention", "min_browsers": 3, "max_browsers": 9},
+    {"level": "high", "label": "High attention", "min_browsers": 10, "max_browsers": None},
+)
+
+
+def _coverage(browsers: int) -> dict:
+    tier = next(t for t in reversed(COVERAGE_TIERS) if browsers >= t["min_browsers"])
+    return {"level": tier["level"], "label": tier["label"], "browsers": browsers}
+
+
+def _browsers(pix: int) -> int:
+    return int(_conn().execute("SELECT COUNT(*) FROM seen WHERE pix = ?", (pix,)).fetchone()[0])
+
+
 def _views(pix: int) -> int:
     r = _conn().execute("SELECT n FROM views WHERE pix = ?", (pix,)).fetchone()
     return int(r["n"]) if r else 0
@@ -157,10 +174,10 @@ def tile(pix: int):
     if not _valid_pix(pix):
         return _bad(f"tile must be 0..{NPIX - 1} (HEALPix order {ORDER}, nested)")
     with _lock:
-        comments, views = _thread(pix), _views(pix)
+        comments, views, coverage = _thread(pix), _views(pix), _coverage(_browsers(pix))
     n = sum(1 + len(c["replies"]) for c in comments)
     return {"status": "ready", "tile": {"order": ORDER, "pix": pix}, "center": tile_center(pix), "views": views,
-            "n_comments": n, "comments": comments}
+            "n_comments": n, "comments": comments, "coverage": coverage}
 
 
 @router.post("/api/community/tiles/{pix}/view")
@@ -183,7 +200,8 @@ async def view(pix: int, request: Request):
             db.execute("INSERT INTO views (pix, n) VALUES (?, 1) ON CONFLICT(pix) DO UPDATE SET n = n + 1", (pix,))
             db.commit()
         views = _views(pix)
-    return {"status": "ready", "views": views, "counted": counted}
+        coverage = _coverage(_browsers(pix))
+    return {"status": "ready", "views": views, "counted": counted, "coverage": coverage}
 
 
 @router.post("/api/community/tiles/{pix}/comments")
@@ -285,10 +303,38 @@ def counts(pix: str):
     with _lock:
         db = _conn()
         out = {p: {"views": 0, "comments": 0} for p in ids}
+        coverage = {p: _coverage(0) for p in ids}
         if ids:
             q = ",".join("?" * len(ids))
+            for r in db.execute(f"SELECT pix, COUNT(*) AS n FROM seen WHERE pix IN ({q}) GROUP BY pix", ids):
+                coverage[r["pix"]] = _coverage(int(r["n"]))
             for r in db.execute(f"SELECT pix, n FROM views WHERE pix IN ({q})", ids):
                 out[r["pix"]]["views"] = int(r["n"])
             for r in db.execute(f"SELECT pix, COUNT(*) AS c FROM comments WHERE pix IN ({q}) GROUP BY pix", ids):
                 out[r["pix"]]["comments"] = int(r["c"])
-    return {"status": "ready", "tiles": {str(k): v for k, v in out.items()}}
+    return {"status": "ready", "tiles": {str(k): v for k, v in out.items()},
+            "coverage": {str(k): v for k, v in coverage.items()}}
+
+
+@router.get("/api/community/coverage")
+def coverage_overview(limit: int = 40, sort: str = "least"):
+    """Attention from distinct stored browser IDs, never a probability of scientific completeness."""
+    if sort not in ("least", "most"):
+        return _bad("sort must be least or most")
+    limit = max(1, min(limit, 100))
+    with _lock:
+        db = _conn()
+        visitors = {int(r["pix"]): int(r["n"]) for r in db.execute("SELECT pix, COUNT(*) AS n FROM seen GROUP BY pix")}
+        visits = {int(r["pix"]): int(r["n"]) for r in db.execute("SELECT pix, n FROM views")}
+        comments = {int(r["pix"]): int(r["n"]) for r in db.execute("SELECT pix, COUNT(*) AS n FROM comments GROUP BY pix")}
+    summary = {t["level"]: 0 for t in COVERAGE_TIERS}
+    summary["unvisited"] = NPIX - len(visitors)
+    for n in visitors.values():
+        summary[_coverage(n)["level"]] += 1
+    # A coprime stride spreads equally unvisited recommendations across the sky instead of clustering at pix 0.
+    candidates = list(range(NPIX)) if sort == "least" else list(set(visitors) | set(visits) | set(comments))
+    ids = sorted(candidates, key=lambda p: (visitors.get(p, 0) * (1 if sort == "least" else -1), (p * 7919) % NPIX))[:limit]
+    tiles = [{"pix": pix, "center": tile_center(pix), "views": visits.get(pix, 0), "n_comments": comments.get(pix, 0),
+              "coverage": _coverage(visitors.get(pix, 0))} for pix in ids]
+    return {"status": "ready", "order": ORDER, "total_tiles": NPIX, "summary": summary,
+            "tiers": list(COVERAGE_TIERS), "basis": "distinct_browser_ids", "tiles": tiles}
