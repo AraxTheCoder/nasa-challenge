@@ -149,17 +149,42 @@ uv pip compile requirements-dev.txt --python-version 3.12 --universal -o require
 
 ## Data credits
 
-- **SPHEREx** data from the NASA/IPAC Infrared Science Archive (IRSA), operated by
-  Caltech/IPAC. _TODO: add the exact data set name, release (QR2/QR3) and DOI from the IRSA
-  SPHEREx page, plus the acknowledgement text IRSA asks for._
-- SPHEREx level-2 images also read from the **AWS Open Data** bucket `nasa-irsa-spherex`; all-sky maps
-  from IRSA (SPHEREx cube, 2MASS, AllWISE HiPS) and **CDS** (SPHEREx per-detector HiPS).
-- **JPL Horizons** and the **JPL Small-Body Identification** API, Solar System Dynamics group,
-  Jet Propulsion Laboratory; **IMCCE SkyBoT** (Paris Observatory); the **Minor Planet Center** orbit
-  catalogue MPCORB.
-- **SIMBAD** (CDS, Strasbourg; Harvard mirror) and **Gaia DR3** (ESA, Gaia archive TAP).
-- Software: astropy, astropy-healpix, reproject, pyvo, numpy, scipy, Pillow, FastAPI, uvicorn.
-  _TODO (T15): exact data set names, release, DOIs and the acknowledgement texts each archive asks for._
+Text for the project page: `docs/SUBMISSION.md`.
+
+- **SPHEREx** (NASA): Data Release 1 spectral images (DOI
+  [10.26131/IRSA678](https://www.ipac.caltech.edu/doi/10.26131/IRSA678)), the DR1 Spectral All-Sky Cube
+  (DOI [10.26131/IRSA679](https://www.ipac.caltech.edu/doi/10.26131/IRSA679)) and Quick Release 3 (DOI
+  [10.26131/IRSA662](https://www.ipac.caltech.edu/doi/10.26131/IRSA662)), from the NASA/IPAC Infrared
+  Science Archive (IRSA) and its AWS Open Data bucket `nasa-irsa-spherex`. This project makes use of data
+  products from the Spectro-Photometer for the History of the Universe, Epoch of Reionization and Ices
+  Explorer (SPHEREx), which is a joint project of the Jet Propulsion Laboratory and the California
+  Institute of Technology, and is funded by the National Aeronautics and Space Administration.
+- **IRSA** (TAP, cutouts, HiPS): this project has made use of the NASA/IPAC Infrared Science Archive,
+  which is funded by the National Aeronautics and Space Administration and operated by the California
+  Institute of Technology.
+- **2MASS** and **AllWISE** all-sky maps (IRSA HiPS). 2MASS is a joint project of the University of
+  Massachusetts and the Infrared Processing and Analysis Center / Caltech, funded by NASA and the
+  National Science Foundation. WISE is a joint project of the University of California, Los Angeles, and
+  the Jet Propulsion Laboratory / Caltech, funded by NASA.
+- **JPL Horizons** and the **JPL Small-Body Identification** API, Solar System Dynamics group, Jet
+  Propulsion Laboratory.
+- **Gaia DR3**: this work has made use of data from the European Space Agency (ESA) mission Gaia
+  (<https://www.cosmos.esa.int/gaia>), processed by the Gaia Data Processing and Analysis Consortium
+  (DPAC, <https://www.cosmos.esa.int/web/gaia/dpac/consortium>). Funding for the DPAC has been provided
+  by national institutions, in particular the institutions participating in the Gaia Multilateral
+  Agreement.
+- **SIMBAD** and **VizieR**, operated at CDS, Strasbourg, France (Wenger et al. 2000; Ochsenbein et al.
+  2000), also through the Harvard mirrors; the **AAVSO International Variable Star Index (VSX)** through
+  VizieR; the SPHEREx per-detector **HiPS** maps of CDS (HiPS: Fernique et al. 2015).
+- **Minor Planet Center**: this project has made use of data and services provided by the International
+  Astronomical Union's Minor Planet Center (orbit catalogue MPCORB). **SkyBoT**, IMCCE / Paris
+  Observatory (Berthier et al. 2006).
+- Software: astropy (Astropy Collaboration 2013, 2018, 2022), astropy-healpix, reproject, pyvo, numpy,
+  scipy, Pillow, FastAPI, uvicorn.
+
+The SPHEREx wording follows IRSA's release pages (`irsa.ipac.caltech.edu/data/SPHEREx/docs/`, read
+2026-11-15); the other texts are the archives' standard acknowledgements, written from memory: compare
+with each archive's page before a formal publication.
 
 Anything simulated or injected in this project is labelled as synthetic in the data and in the UI.
 

@@ -1,7 +1,7 @@
 # Challenge: Planet X and SPHEREx
 
 > The official challenge text (Details tab) is pasted below verbatim, retrieved 2026-11-14.
-> Resources tab pasted too. Judging criteria and submission requirements are still TODO. Where the official
+> Resources tab pasted too. Judging criteria and submission requirements are summarised below (not verbatim). Where the official
 > text is here, it wins over everything else in this repo.
 
 Source: Space Apps 2026 challenge page "Planet X and SPHEREx" (Details tab).
@@ -67,11 +67,38 @@ CSA (Canadian Space Agency)
 
 The challenge page has no separate judging section. Team decision (Jonathan, 2026-11-14): we
 treat the **Objectives** and the **Potential Considerations** above as what the judges look for.
-_TODO: also paste the general Space Apps judging criteria (they apply to all challenges) if found._
+General Space Apps criteria (2026 Judging & Awards Guide, as summarised by a web search on 2026-11-15;
+the guide itself could not be opened from our machine, so this is not verbatim): every project is scored
+1 to 5 on each of
+
+- **Impact:** how significant is the problem, how many people could the solution reach or inspire.
+- **Creativity:** a new idea, or a meaningful improvement on existing ones.
+- **Validity:** scientifically sound, technically feasible, works for its purpose; usability counts.
+- **Relevance:** how closely it answers the challenge and how well it uses NASA data.
+- **Presentation:** how clearly the demo and the project page explain the challenge, the solution and why
+  it matters.
+
+A Global Award needs at least one NASA data set or resource. If the judges cannot open a link, the
+project cannot be judged.
 
 ## Submission requirements and deadline
 
-_TODO: what has to be handed in, in which form, by when (local time)._
+From the 2026 Project Submission Guide (<https://www.spaceappschallenge.org/resources/project-submission-guide/>),
+as summarised by a web search on 2026-11-15; not verbatim, the page could not be opened from our machine
+(certificate error). **Check required fields and character limits on the live form.**
+
+- **Deadline:** submission opened Saturday, November 14 at 9:00 AM and closes **Sunday, November 15, 2026
+  at 11:59 PM local time**.
+- **Fields of the project page:** project name; high-level project summary (what we built, how it answers
+  the challenge, why it matters); link to project demo; link to final project; detailed project description
+  (what it does, how it works, benefits, tools / languages / software used); NASA data; space agency
+  partner data and other references (all code, text and images used, also open-source ones); use of AI
+  tools (allowed; say where and how they were used, AI-generated images and video need a visible mark).
+- **Demo:** a video of 30 seconds or less, or a slide deck of up to 7 slides (title and introduction slides
+  count). Hosted outside the Space Apps site, on a public link.
+- **Language:** English. A video may be in another language with English subtitles.
+
+Our text for each field: `docs/SUBMISSION.md`.
 
 ## Our understanding (unofficial)
 
