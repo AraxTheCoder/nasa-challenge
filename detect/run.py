@@ -28,13 +28,16 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def detect_target(target: dict, jpl: Jpl | None = None, vmag_lim: float = DEFAULT_VMAG) -> dict:
-    """Run the detect steps on a target dict in place. Returns the target."""
+def detect_target(target: dict, jpl: Jpl | None = None, vmag_lim: float = DEFAULT_VMAG, movers: bool = True) -> dict:
+    """Run the detect steps on a target dict in place. Returns the target.
+    movers=False (T106): known objects only, e.g. on a build's stub before any image is downloaded; the mover
+    search then runs when the viewer asks for the field's objects."""
     if target.get("synthetic"):
         return target  # the fixture already carries its synthetic objects
 
     try:                                             # 1. T06: tracks from the field's SPHEREx images
-        find_movers(target)
+        if movers:
+            find_movers(target)
     except Exception as e:  # noqa: BLE001 - detection is an extra: the field is still worth showing
         target["detections"] = []
         target.setdefault("provenance", []).append({

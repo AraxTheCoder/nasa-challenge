@@ -1070,7 +1070,9 @@ async function loadObjects(target) {
   const notes = [$("#objects-note"), $("#objects-hud-note")];
   const say = (long, short = long) => { notes[0].textContent = long; notes[1].textContent = short; };
   say("");
-  if (target.synthetic || target.objects_requested || app.dataRoot || !app.shownTargetUrl) return;
+  // T106: fields looked up before T06 existed are asked once more (the server then runs only the mover search)
+  const moversRan = (target.provenance ?? []).some((p) => (p.service ?? "").includes("(T06)"));
+  if (target.synthetic || (target.objects_requested && moversRan) || app.dataRoot || !app.shownTargetUrl) return;
   const id = target.id;
   say("Asking JPL for known asteroids and comets (can take a few minutes)…", "looking up known asteroids and comets…");
   try {
