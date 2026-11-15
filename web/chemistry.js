@@ -41,6 +41,29 @@ function colours(ids) {
   return new Map(ids.length > 1 && cs ? inOrder(ids).map((id, i) => [id, cs[i]]) : []);
 }
 
+// T132: notes are two short lines (what is shown + keys, how to read it); the rest under "More" (open state
+// remembered per browser).
+const MORE_KEY = "spherex.chemMore";
+let moreOpen = false;
+try { moreOpen = localStorage.getItem(MORE_KEY) === "1"; } catch { /* private mode */ }
+const line = (...parts) => el("span", { class: "chem-line" }, ...parts.filter((x) => x != null));
+
+function more(...parts) {
+  const d = el("details", { class: "chem-more" }, el("summary", {}, "More"), ...parts.filter(Boolean));
+  d.open = moreOpen;
+  d.addEventListener("toggle", () => {
+    moreOpen = d.open;
+    try { localStorage.setItem(MORE_KEY, d.open ? "1" : "0"); } catch { /* private mode */ }
+  });
+  return d;
+}
+
+/** "H₂O 1.4 µm", "CO₂ ice 4.27 µm", at a redshift "Pa-β → 1.485 µm" (names that carry µm keep theirs at z = 0). */
+function fname(f) {
+  if (st.z > 0) return `${f.name} → ${fmtNum(atZ(f.um), 3)} µm`;
+  return f.name.includes("µm") ? f.name : `${f.name} ${fmtNum(f.um, 2)} µm`;
+}
+
 function note(parts) {
   const box = $("#chem-note");
   const shown = parts.filter(Boolean);
@@ -104,7 +127,6 @@ function choosePreset(p) {
 
 const atZ = (um) => um * (1 + st.z);
 const RETRY_S = 90;          // T110: how long a measurement waits for a restarting Live API
-const zText = () => (st.z > 0 ? ` at z = ${st.z} (seen at λ × ${fmtNum(1 + st.z, 4)})` : "");
 
 /** Make (or reuse) one feature's map at the current z; resolves with the ready body or an error body. */
 async function ensure(id, token, k, n) {
@@ -150,10 +172,8 @@ async function apply() {
   if (!st.target || !ids.length) return;
   const need = presetOf(ids);
   if (need?.needs_z && !(st.z > 0)) {                 // T127: galaxies / quasars only at their redshift
-    note([el("strong", {}, `${need.name}: `), `${need.looks_for}. `,
-      el("span", { class: "chem-line" }, "These features are shifted by the object's redshift: type its z in the ",
-        el("em", {}, "Redshift z"), " box above (SIMBAD fills it in for a galaxy or quasar at the centre; ",
-        el("a", { href: `?ra=${need.try.ra}&dec=${need.try.dec}&size=${need.try.size}` }, `try ${need.try.name}`), ").")]);
+    note([line(el("strong", {}, need.name), ` needs the object's redshift: type z above (SIMBAD fills it in for a galaxy or quasar at the centre) · `,
+      el("a", { href: `?ra=${need.try.ra}&dec=${need.try.dec}&size=${need.try.size}` }, `try ${need.try.name}`))]);
     return;
   }
   const stats = [];
@@ -176,42 +196,39 @@ async function apply() {
   if (token !== st.token) return;
   const png = `${base()}/${keys.join("-")}.png`;
   if (ok) showCandidates(base(), keys, (k) => byId(k.replace(/_z\d+$/, ""))?.name ?? k, presetOf(ids)?.id);   // T128
-  const tail = [ok ? null : "(The map layer could not be shown here.) ",
-    el("a", { href: png, target: "_blank", rel: "noopener" }, ids.length > 1 ? "picture" : "map image")];
+  const link = el("a", { href: png, target: "_blank", rel: "noopener" }, ids.length > 1 ? "picture" : "map image");
+  const notShown = ok ? null : line("(The map layer could not be shown here.)");
+  const zt = st.z > 0 ? ` at z = ${st.z}` : "";
   if (ids.length === 1) {
     const b = stats[0];
+    const f = byId(b.feature ?? ids[0]);
     note([
-      el("strong", {}, `${label(b)} minus its continuum${zText()}${st.z > 0 ? `: ${fmtNum(atZ(b.um), 3)} µm` : ""}. `),
-      el("span", { class: "chem-key chem-dark" }), " darker = less light than at the neighbouring wavelengths (absorption) · ",
-      el("span", { class: "chem-key chem-grey" }), " grey = like the neighbours · ",
-      el("span", { class: "chem-key chem-bright" }), " brighter = more light (emission). ",
-      `${b.what}. `,
-      `From ${b.exposures_used} SPHEREx exposures (per spot: ${b.median_on} on the feature, ${b.median_continuum} around it; `,
-      "±5 noise levels = black / white). Stars mostly cancel; leftover black-and-white pairs at stars are sharpness differences, not chemistry. ",
-      ...tail,
+      line(el("strong", {}, `${fname(f)} minus continuum${zt}`), " · ", el("span", { class: "chem-key chem-dark" }), " absorbs · ",
+        el("span", { class: "chem-key chem-bright" }), " emits"),
+      line(f.what),
+      notShown,
+      more(line(`${b.exposures_used} exposures (per spot ${b.median_on} on, ${b.median_continuum} around) · ±5σ = black / white.`),
+        line("Black/white pairs at stars: sharpness, not chemistry. ", link)),
     ]);
     return;
   }
   const cs = colours(ids);
   const pre = presetOf(ids);
   const here = pre && st.target && Math.abs(st.target.center?.ra_deg - pre.try.ra) < 0.2 && Math.abs(st.target.center?.dec_deg - pre.try.dec) < 0.2;
+  const dirs = new Set(ids.map((id) => byId(id).shows));
+  const scale = dirs.size > 1 ? "brighter = stronger" : dirs.has("emission") ? "brighter = stronger emission" : "brighter = deeper absorption";
+  const fs = stats.map((b) => byId(b.feature ?? b.id));
   note([
-    pre ? el("strong", {}, `${pre.name}: `) : null,
-    pre ? `${pre.looks_for}. ${pre.read} ` : null,
-    pre ? el("span", { class: "chem-line" }, el("em", {}, "Can fool it: "), pre.caveats) : null,
-    pre && !here ? el("span", { class: "chem-line" }, "Tried on: ",
-      el("a", { href: `?ra=${pre.try.ra}&dec=${pre.try.dec}&size=${pre.try.size}` }, pre.try.name), ".") : null,
-    el("strong", {}, `${stats.map((b) => b.name).join(" + ")}, one colour each${zText()}. `),
-    ...stats.map((b) => el("span", { class: "chem-line" },
-      el("span", { class: "chem-key", style: `background:${cs.get(b.feature ?? b.id)}` }),
-      ` ${label(b)}${st.z > 0 ? ` → ${fmtNum(atZ(b.um), 3)} µm` : ""}: ${byId(b.feature ?? b.id).shows === "emission" ? "where it emits" : "where it absorbs (depth)"} · `,
-      `${b.what} · ${b.exposures_used} exposures`)),
-    "Brighter = stronger (from one noise level; full colour at five). Where colours mix, several are strong at the same spot ",
-    ids.length <= 3 ? "(e.g. red + green = yellow, all three = white); " :
-      el("em", {}, `with ${ids.length} colours a mix can look like another feature's own colour (e.g. green + red = yellow): check a spot with its single maps; `),
-    "black = none of them stands out. Shown where all the maps have data. ",
-    "Coloured pairs at stars are sharpness differences, not chemistry. ",
-    ...tail,
+    line(el("strong", {}, pre ? pre.name : "Picture"), zt, " · ",
+      ...fs.flatMap((f) => [el("span", { class: "chem-key", style: `background:${cs.get(f.id)}` }),
+        el("span", { title: f.what }, ` ${fname(f)} `)]), "· ", scale),
+    line(pre ? pre.read : ids.length <= 3 ? "Mixed colours = several at one spot (red + green = yellow, all = white) · black = none"
+      : `Mixed colours = several at one spot; with ${ids.length} colours a mix can look like another feature's own colour: check its single maps`),
+    notShown,
+    more(pre ? line(`Looks for: ${pre.looks_for}.`) : null,
+      line(`Fooled by: ${pre ? `${pre.caveats}; ` : ""}coloured pairs at stars (sharpness).`),
+      line(`Exposures: ${stats.map((b) => b.exposures_used).join(" · ")}. Colour from 1σ, full at 5σ; black = none; shown where all maps have data.`),
+      line(pre && !here ? ["Tried on ", el("a", { href: `?ra=${pre.try.ra}&dec=${pre.try.dec}&size=${pre.try.size}` }, pre.try.name), " · "] : null, link)),
   ]);
 }
 

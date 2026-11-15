@@ -13,7 +13,7 @@ import numpy as np
 from .chemistry import FEATURES, PRESETS, _other_features
 from .spectral_outliers import _blends, _clean, peer_group
 
-VERSION = 1
+VERSION = 2
 # Signs follow the map presets: absorption negative, emission positive.
 SIGNS = {"h2o_14": -1, "h2o_19": -1, "co_23": -1, "h2o_ice": -1,
          "ch4": -1, "ch3oh_ice": -1, "co2_ice": -1, "co_ice": -1}
@@ -69,15 +69,18 @@ def feature_evidence(fs, i, feature, z=0):
 
 
 def find_matches(fs, blends=None):
+    from .redshift import valid_z
     matches, skipped = [], []
     if blends is None:
         blends = _blends(fs["sources"])
     for i, source in enumerate(fs["sources"]):
         evidence = {}
         for profile in PRESETS:
-            z = source.get("z", source.get("redshift")) if profile.get("needs_z") else 0
-            if profile.get("needs_z") and (z is None or not math.isfinite(float(z)) or not 0 < float(z) <= 1):
-                skipped.append({"id": source["id"], "profile": profile["id"], "why": "known redshift required"})
+            if profile.get("needs_z") and peer_group(source) == "stars":
+                continue
+            z = valid_z(source.get("redshift", source.get("z"))) if profile.get("needs_z") else 0
+            if profile.get("needs_z") and z is None:
+                skipped.append({"id": source["id"], "profile": profile["id"], "why": "reliable catalogue or spectral redshift required"})
                 continue
             # Extragalactic sources must not be assigned a rest-frame stellar profile.
             if peer_group(source) == "galaxies" and profile["group"] == "object" and not profile.get("needs_z"):
@@ -96,11 +99,11 @@ def find_matches(fs, blends=None):
                 continue
             matches.append({"id": source["id"], "name": source["name"], "ra_deg": source["ra_deg"],
                             "dec_deg": source["dec_deg"], "profile": profile["id"], "profile_name": profile["name"],
-                            "z": z, "features": features, "score": round(sum(abs(f["significance"]) for f in detected), 1),
+                            "z": z, "redshift_origin": source.get("redshift_origin", "label") if profile.get("needs_z") else "rest", "features": features, "score": round(sum(abs(f["significance"]) for f in detected), 1),
                             "caveats": ([f"Blended with {blends[i]['name']}; the features may belong to either source."] if blends[i] else []) +
                                        [profile["caveats"], "Feature-pattern candidate; not an object classification."]})
     matches.sort(key=lambda m: -m["score"])
     return {"version": VERSION, "matches": matches, "skipped": skipped,
             "method": "Shared source spectra; at least two features with ≥10% contrast and ≥3σ, continuum on both sides, "
                       "and agreement in two epochs when available. Brown-dwarf candidates require methane; cool giants require CO. "
-                      "Single-epoch evidence and blends need follow-up. Redshift profiles require a known source redshift."}
+                      "Single-epoch evidence and blends need follow-up. Redshift profiles use catalogue values or unambiguous experimental spectral estimates."}

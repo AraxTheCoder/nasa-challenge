@@ -36,13 +36,13 @@ def _analysis_lock_for(path: str):
 
 
 @lru_cache(maxsize=64)
-def _outliers(path: str, mtime: float, sources_json: str) -> dict:
+def _outliers(path: str, mtime: float, sources_json: str, catalogue_json: str = "{}") -> dict:
     from pipeline import fieldspectra, spectral_outliers
     from pathlib import Path
-    from pipeline import profile_matches
+    from pipeline import profile_matches, redshift
     from detect.variability import VERSION as variability_version
     derived = Path(path).with_suffix(".analysis.json")
-    stamp = [mtime, spectral_outliers.VERSION, profile_matches.VERSION, variability_version, sources_json]
+    stamp = [mtime, spectral_outliers.VERSION, profile_matches.VERSION, variability_version, redshift.VERSION, sources_json, catalogue_json]
     if derived.is_file():
         try:
             hit = json.loads(derived.read_text(encoding="utf-8"))
@@ -53,9 +53,11 @@ def _outliers(path: str, mtime: float, sources_json: str) -> dict:
     fs = _read_field(path, mtime)
     fs = {**fs, "sources": json.loads(sources_json)}
     fieldspectra.seed_spectra(fs)          # measured from the command line: clicks on its sources answer at once too
+    fs, shifts = redshift.resolve(fs, json.loads(catalogue_json))
     blends = spectral_outliers._blends(fs["sources"])
     out = spectral_outliers.find_outliers(fs, blends=blends)
     out["chemistry_profiles"] = profile_matches.find_matches(fs, blends=blends)
+    out["redshifts"] = shifts
     try:                                   # T61: sources that change brightness (the same spectra, the level)
         from detect.variability import find_variables
         out["variability"] = find_variables(fs)
@@ -76,7 +78,7 @@ def _read_field(path: str, mtime: float) -> dict:
         return json.load(f)
 
 
-def _cached(target: dict) -> dict | None:
+def _cached(target: dict, target_dir=None) -> dict | None:
     from pipeline import fieldspectra
     p = fieldspectra.cache_path(target["id"])
     if not p.is_file():
@@ -87,13 +89,17 @@ def _cached(target: dict) -> dict | None:
     if fs_head.get("version") != fieldspectra.VERSION or \
             fs_head.get("sources_key") != fieldspectra._key(sources):
         return None                         # older method or the labels changed: measure again
+    from pipeline.spectral_outliers import peer_group
+    from .redshifts import catalogue
+    cat = catalogue(target_dir, target) if target_dir is not None and any(peer_group(s) != "stars" for s in sources) else {}
+    catalogue_json = json.dumps(cat, sort_keys=True)
     sources_json = json.dumps(sources, sort_keys=True)
     with _analysis_lock_for(str(p)):  # concurrent polls of this field share one analysis
-        return _outliers(str(p), mtime, sources_json)
+        return _outliers(str(p), mtime, sources_json, catalogue_json)
 
 
-def _state(target: dict, start: bool) -> dict:
-    hit = _cached(target)
+def _state(target: dict, start: bool, target_dir=None) -> dict:
+    hit = _cached(target, target_dir)
     if hit is not None:
         return {"status": "ready", **hit}
     tid = target["id"]
@@ -120,7 +126,7 @@ def _state(target: dict, start: bool) -> dict:
 
             threading.Thread(target=run, daemon=True, name=f"fieldspectra-{tid}").start()
     if job["status"] == "ready":
-        return {"status": "ready", **(_cached(target) or {})}
+        return {"status": "ready", **(_cached(target, target_dir) or {})}
     return dict(job)
 
 
@@ -132,10 +138,10 @@ async def spectral_outliers(tid: str, request: Request, start: int = 0):
     target = json.loads(path.read_text(encoding="utf-8"))
     if target.get("synthetic"):
         return {"status": "no_data", "id": tid, "message": "synthetic target: there are no SPHEREx images to measure"}
-    if start and tid not in _jobs and await run_in_threadpool(_cached, target) is None:
+    if start and tid not in _jobs and await run_in_threadpool(_cached, target, path.parent) is None:
         deny = limits.new_job(request)               # T58: a new run costs a job (per IP + server-wide cap)
         if deny is not None:
             return deny
-    body = await run_in_threadpool(_state, target, bool(start))
+    body = await run_in_threadpool(_state, target, bool(start), path.parent)
     code = {"ready": 200, "not_started": 200, "building": 202}.get(body["status"], 500)
     return JSONResponse({"id": tid, **body}, status_code=code)

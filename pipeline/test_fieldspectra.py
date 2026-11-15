@@ -145,6 +145,7 @@ def test_separate_galaxy_population_has_own_model():
     fs = _field(n=80)
     for i in range(60, 80):
         fs["sources"][i]["otype"] = "QSO" if i == 60 else "G"
+        fs["sources"][i]["redshift"] = .1
         # Strongly different slope, but ordinary within this population.
         fs["flux_ujy"][i] = [f * w ** 2 for f, w in zip(fs["flux_ujy"][i], fs["wavelength_um"][i])]
         fs["err_ujy"][i] = [f * .02 for f in fs["flux_ujy"][i]]
@@ -162,3 +163,14 @@ def test_cross_population_blend_is_still_flagged():
     match = next(it for it in out['items'] if it['id'] == 's5')
     assert match['peer_group'] == 'stars'
     assert any('blended' in c for c in match['caveats'])
+
+
+def test_galaxies_without_redshifts_are_not_compared_in_observed_frame():
+    fs = _field(n=20)
+    for source in fs['sources']:
+        source['otype'] = 'G'
+    out = SO.find_outliers(fs)
+    assert out['n_judged'] == 0 and out['items'] == []
+    assert len(out['not_judged']) == 20
+    assert all('redshift' in n['why'] for n in out['not_judged'])
+    assert out['groups']['galaxies']['n_sources'] == 20
