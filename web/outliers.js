@@ -4,6 +4,9 @@
 // it stands out in plain words, caveats, and a small chart of how far each band is off. A click on a name
 // opens that source's spectrum in the spectrum panel (already measured, so at once).
 //
+// T135: the measured sources include ones found in SPHEREx's own images (not in any label); flagged ones carry a
+// catalogue lookup ("not catalogued" first). Started only by the toggle or the panel's button.
+//
 // Events: listens to viewer:target {target}; fires outliers:list {targetId, items} when a list is shown,
 // for anyone who wants to mark the sources (e.g. the map).
 //
@@ -226,11 +229,23 @@ function vizBlock(d) {
       it ? el("p", { class: "small" }, it.reason) : el("p", { class: "small muted" }, "Fits its peer group: no consistent deviation.")));
 }
 
+/** T135: SPHEREx-only sources (found in SPHEREx's own images) carry a catalogue lookup: "not catalogued", the
+ *  catalogue that has it ("in Gaia DR3"), or its SIMBAD type. */
+function tagOf(it) {
+  if (!it.tag) return null;
+  const m = it.catalogues ?? {};
+  const text = it.tag === "new" ? "not catalogued"
+    : it.tag === "other" ? `SIMBAD: ${m.simbad?.kind ?? m.simbad?.otype}`
+    : `in ${(Object.values(m).find(Boolean)?.name ?? "").split(" ").slice(0, -1).join(" ") || "a catalogue"}`;
+  return el("span", { class: `small ${it.tag === "new" ? "ol-new" : "muted"}`,
+    title: `Found in SPHEREx's own images; looked up in ${Object.keys(m).join(", ")}${it.catalogues_failed?.length ? ` (no answer: ${it.catalogues_failed.join(", ")})` : ""}` }, text);
+}
+
 function item(it) {
   const name = el("button", { type: "button", class: "link ol-name", title: "Open its spectrum" }, it.name);
   name.addEventListener("click", () => openSpectrum(it.ra_deg, it.dec_deg, it.name));
   const li = el("li", { class: `ol-item${it.id === st.sel ? " is-selected" : ""}`, title: "Click to show it in the charts" },
-    el("div", { class: "ol-row" }, name,
+    el("div", { class: "ol-row" }, name, tagOf(it),
       el("span", { class: "muted small" }, [it.otype && it.otype !== "*" ? it.otype : "", it.mag != null ? `mag ${fmtNum(it.mag, 1)}` : ""]
         .filter(Boolean).join(" · ")),
       el("span", { class: "ol-score small", title: "Ranking score: summed significance of the consistent deviations (halved for blends)" },
@@ -397,13 +412,9 @@ document.addEventListener("viewer:target", (e) => {
   cardEl().hidden = true;
   mapNote();
   getSky()?.redraw();
-  // A selected region/shared explicit field runs all source analyses automatically.
-  const params = new URLSearchParams(location.search);
-  const center = st.target?.center;
-  const requested = center && params.has("size") && params.has("ra") && params.has("dec") &&
-    Math.abs(((Number(params.get("ra")) - center.ra_deg + 540) % 360) - 180) < 0.001 &&
-    Math.abs(Number(params.get("dec")) - center.dec_deg) < 0.001;
-  if (st.target && st.target.synthetic === false) load(st.mapOn || requested);
+  // Measured only on a click (Decision 2026-11-15, Mati): the toggle or the panel's button; here just the stored
+  // result, if any (T130 had started it for every explicit / selected field).
+  if (st.target && st.target.synthetic === false) load(st.mapOn);
 });
 
 // ---------- T88: on the map ----------

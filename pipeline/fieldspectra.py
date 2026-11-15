@@ -39,7 +39,7 @@ DUP_ARCSEC = 3.0           # labels this close are one source (SIMBAD + Gaia twi
 # SIMBAD types whose positions come from X-ray / radio / far-IR catalogues (ROSAT 1RXS: 10-20" errors): an
 # aperture there sits beside the star, and the PSF growing with wavelength fakes spectral structure (T86).
 LOOSE_OTYPES = {"X", "gam", "UV", "Rad", "mR", "cm", "mm", "smm", "HI", "rB", "IR", "FIR", "MIR", "gB", "XB", "ULX"}
-VERSION = 2                # 2: no X-ray / radio positions
+VERSION = 3                # 2: no X-ray / radio positions; 3: + SPHEREx-only sources (T135)
 _lock = threading.Lock()
 
 
@@ -127,8 +127,11 @@ def _key(sources: list[dict]) -> str:
 
 
 def measure_field(target: dict, progress=None, processes: int | None = None, refresh: bool = False) -> dict:
-    """Spectra of all catalogue sources of `target` (a parsed target.json) from every exposure there."""
+    """Spectra of all catalogue sources of `target` (a parsed target.json) from every exposure there.
+    T135: + sources found in SPHEREx's own images (pipeline/srcfind.py, found here the first time)."""
+    from .srcfind import spherex_sources
     sources = sources_of(target)
+    sources = sources + spherex_sources(target, sources, compute=True, progress=progress)
     key = _key(sources)
     path = cache_path(target["id"])
     if not refresh and path.is_file():
