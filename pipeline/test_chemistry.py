@@ -204,3 +204,42 @@ def test_smooth_removes_speckle_keeps_edges_and_big_holes():
     assert c[cov].all()                                    # nothing that had data is lost
     same, c0 = C.smooth(grey, cov, 0)                      # sigma 0: unchanged
     assert (same == grey).all() and (c0 == cov).all()
+
+
+def test_object_presets_and_new_features(tmp_path):
+    """T127: object presets next to the place presets; CH₄ its own feature (absorption, unlike the PAH glow at the
+    same wavelengths); Hα only from z ≈ 0.15 on (below SPHEREx's 0.75 µm at rest)."""
+    import json
+    groups = {p["id"]: p.get("group") for p in C.PRESETS}
+    assert {g for g in groups.values()} == {"object", "place"}
+    assert {"brown_dwarfs", "young_stars", "cool_giants", "protostars", "starburst", "quasars"} <= set(groups)
+    assert all(not p.get("needs_z") or p["group"] == "object" for p in C.PRESETS)
+    assert C.SHOWS["ch4"] == "absorption" and C.SHOWS["pah"] == "emission" and C.SHOWS["co_23"] == "absorption"
+    assert C.SHOWS["h_alpha"] == C.SHOWS["pa_alpha"] == "emission"
+    ums = [v[1] for v in C.FEATURES.values()]
+    assert ums == sorted(ums)                                               # the list reads in wavelength order
+    (tmp_path / "target.json").write_text(json.dumps({"center": {"ra_deg": 187.28, "dec_deg": 2.05},
+                                                     "image": {"width": 10}, "size_arcmin": 15}))
+    try:
+        C.compute(tmp_path, "h_alpha", z=0.1)
+    except LookupError as e:
+        assert "0.75" in str(e) and "0.14" in str(e)                        # says which z it needs
+    else:
+        raise AssertionError("Hα below SPHEREx accepted")
+
+
+def test_redshift_lookup_puts_the_centre_object_first(monkeypatch):
+    """T127: a quasar at the field centre has no size in SIMBAD; it must still come first, not be cut off behind
+    the bigger galaxies around it (3C 273: 8 galaxies with sizes in its 15′ field, the first had z 0.0778)."""
+    import numpy as np
+    from pipeline import labels as L
+    n = 10
+    rows = {"main_id": [f"G{i}" for i in range(n - 1)] + ["3C 273"], "otype": ["G"] * (n - 1) + ["QSO"],
+            "ra": [187.2 + 0.01 * i for i in range(n - 1)] + [187.2779], "dec": [2.0] * (n - 1) + [2.0524],
+            "rvz_redshift": [0.0778] * (n - 1) + [0.158], "rvz_qual": ["A"] * n,
+            "galdim_majaxis": [0.5 + 0.1 * i for i in range(n - 1)] + [np.nan]}
+    monkeypatch.setattr(L, "_tap", lambda url, adql: {k: np.ma.masked_invalid(np.array(v)) if k == "galdim_majaxis"
+                                                      else np.ma.asarray(np.array(v)) for k, v in rows.items()})
+    out = C.galaxy_redshifts({"center": {"ra_deg": 187.2779, "dec_deg": 2.0524}, "size_arcmin": 15})
+    assert out["galaxies"][0]["name"] == "3C 273" and out["galaxies"][0]["z"] == 0.158
+    assert len(out["galaxies"]) == C.Z_LIST

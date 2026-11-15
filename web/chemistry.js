@@ -13,20 +13,25 @@
 // T109: "Redshift z" in the list. A galaxy's features arrive at λ(1 + z); from cz ≈ 1 300 km/s (Br-α) they miss
 // the rest-wavelength window. The maps are made at the z in the box (one z per picture); when the list is opened
 // the Live API names the field's galaxies with a measured redshift (SIMBAD) and a big one at the centre fills it in.
+// T127: presets for kinds of objects too (brown dwarfs, young stars, cool giants, protostars, star-forming galaxies,
+// quasars), listed as "Objects" above the T107 "Places". A preset with needs_z (galaxies, quasars) is made only at
+// the object's redshift; with z = 0 the note says so instead of measuring.
 
 import { $, el, fmtNum } from "./util.js";
 import * as explore from "./explore.js";
 
 const st = { api: null, target: null, z: 0, zTouched: false, zAsked: null, features: [], presets: [], presetBtns: new Map(), combine: { max: 3, colours: {} }, sel: [], boxes: new Map(),
-  ready: new Map(), token: 0, shown: null };
+  ready: new Map(), token: 0, shown: null, picked: null };
 
 const byId = (id) => st.features.find((f) => f.id === id);
 const inOrder = (ids) => [...ids].sort((a, b) => byId(a).um - byId(b).um);
 const label = (f) => `${f.name} (${fmtNum(f.um, 2)} µm)`;
 const base = () => `${st.api}/api/targets/${encodeURIComponent(st.target.id)}/chemistry`;
 
-/** The preset whose features are exactly these (ticked by its button or by hand), or undefined. */
-const presetOf = (ids) => st.presets.find((p) => p.features.length === ids.length && p.features.every((f) => ids.includes(f)));
+const sameSet = (p, ids) => p.features.length === ids.length && p.features.every((f) => ids.includes(f));
+/** The preset whose features are exactly these (ticked by its button or by hand), or undefined. T127: the one
+ *  clicked last wins when two presets share their features. */
+const presetOf = (ids) => (st.picked && sameSet(st.picked, ids) ? st.picked : st.presets.find((p) => sameSet(p, ids)));
 
 /** id -> colour in the picture of these features (empty for one: the grey map). */
 function colours(ids) {
@@ -88,6 +93,7 @@ function toggle(id, on) {
 
 function choosePreset(p) {
   if (presetOf(st.sel)?.id === p.id) return;
+  st.picked = p;
   st.sel = [...p.features];
   syncControls();
   apply();
@@ -138,6 +144,14 @@ async function apply() {
   const token = ++st.token;
   const ids = inOrder(st.sel);
   if (!st.target || !ids.length) return;
+  const need = presetOf(ids);
+  if (need?.needs_z && !(st.z > 0)) {                 // T127: galaxies / quasars only at their redshift
+    note([el("strong", {}, `${need.name}: `), `${need.looks_for}. `,
+      el("span", { class: "chem-line" }, "These features are shifted by the object's redshift: type its z in the ",
+        el("em", {}, "Redshift z"), " box above (SIMBAD fills it in for a galaxy or quasar at the centre; ",
+        el("a", { href: `?ra=${need.try.ra}&dec=${need.try.dec}&size=${need.try.size}` }, `try ${need.try.name}`), ").")]);
+    return;
+  }
   const stats = [];
   try {
     for (const [k, id] of ids.entries()) {          // one after another: each reads tens of exposures
@@ -216,7 +230,8 @@ function syncZ() {
   if (g) {
     const use = el("button", { type: "button", class: "link small" }, "use");
     use.addEventListener("click", () => setZ(g.z));
-    parts.push(`SIMBAD: ${g.name}, z = ${g.z} (${g.cz_km_s.toLocaleString("en")} km/s) `, g.z === st.z ? "· in use" : use);
+    const inUse = Math.round(g.z * 1e4) / 1e4 === st.z;           // st.z is kept to 4 decimals (T127: 3C 273, 0.15757)
+    parts.push(`SIMBAD: ${g.name}, z = ${g.z} (${g.cz_km_s.toLocaleString("en")} km/s) `, inUse ? "· in use" : use);
   } else if (st.zInfo) {
     parts.push("No galaxy with a measured redshift here: z = 0 (Milky Way objects need none).");
   }
@@ -281,16 +296,21 @@ export async function initChemistry(api) {
     if (body.combine) st.combine = body.combine;
     st.presets = (body.presets ?? []).filter((p) => p.features.length <= st.combine.max && p.features.every(byId));
   } catch { st.features = []; st.presets = []; }
-  const presets = st.presets.length ? el("div", { class: "chem-presets", role: "group", "aria-label": "Presets" },
-    el("span", { class: "muted small" }, "Presets"),
-    ...st.presets.map((p) => {
-      const b = el("button", { type: "button", class: "chem-preset", "aria-pressed": "false",
-        title: `${p.looks_for}. Tried on: ${p.tested}.` }, p.name,
-      el("span", { class: "muted small" }, ` ${p.features.map((f) => byId(f).name).join(" + ")}`));
-      b.addEventListener("click", () => choosePreset(p));
-      st.presetBtns.set(p.id, b);
-      return b;
-    })) : null;
+  const presetBtn = (p) => {
+    const b = el("button", { type: "button", class: "chem-preset", "aria-pressed": "false",
+      title: `${p.looks_for}. Tried on: ${p.tested}.` }, p.name,
+    el("span", { class: "muted small" }, ` ${p.features.map((f) => byId(f).name).join(" + ")}${p.needs_z ? " · at its redshift" : ""}`));
+    b.addEventListener("click", () => choosePreset(p));
+    st.presetBtns.set(p.id, b);
+    return b;
+  };
+  // T127: objects first (what the challenge looks for), then the T107 places; presets without a group are places
+  const groups = [["object", "Presets for objects"], ["place", "Presets for places"]]
+    .map(([g, title]) => [title, st.presets.filter((p) => (p.group ?? "place") === g), g]).filter(([, ps]) => ps.length);
+  const presets = groups.length ? el("div", { class: "chem-presets", role: "group", "aria-label": "Presets" },
+    ...groups.flatMap(([title, ps, g]) => [el("span", { class: "muted small chem-group" }, title), ...ps.map(presetBtn),
+      g === "object" ? el("span", { class: "muted small" }, "Comets and asteroids move between exposures: each map "
+        + "combines all of them, so they do not show here (blink the field instead).") : null].filter(Boolean))) : null;
   const zIn = el("input", { id: "chem-z", type: "number", min: "0", max: "1", step: "0.0001", value: "0", inputmode: "decimal",
     title: "Redshift of the object: its features arrive at λ × (1 + z). 0 for anything in the Milky Way." });
   zIn.addEventListener("change", () => setZ(zIn.value));
