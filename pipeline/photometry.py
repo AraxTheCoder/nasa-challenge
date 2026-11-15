@@ -61,6 +61,26 @@ def measure_cutout(path: Path, ra: float, dec: float) -> dict | None:
     return measure_cutout_many(path, [(ra, dec)])[0]
 
 
+FAR_DEG = 3.0                # T113: farther than this from an image's centre = not on it (SPHEREx images are 3.5°)
+
+
+def _sky_to_pixel(w, positions, nx: int, ny: int):
+    """Pixel positions of (ra, dec) pairs; NaN for points far from the image. astropy's iterative solution raises
+    for a point far from the image (no convergence, or no solution of the projection), which made a spectrum
+    asked far outside a field a 500 (T113)."""
+    ra = np.array([p[0] for p in positions], float)
+    dec = np.array([p[1] for p in positions], float)
+    cra, cdec = (float(v[0]) for v in w.all_pix2world([(nx - 1) / 2], [(ny - 1) / 2], 0))
+    cosd = (np.sin(np.radians(dec)) * math.sin(math.radians(cdec)) +
+            np.cos(np.radians(dec)) * math.cos(math.radians(cdec)) * np.cos(np.radians(ra - cra)))
+    near = np.degrees(np.arccos(np.clip(cosd, -1, 1))) <= FAR_DEG
+    xs, ys = np.full(len(ra), np.nan), np.full(len(ra), np.nan)
+    if near.any():
+        x, y = w.all_world2pix(ra[near], dec[near], 0, quiet=True)
+        xs[near], ys[near] = x, y
+    return xs, ys
+
+
 def measure_cutout_many(path: Path, positions) -> list[dict | None]:
     """measure_cutout at many (ra, dec) positions, the file read once (T85: a whole field per exposure)."""
     from astropy.io import fits
@@ -79,8 +99,8 @@ def measure_cutout_many(path: Path, positions) -> list[dict | None]:
         w = WCS(hd["IMAGE"].header)
         if not positions:
             return []
-        xs, ys = w.all_world2pix([p[0] for p in positions], [p[1] for p in positions], 0)
         ny, nx = img.shape
+        xs, ys = _sky_to_pixel(w, positions, nx, ny)
         r_out = ANNULUS_PX[1]
         inside = (xs >= r_out) & (xs <= nx - 1 - r_out) & (ys >= r_out) & (ys <= ny - 1 - r_out)
         waves = build.wavelengths_at(hd, xs[inside], ys[inside]) if inside.any() else ([], [])

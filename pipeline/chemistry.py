@@ -136,8 +136,11 @@ def _other_features(lam0: float, z: float = 0.0):
 
 def z_of(z) -> float:
     """z rounded to Z_STEP; ValueError outside 0..Z_MAX."""
-    z = round(float(z or 0.0) / Z_STEP) * Z_STEP
-    if not 0.0 <= z <= Z_MAX or not math.isfinite(z):
+    z = float(z or 0.0)
+    if not math.isfinite(z) or not 0.0 <= z <= Z_MAX:       # T113: inf / nan before rounding (OverflowError)
+        raise ValueError(f"redshift z must be 0 to {Z_MAX:g}")
+    z = round(z / Z_STEP) * Z_STEP
+    if not 0.0 <= z <= Z_MAX:
         raise ValueError(f"redshift z must be 0 to {Z_MAX:g}")
     return round(z, 4)
 
