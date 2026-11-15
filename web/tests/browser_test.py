@@ -434,6 +434,7 @@ try:
         # 8b4. light curves + spectra (T49): the API answer is stubbed (CI has no real FITS)
         ph = b.new_page(viewport={"width": 1280, "height": 1000})
         pherr, phreq = [], []
+        ph_state = {"mode": "normal"}
         ph.on("pageerror", lambda x: pherr.append(str(x)))
         def stub(route):
             phreq.append(route.request.url)
@@ -444,29 +445,58 @@ try:
                 rows.append({"frame_id": fid, "epoch": ep, "mjd": 60790 + 180 * (ep - 1), "time_utc": "2025-04-25T00:00:00Z", "detector": 2,
                              "wavelength_um": lam, "bandwidth_um": 0.03, "flux_ujy": None if masked else flux, "err_ujy": None if masked else 30,
                              "masked_fraction": 0.9 if masked else 0.0, "masked": masked})
+            if ph_state["mode"] == "single":
+                rows = [r for r in rows if r["epoch"] == 1]
+            elif ph_state["mode"] == "unmatched":
+                rows = [dict(rows[0]), dict(rows[4], wavelength_um=4.5)]
+            elif ph_state["mode"] == "masked":
+                rows = [dict(r, masked=True, flux_ujy=None) for r in rows]
             route.fulfill(json={"status": "ready", "id": "multi-epoch", "ra_deg": 150.0, "dec_deg": 2.2, "aperture_px": 3,
                                 "annulus_px": [5, 8], "unit": "uJy", "frames": rows, "missing": [], "note": "stub note"})
         ph.route(lambda url: url.split("?")[0].endswith("/photometry"), stub)  # the API path only, not photometry.js
         ph.goto(WEB + "?explore=0&data=../data/test-targets/")
         wait_loaded(ph)
         ph.wait_for_selector("#photometry:not([hidden]) #ph-body svg", timeout=8000)
-        titles = ph.eval_on_selector_all("#ph-body .ph-title", "es => es.map(e => e.textContent)")
-        check(titles == ["Epoch 1", "Epoch 2", "Epoch 3"], f"spectrum: one panel per epoch ({titles})")
+        check(ph.locator("#ph-epoch option").count() == 3 and ph.locator("#ph-body svg:visible").count() == 1,
+              "T140: one full-width spectrum with three selectable visits")
         check("8 of 9 frames measured at the field centre" in ph.text_content(".ph-where") and ph.locator(".ph-masked").count() == 1,
               f"counts measured frames, marks the flagged one ({ph.text_content('.ph-where')})")
-        legend = ph.text_content(".ph-legend")
-        # matches within half a channel (0.015 µm): f000↔f004 (+50%) and f001↔f007 (+82%)
-        check("epoch 1 → 2: median +50%" in legend and "epoch 1 → 3: median +82%" in legend and ph.locator(".ph-dot-c").count() == 2,
-              f"change at the same wavelength across epoch pairs ({legend})")
-        # T63 spectrum context (the science itself is checked in web/tests/spectrum_check.mjs)
+        check(ph.locator(".ph-base").count() == 0 and not ph.locator("#ph-quality").evaluate("e=>e.open"),
+              "T140: optional stellar model and quality details start out collapsed")
+        ph.get_by_role("tab", name="Changes between visits", exact=True).click()
+        # matches within half a channel: f000↔f004 (+50%) and f001↔f007 (+82%), selected one pair at a time
+        ph.select_option("#ph-pair", "1→2")
+        check("+50%" in ph.text_content(".ph-change-summary") and ph.locator(".ph-dot-c").count() == 1,
+              "T140: earlier/later visit comparison gives +50% at one matched wavelength")
+        ph.select_option("#ph-pair", "1→3")
+        check("+82%" in ph.text_content(".ph-change-summary") and ph.locator("#ph-body svg:visible").count() == 1,
+              "T140: selecting another visit pair updates the comparison")
+        check("Wavelength (µm)" in ph.locator("#ph-changes-view svg").text_content(),
+              "T140: change chart clearly labels its wavelength axis")
+        ph.get_by_role("tab", name="Spectrum", exact=True).click()
+        ph.locator("#ph-overlays > summary").click()
+        ph.locator("#ph-context").check()
         check(ph.locator(".ph-context").count() == 1 and "Baseline" in ph.text_content(".ph-context") and ph.locator(".ph-base").count() >= 2,
-              "T63: baseline drawn and explained under the spectrum")
-        ph.click("text=Feature markers")
-        check(ph.locator(".ph-feature").count() == 8 * 3 and "H₂O ice 3.05" in ph.text_content(".ph-features-key"),
-              "T63: feature markers in every epoch panel, with a key")
-        ph.click("text=Expected + hints")
+              "T63/T140: optional stellar model and hints remain available")
+        ph.locator("#ph-features").check()
+        check(ph.locator(".ph-feature").count() == 8 and "H₂O ice 3.05" in ph.text_content(".ph-features-key"),
+              "T63/T140: feature markers on the selected visit, with a key")
+        ph.locator("#ph-compare").check()
+        check(ph.locator(".ph-ghost").count() > 0, "T140: other visits can be overlaid in grey")
+        ph.locator("#ph-context").uncheck()
         check(ph.locator(".ph-context").count() == 0 and ph.locator(".ph-base").count() == 0, "T63: baseline + hints can be switched off")
-        ph.click("text=Expected + hints"); ph.click("text=Feature markers")
+        ph.locator("#ph-features").uncheck(); ph.locator("#ph-compare").uncheck()
+        ph.select_option("#ph-epoch", "2")
+        check(ph.locator("#ph-spectrum-view .ph-dot").count() == 3 and ph.input_value("#ph-epoch") == "2" and ph.locator("#ph-epoch").evaluate("e=>e===document.activeElement"),
+              "T140: spectrum selector changes the displayed visit and retains keyboard focus")
+        ph.locator("#ph-overlays > summary").click()
+        ph.screenshot(path=str(out / "brightness-spectrum.png"), full_page=True)
+        ph.get_by_role("tab", name="Changes between visits", exact=True).click()
+        ph.screenshot(path=str(out / "brightness-changes.png"), full_page=True)
+        ph.set_viewport_size({"width": 390, "height": 844})
+        ph.screenshot(path=str(out / "brightness-phone.png"), full_page=True)
+        check(ph.evaluate("document.documentElement.scrollWidth") <= 390, "T140: brightness controls and charts fit on a phone")
+        ph.set_viewport_size({"width": 1280, "height": 1000})
         ph.click("#ph-measure")
         cb = ph.locator("#ph-catcher").bounding_box()
         ph.locator("#ph-catcher").click(position={"x": cb["width"] * 0.25, "y": cb["height"] * 0.5})
@@ -474,7 +504,19 @@ try:
         check("x=" in phreq[-1] and "y=" in phreq[-1] and ph.locator("#ph-layer .ph-marker").count() == 3,
               "Measure a star: click sends the pixel, marks the spot")
         check(ph.get_attribute("#ph-measure", "aria-pressed") == "false" and ph.is_hidden("#ph-catcher"), "measure mode ends after one click")
-        check(not pherr, f"T49: no page errors {pherr}")
+        ph_state["mode"] = "single"
+        ph.click("#ph-centre")
+        ph.wait_for_function("document.querySelector('#ph-changes-view').textContent.includes('At least two observing visits')")
+        check("At least two observing visits" in ph.text_content("#ph-changes-view"), "T140: one visit explains why no change comparison exists")
+        ph_state["mode"] = "unmatched"
+        ph.click("#ph-centre")
+        ph.wait_for_function("document.querySelector('#ph-changes-view').textContent.includes('no usable, positive-brightness')")
+        check("Missing matches do not mean" in ph.text_content("#ph-changes-view"), "T140: unmatched wavelengths do not imply a constant source")
+        ph_state["mode"] = "masked"
+        ph.click("#ph-centre")
+        ph.wait_for_function("document.querySelector('#ph-body').textContent.includes('No usable brightness measurements')")
+        check(ph.locator("#ph-body svg").count() == 0, "T140: all-flagged data gets a clear empty state")
+        check(not pherr, f"T49/T140: no page errors {pherr}")
 
         # 8b5. T78: type an exact wavelength -> A/B = closest frames in the earliest and latest epoch
         lp = b.new_page(viewport={"width": 1280, "height": 900})

@@ -19,7 +19,7 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `objects.js` | objects panel: known / unknown / artifact detections, known objects, synthetic badge (T13) |
 | `chemistry.js` | Chemistry (T93): for the shown field, the map of a chemical feature (ices, PAH, hydrogen lines) minus its continuum, as a map layer, with a plain-words note; takes the map from the automatic blink (`map:take`); T96/T108: several ticked at once = one colour picture; T107: presets at the top of the list; T127: presets for objects |
 | `chemcands.js` | Spots to check (T128): the spots where the chemistry picture's features show, as a numbered list under its note and rings on the map; a click centres the spot and opens its spectrum |
-| `photometry.js` | spectrum + change-at-same-wavelength charts from `/api/targets/<id>/photometry` (T49) |
+| `photometry.js`, `brightness.js` | Selected-position brightness (T49/T140): one-visit Spectrum and Changes between visits tabs; dates, matched-wavelength pairs, optional model/features/quality details |
 | `explore.js`, `sky.js`, `healpix.js` | sky map: own WebGL HiPS renderer, surveys, the field's epochs (T30, T36, T41, T42) |
 | `traces.js` | the field's objects drawn on the sky map (T35) |
 | `skylabels.js` | catalogue labels anywhere on the zoomed-in map from `/api/sky-labels` (T72), follows the Labels switch |
@@ -62,6 +62,28 @@ roll over it, drag it, or its arrows) or with the wheel over any panel. Scrollin
 provenance. On wide screens (≥ 1280 px) the map's panels stay on the left and the analysis is a column on the
 right, so the map stays visible while the frame tools drive it; the ⇤ button under the wheel widens it.
 Without the map (`?explore=0`, offline) the same panels sit in an ordinary page (`body.no-map`).
+
+## Brightness at this spot (T140)
+
+The point selected on the map (or a position in the frame viewer) is measured in each exposure by adding
+light inside a small aperture and subtracting the local sky background. Nearby objects can contribute;
+a moving source can drift through the aperture. Flux is shown in µJy/mJy/Jy; higher means more light.
+
+- **Spectrum** asks where the source is brightest in infrared wavelength. One survey visit is shown at a
+  time, with its dates and usable-observation count; the brightness scale is shared across visits. Dots are
+  exposures, bars are measurement uncertainty where available, crosses are excluded measurements.
+- **Changes between visits** compares an earlier and later exposure at nearly the same wavelength (within
+  half of the narrower spectral channel). Choose a visit pair; +50% means 50% brighter in the later exposure.
+  Both charts have wavelength on the horizontal axis. This is not a time-axis light curve. The median is
+  a summary of the displayed matches, not proof of variability; calibration, motion and blends can contribute.
+- Other visits in grey, an approximate stellar baseline, and feature markers are optional under **Overlays
+  and interpretation**. Model hints remain tentative. **Data quality** and **How is brightness measured?**
+  expand the diagnostic flags and method. Brief-event exposures are marked in the spectrum and omitted
+  from the between-visit comparison. Missing error estimates stay unknown instead of becoming zero error.
+
+The previous three-pair colour cap is removed: one pair is displayed at a time, so all eligible visit pairs
+can be selected. Background loading, selected-point retention (T138), aperture photometry and the API
+are unchanged. The interface explains one-visit, unmatched-wavelength, missing and fully flagged data.
 
 ## Run locally
 

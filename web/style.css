@@ -780,3 +780,32 @@ body:not(.community-workspace) .cm-coverage-summary { grid-template-columns: rep
 .ph-context > .analysis-note, .ol-item > .analysis-note { margin: 4px 0; }
 
 .ph-context > .analysis-note { display: block; }
+
+/* T140: two readable questions for selected-position brightness. */
+.ph-head h3 { font-size: 17px; flex: 1 1 180px; }
+.ph-head button { font-size: 12px; }
+.ph-where { overflow-wrap: anywhere; }
+.photometry .ph-intro { margin: 10px 0 14px; }
+.ph-view-tabs { display: grid; grid-template-columns: 1fr 1.6fr; gap: 4px; padding: 4px; margin: 14px 0;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 11px; }
+.ph-view-tabs button { min-width: 0; white-space: normal; background: transparent; color: var(--muted); padding: 7px 10px; }
+.ph-view-tabs button[aria-selected=true] { background: var(--panel-2); color: var(--text); font-weight: 600; }
+.photometry [role=tabpanel] > h4 { font-size: 15px; margin: 14px 0 6px; }
+.ph-select { display: grid; gap: 5px; margin: 14px 0 7px; min-width: 0; }
+.ph-select select { width: 100%; max-width: 100%; min-width: 0; padding: 7px 9px; text-overflow: ellipsis; }
+.photometry .ph-svg { max-width: 100%; margin: 12px 0 0; overflow: hidden; }
+.photometry .ph-legend { margin: 6px 0 12px; line-height: 1.5; }
+.ph-ghost { opacity: .25; }
+.ph-details { margin-top: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+.ph-details summary { font-size: 12px; color: var(--muted); font-weight: 600; cursor: pointer; }
+.ph-details[open] summary { color: var(--text); margin-bottom: 10px; }
+.ph-details p { line-height: 1.55; }
+.ph-details .ph-context { border: none; padding: 0; margin: 12px 0; }
+.ph-details .ph-toggles { display: grid; gap: 8px; margin: 12px 0; }
+.ph-change-summary { padding: 9px 11px; border-left: 3px solid var(--accent); background: var(--panel); border-radius: 5px; font-size: 13px; }
+.ph-empty { margin: 14px 0; padding: 14px; border: 1px dashed var(--border); border-radius: 10px; line-height: 1.55; }
+.ph-empty h4 { margin-top: 0; }
+.photometry > #ph-body > .ph-motion { margin-top: 18px; border-top: 1px solid var(--border); }
+@media (max-width: 400px) {
+  .ph-view-tabs button { padding: 7px 6px; font-size: 12px; }
+}

@@ -1,14 +1,6 @@
-// Light curves and spectra on the fly (T49). Asks the Live API for aperture photometry at a position
-// (default: the field centre, i.e. the object the user asked for; "Measure a star" + click for any
-// other) and draws two charts:
-//  - Spectrum: brightness vs wavelength, one small panel per epoch (shared axes), the other epochs as
-//    grey ghosts behind, so a change shows without needing a colour per epoch.
-//  - Change at the same wavelength: for frames of consecutive epochs whose wavelengths at the star
-//    match (|dλ| <= half the bandwidth), the brightness change in %. A constant star scatters around 0.
-// Colours: epoch transitions use the first three categorical slots (validated, dark, all pairs);
-// facets instead of a fourth colour (palette check fails for 4 on the dark surface).
-// T63: on the spectrum, a baseline "what a plain star would give" (spectrum.js), rings on the points
-// that leave it, optional feature markers, and plain-words hints below the chart.
+// Selected-position aperture brightness (T49/T140). Spectrum shows one survey visit at a time;
+// Changes between visits compares matched wavelengths, with one earlier/later visit pair selected.
+// Model hints, reference features and quality details remain optional. T138's selection/loading stays separate.
 
 import { $, el, fmtNum, fmtTime } from "./util.js";
 import { currentTarget, targetBase } from "./viewer.js";
@@ -19,9 +11,11 @@ import { motionBox } from "./motion.js";
 import { analysisNote } from "./analysisnote.js";
 import { anomalyCopy, LIMITS } from "./analysiscopy.js";
 
+import { usable, measurementError, periodKey, observingPeriods, matchedChanges, comparisonGroups } from "./brightness.js";
+export { matchedChanges } from "./brightness.js";
 const NS = "http://www.w3.org/2000/svg";
-const TRANSITION_COLOURS = ["#3987e5", "#d95926", "#199e70"]; // categorical slots 1-3, dark mode, validated
-const st = { target: null, measuring: false, token: 0, pos: null, sky: null, data: null, context: true, features: false };
+const CHANGE_COLOUR = "#6da7ec";
+const st = { target: null, measuring: false, token: 0, pos: null, sky: null, data: null, context: false, features: false, compare: false, view: "spectrum", epoch: null, pair: null, details: {} };
 const home = { parent: null, next: null };   // where the panel sits in the field view (T79 moves it under the map)
 let chartId = 0;
 
@@ -44,53 +38,20 @@ function niceTicks(lo, hi, count = 4) {
 
 const sig3 = (v) => String(parseFloat(v.toPrecision(3))); // 750 not 750.0, 1.25 not 1.250
 const fmtFlux = (v) => (Math.abs(v) >= 1e6 ? `${sig3(v / 1e6)} Jy` : Math.abs(v) >= 1e3 ? `${sig3(v / 1e3)} mJy` : `${sig3(v)} µJy`);
-const median = (xs) => {
-  const s = [...xs].sort((a, b) => a - b);
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
-
-/**
- * Matches between an earlier and a later epoch at the same wavelength (at the star), with % change.
- * Any epoch pair counts (SPHEREx's wavelength steps rarely line up between neighbouring epochs);
- * at most 3 transitions are kept (the ones with most matches), so 3 validated colours suffice.
- */
-export function matchedChanges(frames) {
-  const ok = frames.filter((f) => !f.masked && f.flux_ujy > 0);
-  const epochs = [...new Set(ok.map((f) => f.epoch))].sort((a, b) => a - b);
-  const all = [];
-  epochs.forEach((e1, i) => epochs.slice(i + 1).forEach((e2) => {
-    const later = ok.filter((f) => f.epoch === e2);
-    for (const a of ok.filter((f) => f.epoch === e1)) {
-      const b = later.filter((x) => Math.abs(x.wavelength_um - a.wavelength_um) <=
-          0.5 * Math.min(a.bandwidth_um ?? 0.05, x.bandwidth_um ?? 0.05))
-        .sort((x, y) => Math.abs(x.wavelength_um - a.wavelength_um) - Math.abs(y.wavelength_um - a.wavelength_um))[0];
-      if (!b) continue;
-      const ratio = b.flux_ujy / a.flux_ujy;
-      const err = 100 * ratio * Math.hypot((a.err_ujy ?? 0) / a.flux_ujy, (b.err_ujy ?? 0) / b.flux_ujy);
-      all.push({ a, b, pct: (ratio - 1) * 100, err, wavelength: (a.wavelength_um + b.wavelength_um) / 2, key: `${e1}→${e2}` });
-    }
-  }));
-  const counts = new Map();
-  for (const c of all) counts.set(c.key, (counts.get(c.key) ?? 0) + 1);
-  const kept = [...counts.entries()].sort((x, y) => y[1] - x[1]).slice(0, 3).map(([k]) => k).sort();
-  const out = all.filter((c) => kept.includes(c.key)).map((c) => ({ ...c, transition: kept.indexOf(c.key) }));
-  out.omitted = counts.size - kept.length;
-  return out;
-}
-
 function spectrumChart(frames, width, ana) {
   // T84: exposures in a spike/dip event (server: pipeline/anomaly.py) get a red ring
   const anomalous = new Set((st.data?.anomalies?.items ?? []).flatMap((a) => a.frames ?? (a.frame_id ? [a.frame_id] : [])));
-  const epochs = [...new Set(frames.map((f) => f.epoch))].sort((a, b) => a - b);
-  const good = frames.filter((f) => !f.masked && Number.isFinite(f.flux_ujy));
-  const H = 150, top = 22, bottom = 26, left = 52, gap = 10;
+  const epochs = [st.epoch];
+  const good = frames.filter(usable);
+  const H = 248, top = 28, bottom = 46, left = 64, gap = 10;
   const pw = (width - left - gap * (epochs.length - 1)) / Math.max(epochs.length, 1);
-  const fl = good.map((f) => f.flux_ujy);
+  const fl = good.flatMap((f) => [f.flux_ujy - (measurementError(f) ?? 0), f.flux_ujy + (measurementError(f) ?? 0)]);
   const lo = Math.min(0, ...fl), hi = Math.max(1, ...fl) * 1.08;
   const yOf = (v) => top + (H - top - bottom) * (1 - (v - lo) / (hi - lo));
   const root = svg("svg", { class: "ph-svg", width, height: H, viewBox: `0 0 ${width} ${H}`, role: "img",
-    "aria-label": "Spectrum: brightness against wavelength, one panel per epoch" });
+    "aria-label": "Spectrum: brightness against infrared wavelength for the selected observing visit" });
+  root.append(svg("text", { class: "ph-axis", x: left, y: 12 }, "Brightness"),
+    svg("text", { class: "ph-axis", x: left + (width - left) / 2, y: H - 6, "text-anchor": "middle" }, "Wavelength (µm)"));
   for (const t of niceTicks(lo, hi)) {
     root.append(svg("line", { class: "ph-grid", x1: left, x2: width, y1: yOf(t), y2: yOf(t) }),
       svg("text", { class: "ph-axis", x: left - 6, y: yOf(t) + 3.5, "text-anchor": "end" }, fmtFlux(t)));
@@ -101,10 +62,9 @@ function spectrumChart(frames, width, ana) {
     const xOf = (w) => x0 + 6 + (pw - 12) * ((w - 0.7) / (5.1 - 0.7));
     root.append(
       svg("rect", { class: "ph-panel", x: x0, y: top - 4, width: pw, height: H - top - bottom + 8, rx: 4 }),
-      svg("text", { class: "ph-title", x: x0 + 2, y: top - 9 }, `Epoch ${ep}`),
-      svg("text", { class: "ph-axis", x: x0 + 2, y: H - 6 }, "0.7"),
-      svg("text", { class: "ph-axis", x: x0 + pw - 2, y: H - 6, "text-anchor": "end" }, "5 µm"),
+      svg("title", {}, ep === "unknown" ? "Undated observations" : `Visit ${ep}`),
     );
+    for (const w of [1, 2, 3, 4, 5]) root.append(svg("text", { class: "ph-axis", x: xOf(w), y: H - 26, "text-anchor": "middle" }, String(w)));
     if (st.features) {
       for (const f of FEATURES) {
         const x = xOf(f.um);
@@ -126,19 +86,21 @@ function spectrumChart(frames, width, ana) {
         svg("polyline", { class: "ph-base", points: line(0.7, e.fit.umMax) }),
         svg("polyline", { class: "ph-base ph-base-x", points: line(e.fit.umMax, 5.1) })));
     }
-    for (const f of good.filter((g) => g.epoch !== ep)) { // ghosts: the other epochs
+    for (const f of good.filter((g) => st.compare && periodKey(g) !== ep)) { // ghosts: the other epochs
       root.append(svg("circle", { class: "ph-ghost", cx: xOf(f.wavelength_um), cy: yOf(f.flux_ujy), r: 2.5 }));
     }
-    for (const f of frames.filter((g) => g.epoch === ep)) {
+    for (const f of frames.filter((g) => periodKey(g) === ep)) {
+      if (!Number.isFinite(f.wavelength_um)) continue;
       const cx = xOf(f.wavelength_um);
       if (f.masked || !Number.isFinite(f.flux_ujy)) {
         root.append(svg("text", { class: "ph-masked", x: cx, y: H - bottom + 1, "text-anchor": "middle" }, "×",
           svg("title", {}, `${f.frame_id} · ${fmtNum(f.wavelength_um, 3)} µm · flagged (saturated or bad pixels)`)));
         continue;
       }
+      const error = measurementError(f);
       const g = svg("g", { class: "ph-pt" }, svg("title", {}, `${f.frame_id} · ${fmtNum(f.wavelength_um, 3)} µm · ` +
-        `${fmtFlux(f.flux_ujy)} ± ${fmtFlux(f.err_ujy ?? 0)} · ${fmtTime(f.time_utc)}`));
-      if (f.err_ujy) g.append(svg("line", { class: "ph-err", x1: cx, x2: cx, y1: yOf(f.flux_ujy - f.err_ujy), y2: yOf(f.flux_ujy + f.err_ujy) }));
+        `${fmtFlux(f.flux_ujy)}${error == null ? " · uncertainty unavailable" : ` ± ${fmtFlux(error)}`} · ${fmtTime(f.time_utc)}`));
+      if (error != null) g.append(svg("line", { class: "ph-err", x1: cx, x2: cx, y1: yOf(f.flux_ujy - error), y2: yOf(f.flux_ujy + error) }));
       g.append(svg("circle", { class: "ph-dot", cx, cy: yOf(f.flux_ujy), r: 4 }));
       const off = st.context && e?.regions.some((r) => r.points.some((p) => p.frame_id === f.frame_id));
       if (off) g.append(svg("circle", { class: "ph-flag", cx, cy: yOf(f.flux_ujy), r: 7 }));
@@ -150,88 +112,135 @@ function spectrumChart(frames, width, ana) {
 }
 
 function changeChart(changes, width) {
-  const H = 140, top = 12, bottom = 26, left = 52;
-  const vals = changes.flatMap((c) => [c.pct - c.err, c.pct + c.err]);
+  const H = 248, top = 28, bottom = 46, left = 64;
+  const vals = changes.flatMap((c) => [c.pct - (c.err ?? 0), c.pct + (c.err ?? 0)]);
   const m = Math.max(10, ...vals.map(Math.abs)) * 1.1;
   const yOf = (v) => top + (H - top - bottom) * (1 - (v + m) / (2 * m));
   const xOf = (w) => left + 6 + (width - left - 12) * ((w - 0.7) / (5.1 - 0.7));
   const root = svg("svg", { class: "ph-svg", width, height: H, viewBox: `0 0 ${width} ${H}`, role: "img",
-    "aria-label": "Brightness change between consecutive epochs at matched wavelengths" });
+    "aria-label": "Brightness difference by wavelength between the selected earlier and later visits" });
+  root.append(svg("text", { class: "ph-axis", x: left, y: 12 }, "Change (%)"),
+    svg("text", { class: "ph-axis", x: left + (width - left) / 2, y: H - 6, "text-anchor": "middle" }, "Wavelength (µm)"));
   root.append(svg("rect", { class: "ph-panel", x: left, y: top - 4, width: width - left, height: H - top - bottom + 8, rx: 4 }));
   for (const t of niceTicks(-m, m, 4)) {
     root.append(svg("line", { class: t === 0 ? "ph-zero" : "ph-grid", x1: left, x2: width, y1: yOf(t), y2: yOf(t) }),
       svg("text", { class: "ph-axis", x: left - 6, y: yOf(t) + 3.5, "text-anchor": "end" }, `${t > 0 ? "+" : ""}${fmtNum(t, 0)}%`));
   }
-  for (const w of [1, 2, 3, 4, 5]) root.append(svg("text", { class: "ph-axis", x: xOf(w), y: H - 6, "text-anchor": "middle" }, `${w} µm`));
+  for (const w of [1, 2, 3, 4, 5]) root.append(svg("text", { class: "ph-axis", x: xOf(w), y: H - 26, "text-anchor": "middle" }, String(w)));
   for (const c of changes) {
-    const colour = TRANSITION_COLOURS[c.transition % TRANSITION_COLOURS.length];
+    const colour = CHANGE_COLOUR;
     const x = xOf(c.wavelength);
     root.append(svg("g", { class: "ph-pt" },
-      svg("title", {}, `epoch ${c.a.epoch} → ${c.b.epoch} at ${fmtNum(c.wavelength, 3)} µm: ${c.pct > 0 ? "+" : ""}${fmtNum(c.pct, 1)}% ± ${fmtNum(c.err, 1)}% (${c.a.frame_id} → ${c.b.frame_id})`),
-      svg("line", { class: "ph-err", x1: x, x2: x, y1: yOf(c.pct - c.err), y2: yOf(c.pct + c.err) }),
+      svg("title", {}, `epoch ${c.a.epoch} → ${c.b.epoch} at ${fmtNum(c.wavelength, 3)} µm: ${c.pct > 0 ? "+" : ""}${fmtNum(c.pct, 1)}%${c.err == null ? " · uncertainty unavailable" : ` ± ${fmtNum(c.err, 1)}%`} (${c.a.frame_id} → ${c.b.frame_id})`),
+      ...(c.err == null ? [] : [svg("line", { class: "ph-err", x1: x, x2: x, y1: yOf(c.pct - c.err), y2: yOf(c.pct + c.err) })]),
       svg("circle", { class: "ph-dot-c", cx: x, cy: yOf(c.pct), r: 4.5, fill: colour })));
   }
   return root;
 }
 
+function disclosure(id, label, ...children) {
+  const box = el("details", { id, class: "ph-details" }, el("summary", { id: `${id}-toggle` }, label), ...children);
+  box.open = Boolean(st.details[id]);
+  box.addEventListener("toggle", () => { if (box.isConnected) st.details[id] = box.open; });
+  return box;
+}
+function selectControl(id, label, options, value, change) {
+  const select = el("select", { id }, ...options.map(([key, text]) => el("option", { value: key }, text)));
+  select.value = String(value);
+  select.addEventListener("change", () => { change(select.value); render(); });
+  return el("label", { class: "ph-select", for: id }, el("span", { class: "small muted" }, label), select);
+}
+function viewTabs() {
+  const tabs = [["spectrum", "Spectrum"], ["changes", "Changes between visits"]].map(([key, label]) => {
+    const button = el("button", { id: `ph-${key}-tab`, type: "button", role: "tab", "aria-selected": String(st.view === key),
+      "aria-controls": `ph-${key}-view`, tabindex: st.view === key ? "0" : "-1" }, label);
+    button.addEventListener("click", () => { st.view = key; render(); });
+    button.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      event.preventDefault(); event.stopPropagation();
+      st.view = event.key === "Home" ? "spectrum" : event.key === "End" ? "changes" : st.view === "spectrum" ? "changes" : "spectrum";
+      render(); $(`#ph-${st.view}-tab`)?.focus({ preventScroll: true });
+    });
+    return button;
+  });
+  return el("div", { class: "ph-view-tabs", role: "tablist", "aria-label": "Brightness view" }, ...tabs);
+}
 function render() {
-  const box = $("#photometry");
-  const body = $("#ph-body");
-  const d = st.data;
+  const box = $("#photometry"), body = $("#ph-body"), d = st.data;
   if (!d) return;
-  const w = Math.max(300, Math.round(body.clientWidth || 600));
-  const frames = d.frames ?? [];
-  const good = frames.filter((f) => !f.masked && Number.isFinite(f.flux_ujy));
-  // T84: exposures of a spike/dip event (e.g. an asteroid passing) stay in the spectrum chart (ringed)
-  // but not in the baseline hints or the light curve, which would otherwise read them as the source.
+  const focusId = body.contains(document.activeElement) ? document.activeElement.id : null;
+  for (const detail of body.querySelectorAll("details.ph-details")) st.details[detail.id] = detail.open;
+  const w = Math.max(220, Math.round(body.clientWidth || 600));
+  const frames = d.frames ?? [], good = frames.filter(usable), periods = observingPeriods(frames);
   const odd = new Set((d.anomalies?.items ?? []).flatMap((a) => a.frames ?? (a.frame_id ? [a.frame_id] : [])));
   const steady = odd.size ? frames.filter((f) => !odd.has(f.frame_id)) : frames;
-  const changes = matchedChanges(steady);
+  const changes = matchedChanges(steady), groups = comparisonGroups(changes);
+  if (!periods.some((p) => p.id === st.epoch)) st.epoch = [...periods].sort((a, b) => b.usable - a.usable)[0]?.id;
+  if (!groups.some((g) => g.key === st.pair)) st.pair = groups[0]?.key ?? null;
+  const period = periods.find((p) => p.id === st.epoch), comparison = groups.find((g) => g.key === st.pair);
   const at = `(RA ${fmtNum(d.ra_deg, 4)}°, Dec ${fmtNum(d.dec_deg, 4)}°)`;
   const where = st.sky?.name ? `at ${st.sky.name} ${at}` : st.sky ? `at the point clicked on the map ${at}` : st.pos ? `at the clicked star ${at}` : `at the field centre ${at}`;
   const what = d.all_exposures ? "exposures" : "frames";
-  const parts = [el("p", { class: "ph-where small" }, `${good.length} of ${frames.length} ${what} measured ${where}.`)];
-  if (frames.length && !good.length) {
-    parts.push(analysisNote("No clean measurements here", "All frames are flagged at this position. Saturation, bad pixels or other quality issues can prevent measurement; the cause is not established from flags alone.", "msg msg-warn"));
+  const parts = [el("p", { class: "ph-where small muted" }, `${good.length} of ${frames.length} ${what} measured ${where}.`),
+    el("p", { class: "ph-intro" }, "Explore the infrared light measured in a small circle around this position."), viewTabs()];
+  if (!good.length) {
+    for (const view of ["spectrum", "changes"]) parts.push(el("section", { id: `ph-${view}-view`, role: "tabpanel", "aria-labelledby": `ph-${view}-tab`, hidden: st.view !== view },
+      el("div", { class: "ph-empty", role: "status" }, el("h4", {}, frames.length ? "No usable brightness measurements" : "No observations at this position"),
+      el("p", { class: "muted" }, frames.length ? "Every measurement is flagged or unavailable. Try a nearby source or check Data quality below." : "Try another position or wait for more observations to finish loading."))));
+  } else {
+    const ana = analyse(steady.filter((f) => Number.isFinite(f.wavelength_um)));
+    const spectrum = el("section", { id: "ph-spectrum-view", role: "tabpanel", "aria-labelledby": "ph-spectrum-tab", hidden: st.view !== "spectrum" },
+      el("h4", {}, "Where is this source brightest?"),
+      el("p", { class: "small muted" }, "Left to right: infrared wavelength. Higher dots: more light. Each dot is a separate exposure; the small bars show measurement uncertainty where available."),
+      selectControl("ph-epoch", "Observing visit", periods.map((p) => [p.id, `${p.label} · ${p.dates}`]), st.epoch,
+        (value) => { st.epoch = periods.find((p) => String(p.id) === value)?.id; }),
+      el("p", { class: "ph-visit-count small muted" }, `${period?.usable ?? 0} usable of ${period?.total ?? 0} observations in this visit. The brightness scale stays the same when you switch visits.`),
+      spectrumChart(frames, w, ana),
+      el("p", { class: "ph-legend small muted" }, "● measured brightness · × flagged observation", st.compare ? " · grey dots: other visits" : ""),
+      disclosure("ph-overlays", "Overlays and interpretation", spectrumToggles(),
+        st.context ? contextBox(ana) : el("p", { class: "small muted" }, "The approximate stellar model is optional. It is a comparison shape, not an object identification."),
+        st.features ? el("p", { class: "ph-features-key small muted" }, "Reference wavelengths: " + FEATURES.map((f) => `${f.name} ${f.um}`).join("; ") + " µm. A nearby marker does not confirm a molecule.") : null));
+    const pairLabel = (g) => {
+      const first = periods.find((p) => p.id === g.earlier), last = periods.find((p) => p.id === g.later);
+      return `${first?.label ?? g.earlier} → ${last?.label ?? g.later} · ${g.changes.length} wavelength match${g.changes.length === 1 ? "" : "es"}`;
+    };
+    const comparisonView = el("section", { id: "ph-changes-view", role: "tabpanel", "aria-labelledby": "ph-changes-tab", hidden: st.view !== "changes" },
+      el("h4", {}, "Did the brightness change between visits?"),
+      el("p", { class: "small muted" }, "Compare nearly the same wavelength on two visits. +50% means brighter in the later visit; −50% means dimmer. The zero line means no measured change."),
+      comparison ? selectControl("ph-pair", "Earlier → later visit", groups.map((g) => [g.key, pairLabel(g)]), st.pair, (value) => { st.pair = value; }) : null,
+      comparison ? el("p", { class: "ph-comparison-dates small muted" }, `${periods.find((p) => p.id === comparison.earlier)?.dates} → ${periods.find((p) => p.id === comparison.later)?.dates}`) : null,
+      comparison ? el("p", { class: "ph-change-summary" }, `Median measured difference: ${comparison.median >= 0 ? "+" : ""}${fmtNum(comparison.median, 0)}% · ${comparison.changes.length} wavelength match${comparison.changes.length === 1 ? "" : "es"}`) : null,
+      comparison ? changeChart(comparison.changes, w) : el("p", { class: "ph-empty muted" }, periods.filter((p) => p.id !== "unknown").length < 2
+        ? "At least two observing visits are needed. There is no between-visit comparison yet."
+        : "These visits have no usable, positive-brightness measurements close enough in wavelength to compare. Missing matches do not mean the source stayed constant."),
+      comparison ? el("p", { class: "ph-legend small muted" }, "Each dot is one wavelength match. Bars, where available, show measurement uncertainty; a bar crossing zero is consistent with no change.") : null,
+      el("p", { class: "small muted" }, "Wavelength is on the horizontal axis here too. Calibration, source motion and nearby sources can also affect a measured difference."),
+      odd.size ? el("p", { class: "small muted" }, `${odd.size} observations flagged as possible brief events are left out of this comparison; they remain marked in Spectrum.`) : null,
+      d.anomalies?.items?.length ? disclosure("ph-events", "Possible brief events", anomalyBox(d.anomalies)) : null);
+    parts.push(spectrum, comparisonView);
   }
-  if (good.length) {
-    const ana = analyse(steady);
-    parts.push(el("h4", {}, "Spectrum (brightness vs. wavelength)"), spectrumToggles(), spectrumChart(frames, w, ana),
-      analysisNote("Dots: measurements · ×: flagged", "One panel per epoch; grey dots show other epochs. The line is a simplified stellar baseline, dashed where extrapolated. Rings mark deviations from that model, not confirmed physical features.", "muted small"));
-    if (st.features) {
-      parts.push(analysisNote("Feature markers: hover a dotted line", "Reference wavelengths: " + FEATURES.map((f) => `${f.name} ${f.um}`).join("; ") + " µm. A marker near a deviation does not confirm that feature.", "muted small ph-features-key"));
-    }
-    if (st.context) parts.push(contextBox(ana));
-    if (d.anomalies) parts.push(anomalyBox(d.anomalies));
-    parts.push(flagsBox(d));
-    const legend = [...new Set(changes.map((c) => c.transition))].map((k) => {
-      const c = changes.find((x) => x.transition === k);
-      const sub = changes.filter((x) => x.transition === k).map((x) => x.pct);
-      const med = median(sub);
-      const mixed = sub.some((v) => v > 0) && sub.some((v) => v < 0);
-      return el("span", { class: "ph-key" }, el("span", { class: "ph-swatch", style: `background:${TRANSITION_COLOURS[k % 3]}` }),
-        ` epoch ${c.a.epoch} → ${c.b.epoch}: median ${med > 0 ? "+" : ""}${fmtNum(med, 0)}% (${sub.length} match${sub.length === 1 ? "" : "es"}${mixed ? ", mixed signs" : ""})`);
-    });
-    parts.push(el("h4", {}, "Change at the same wavelength (light curve)"),
-      changes.length ? changeChart(changes, w) : el("p", { class: "muted small" }, "No frames of different epochs at the same wavelength here."),
-      changes.length ? el("p", { class: "ph-legend small" }, ...legend) : null,
-      analysisNote("Same-wavelength comparison · changes may be instrumental", "Each dot compares two exposures from different epochs within half a channel in wavelength. Repeated differences may indicate variability, but calibration and blending can also contribute." +
-        (changes.omitted ? ` ${changes.omitted} epoch pairs with fewer matches omitted.` : ""), "muted small"));
-  }
-  parts.push(motionBox(d.ra_deg, d.dec_deg));      // T91: a moving catalogued star: its motion measured by SPHEREx
-  if (d.note) parts.push(analysisNote("Measurement details", d.note, "muted small"));
-  body.replaceChildren(...parts.filter(Boolean));     // null = a box with nothing to say (T91)
+  const excluded = frames.length - good.length;
+  parts.push(disclosure("ph-quality", `Data quality · ${excluded} excluded observation${excluded === 1 ? "" : "s"}`,
+    el("p", { class: "small muted" }, `${good.length} usable of ${frames.length} ${what}. Flagged or missing measurements are excluded from comparisons. A flag can come from the source, a neighbour or the background.`), flagsBox(d)),
+    disclosure("ph-method", "How is brightness measured?",
+      el("p", {}, "For each exposure, the app adds the light in a small circle around the selected position and subtracts the nearby sky background. Flux in µJy is a brightness measure: a larger number means more light."),
+      el("p", {}, "Spectrum shows brightness against infrared wavelength, one observing visit at a time. A visit groups exposures from a survey epoch; its wavelengths may have been observed on different dates."),
+      el("p", {}, "Changes between visits compares an earlier and later exposure only when their wavelengths differ by no more than half of the narrower spectral channel. Percent change is relative to the earlier exposure. These are comparisons by wavelength, not a time-axis light curve."),
+      el("p", { class: "muted" }, "The measuring circle can include neighbours. The approximate aperture correction and calibration limit how precisely you can interpret the spectral shape or a brightness change."),
+      d.note ? el("p", { class: "small muted" }, d.note) : null));
+  parts.push(motionBox(d.ra_deg, d.dec_deg));
+  body.replaceChildren(...parts.filter(Boolean));
   box.hidden = false;
+  if (focusId) document.getElementById(focusId)?.focus({ preventScroll: true });
 }
-
 function spectrumToggles() {
   const box = (key, label) => {
-    const input = el("input", { type: "checkbox" });
+    const input = el("input", { id: `ph-${key}`, type: "checkbox" });
     input.checked = st[key];
     input.addEventListener("change", () => { st[key] = input.checked; render(); });
     return el("label", { class: "ph-toggle small" }, input, ` ${label}`);
   };
-  return el("div", { class: "ph-toggles" }, box("context", "Expected + hints"), box("features", "Feature markers"));
+  return el("div", { class: "ph-toggles" }, box("compare", "Show other visits in grey"), box("context", "Approximate stellar model"), box("features", "Feature markers"));
 }
 
 /** "What this spectrum says": the baseline, the regions that leave it, and why they could be interesting. */

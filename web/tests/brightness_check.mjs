@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import { observingPeriods, matchedChanges, comparisonGroups, median, usable, measurementError } from '../brightness.js';
+const frame = (epoch, wavelength_um, flux_ujy, extra = {}) => ({ epoch, wavelength_um, flux_ujy,
+  bandwidth_um: .04, err_ujy: 10, frame_id: `${epoch}-${wavelength_um}`, ...extra });
+const frames = [frame(1, 1.2, 100), frame(2, 1.21, 150), frame(3, 1.22, 200), frame(4, 1.21, 120)];
+const changes = matchedChanges(frames);
+assert.equal(comparisonGroups(changes).length, 6, 'one-pair selector offers all six visit pairs, without a three-colour cap');
+const fifty = changes.find(c => c.key === '1→2');
+assert.equal(fifty.pct, 50);
+assert.ok(Math.abs(fifty.err - 100 * 1.5 * Math.hypot(.1, 10 / 150)) < 1e-10);
+assert.equal(matchedChanges([frame(1, 1.2, 100), frame(2, 1.221, 150)]).length, 0, 'half of narrower channel, not an arbitrary wavelength match');
+assert.equal(matchedChanges([frame(1, 1.2, 100), frame(2, 1.219, 150, { bandwidth_um: .02 })]).length, 0);
+const nearest = matchedChanges([frame(1, 1.2, 100), frame(2, 1.21, 130), frame(2, 1.201, 110)]);
+assert.equal(Math.round(nearest[0].pct), 10, 'closest later wavelength wins');
+assert.equal(matchedChanges([frame(1, 1.2, 100, { masked: true }), frame(2, 1.21, 150)]).length, 0);
+assert.equal(matchedChanges([frame(1, 1.2, 0), frame(2, 1.21, 150)]).length, 0);
+assert.equal(matchedChanges([frame(1, 1.2, -10), frame(2, 1.21, 150)]).length, 0);
+assert.equal(matchedChanges([frame(null, 1.2, 100), frame(2, 1.21, 150)]).length, 0, 'unknown periods cannot support a visit comparison');
+assert.equal(matchedChanges([frame(1, 1.2, 100, { err_ujy: null }), frame(2, 1.21, 150)])[0].err, null, 'missing uncertainty stays unknown');
+assert.equal(usable(frame(1, 1.2, -10)), true, 'negative sky-subtracted flux can still be plotted in the spectrum');
+const periods = observingPeriods([frame(2, 1.2, 100, { time_utc: '2026-05-01T01:00:00Z' }),
+  frame(1, 1.2, 100, { time_utc: '2025-04-25T00:00:00Z' }), frame(1, 2.1, 100, { time_utc: '2025-04-26T00:00:00Z', masked: true })]);
+assert.deepEqual(periods.map(p => p.id), [1,2]);
+assert.equal(periods[0].usable, 1);
+assert.equal(periods[0].total, 2);
+assert.match(periods[0].dates, /25 Apr 2025 – 26 Apr 2025/);
+assert.match(observingPeriods([frame(1, 1.2, 100, { mjd: 40587 })])[0].dates, /1 Jan 1970/);
+assert.equal(measurementError({err_ujy: null}), null);
+assert.equal(measurementError({err_ujy: -1}), null);
+assert.equal(measurementError({err_ujy: 0}), 0);
+assert.equal(median([]), null);
+assert.equal(median([50,-20,10]), 10);
+console.log('Brightness visit grouping, wavelength matching, percent differences, uncertainty and all visit-pair choices passed.');
