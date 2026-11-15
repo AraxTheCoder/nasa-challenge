@@ -407,7 +407,7 @@ body.pin-picking .sky-stage canvas { cursor: crosshair !important; }   /* pick m
 .ph-hint-mark { color: var(--warn); }
 
 /* T55: pass / epoch dates; the shown one highlighted, passes still loading for this view dimmed */
-.pass-label { padding: 1px 6px; border-radius: 4px; font-size: 0.85em; opacity: 0.75; white-space: nowrap; }
+.pass-label { cursor: pointer; padding: 1px 6px; border-radius: 4px; font-size: 0.85em; opacity: 0.75; white-space: nowrap; }
 .pass-label.current { opacity: 1; outline: 2px solid currentColor; }
 .pass-label.loading { opacity: 0.4; }
 

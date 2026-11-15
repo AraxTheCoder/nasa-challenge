@@ -77,6 +77,8 @@ const app = {
   goal: null,        // T55 Go: {ra, dec, fovDeg}
   goalPending: false,
   manualMap: false,  // T90: map tools / frame viewer below drive the map; automatic blinking waits
+  mapTool: false,    // T100: a tool on the map itself (Chemistry) holds it: zooming within its field keeps it
+  blinkOff: false,   // T100: the Blink switch is off: passes and epochs stand still, a date label picks one
 };
 
 const params = () => new URLSearchParams(location.search);
@@ -580,8 +582,9 @@ function bindPage() {
     setManual(true);
   };
   document.addEventListener("pointerdown", takeOver, true);
-  document.addEventListener("map:take", () => setManual(true));   // T93: a tool on the map itself (Chemistry)
+  document.addEventListener("map:take", () => { app.mapTool = true; setManual(true); });   // T93: a tool on the map itself (Chemistry)
   document.addEventListener("map:give", () => setManual(false));  // T96: Chemistry cleared: the automatic blink again
+  setupBlinkSwitch();
   document.addEventListener("keydown", (e) => {
     if (e.target.closest?.("input, select, textarea, .sky-stage")) return;
     if ([" ", "p", "P", "x", "X", "m", "M", "d", "D", "ArrowLeft", "ArrowRight"].includes(e.key) && app.shownTarget) setManual(true);
@@ -604,6 +607,7 @@ function bindPage() {
 
 /** T90: the user drives the map from below (true) or the automatic blink may again (false). */
 function setManual(on) {
+  if (!on) app.mapTool = false;
   if (app.manualMap === on) return;
   app.manualMap = on;
   passes.setPaused(on);
@@ -688,12 +692,13 @@ async function showEpochLayers(target) {
     labels.forEach((b, j) => b.classList.toggle("current", j === i));
   };
   // no caption for real data; synthetic layers stay visibly labelled (CLAUDE.md)
+  labels.forEach((b, j) => b.addEventListener("click", () => { if (!app.manualMap) pick(j); }));   // T100: by hand
   box.append(...(info.synthetic ? [el("span", { class: "muted small" }, "synthetic:")] : []), ...labels);
   box.hidden = false;
   pick(0);
   // always blinking (like the passes), while nobody drives the map from below
   epochTimer = setInterval(() => {
-    if (!app.manualMap) pick((epochShown + 1) % layers.length);
+    if (!app.manualMap && !app.blinkOff) pick((epochShown + 1) % layers.length);
   }, 800);
 }
 
@@ -755,16 +760,25 @@ const fieldKey = () => { const t = centreTile(); return t === null ? null : `${t
 /** The explicitly asked-for field (Show, a link, Blink this spot), while the view centre is on it: it
  *  blinks at any zoom, as in web/ before T90. */
 function explicitHere() {
-  const t = autoField.explicit, v = explore.view();
-  if (!t?.center || !v) return null;
+  const t = autoField.explicit;
+  return viewOn(t) ? t : null;
+}
+
+/** Is the view centre on field t (within half its side of its centre)? */
+function viewOn(t) {
+  const v = explore.view();
+  if (!t?.center || !v) return false;
   const d = Math.PI / 180, { ra_deg: ra, dec_deg: dec } = t.center;
   const c = Math.sin(dec * d) * Math.sin(v.dec * d) + Math.cos(dec * d) * Math.cos(v.dec * d) * Math.cos((ra - v.ra) * d);
-  return (Math.acos(Math.min(1, c)) / d) * 60 <= t.size_arcmin / 2 ? t : null;
+  return (Math.acos(Math.min(1, c)) / d) * 60 <= t.size_arcmin / 2;
 }
 
 /** Called on every view / band change and when a field is ready: pick the source, start a build after a rest. */
 function decideSource() {
   if (app.dataRoot || !explore.getSky()) return;
+  // T100: a tool's picture (Chemistry) belongs to the shown field: it stays through zooming and panning on that
+  // field (the tile key below changes with the zoom level, which used to hand the map back and drop the picture)
+  if (app.mapTool && app.manualMap && viewOn(app.shownTarget)) { showBlinkStatus(); return; }
   const key = fieldKey();
   const moved = key !== autoField.key;
   autoField.key = key;
@@ -807,7 +821,8 @@ function showBlinkStatus() {
   if (!out) return;
   const key = autoField.key;
   let text;
-  if (app.manualMap) text = "Blink: map tools / frame viewer below (move to another tile to resume)";
+  if (app.mapTool && app.manualMap) text = "Blink: waits for the chemistry map (untick it, or leave this field, to resume)";
+  else if (app.manualMap) text = "Blink: map tools / frame viewer below (move to another tile to resume)";
   else if (!passes.passesOn()) text = "Blink: zoom in to level 6";
   else if (key === null) text = "Blink: survey passes · field epochs at level 7";
   else if (passes.mode() === "epochs") text = "Blink: field epochs";
@@ -820,7 +835,25 @@ function showBlinkStatus() {
       text += ` · field epochs: ${step.toLowerCase()}${n}…`;
     } else if (autoField.error) text += ` · field epochs failed: ${autoField.error}`;
   }
+  if (app.blinkOff && !app.manualMap && passes.passesOn()) text = text.replace(/^Blink:/, "Standing still (click a date):");
   out.textContent = text;
+}
+
+const BLINK_KEY = "spherex.blink";
+
+/** T100: the Blink switch next to the status: off = passes and field epochs stand still. Remembered. */
+function setupBlinkSwitch() {
+  const box = $("#blink-on");
+  if (!box) return;
+  try { app.blinkOff = localStorage.getItem(BLINK_KEY) === "0"; } catch { /* private mode: on */ }
+  box.checked = !app.blinkOff;
+  passes.setStill(app.blinkOff);
+  box.addEventListener("change", () => {
+    app.blinkOff = !box.checked;
+    passes.setStill(app.blinkOff);
+    try { localStorage.setItem(BLINK_KEY, app.blinkOff ? "0" : "1"); } catch { /* not remembered */ }
+    showBlinkStatus();
+  });
 }
 
 // T89: SPHEREx's 6 detectors; one image covers a detector's whole range (a λ gradient across its face)
