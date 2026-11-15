@@ -24,3 +24,10 @@ other things) ran full twice on 2026-11-15: builds and the browser test failed w
 - Test: `server/test_limits.py::test_sweep_frees_disk_space_beyond_the_cap`. pytest 162 passed.
 
 ## Notes from others
+
+- 2026-11-15 [Mati (Claude)] `server/test_limits.py::test_cache_cap_without_public_mode_and_tile_chunks` fails on
+  main on Mati's machine (3 of 3 runs, also alone). Cause: `start_sweeper`'s loop starts with `last = 0.0` and sweeps
+  only when `time.monotonic() - last >= CFG.sweep_s`; `time.monotonic()` is the time since boot, and WSL had just
+  restarted (uptime ~1 250 s < the test's sweep_s = 3 600 s), so the first size-cap sweep never ran. In production
+  the same thing delays the first sweep after a reboot by up to `sweep_s`. Suggested fix: `last = float("-inf")`.
+  Not touched (your code).
