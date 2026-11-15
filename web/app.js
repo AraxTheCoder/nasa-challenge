@@ -1,21 +1,22 @@
-// SPHEREx Blink: page controller. T90: one page with two parts.
-//  - First screen (T55 redesign): the sky map fills the window, the controls float over it (hud.js).
-//    "Go" moves the map to the typed RA/Dec and pins it (cursorpin.js). Blinking starts by itself: from
-//    level 6 the survey passes (autoblink.js), at level 7 resting on one HiPS order-6 tile builds that
-//    tile's field quietly and blinks its epochs; the band slider and "false colour" apply to all of it.
-//  - Below (scroll the page): everything of web/: map tools (base map, north up, Joerg's pass buttons,
-//    "Blink this spot"), the field form ("Show" builds a field of a chosen size), the
-//    frame viewer (map only by default, T80/T81), analysis, spectra, objects, frames, provenance.
-//    Using the map tools or the frame viewer takes the map over until the view moves to another tile.
+// SPHEREx Blink: page controller. T124: the sky map stays behind the page; everything floats over it.
+//  - First screen: the map with its panels (hud.js). "Go" moves the map to the typed RA/Dec and pins it
+//    (cursorpin.js). Blinking starts by itself: from level 6 the survey passes (autoblink.js), at level 7
+//    resting on one HiPS order-6 tile builds that tile's field quietly and blinks its epochs; the band slider
+//    and "False colour" apply to all of it. "Build field" asks for a field of a chosen size.
+//  - Scrolling (the thumbwheel on the right edge, wheel.js) brings up the analysis: spectra, unusual spectra,
+//    the frame tools (map only by default, T80/T81), objects, frames, provenance. Using the frame tools takes
+//    the map over until the view moves to another tile.
 // Two ways to get data:
 //  - live (default): the Live API (docs/CONTRACTS.md) builds any RA/Dec field on request.
 //    ?ra=&dec=&size= (or &blink=1) in the page URL builds that field on load; ?ra=&dec= alone goes there
 //    like Go; ?api=<base> sets the API address.
 //  - offline (?data=<folder>): read a static targets folder with an index.json, no server needed
 //    (e.g. ?data=../fixtures/targets/). ?target=<id> picks a target there.
+// Without the map (?explore=0, offline) the same panels sit in an ordinary page (body.no-map).
 //
 // Modules: api.js (Live API client), viewer.js (frames + blink), util.js (helpers), explore.js + sky.js
-// (the map), autoblink.js (survey passes), hud.js (panels), cursorpin.js (📍), coords.js (RA/Dec input).
+// (the map), autoblink.js (survey passes), hud.js (panels), wheel.js (thumbwheel), cursorpin.js (📍),
+// coords.js (RA/Dec input).
 
 import { DEFAULT_API, ApiError, health, requestField } from "./api.js";
 import { $, el, fmtElapsed } from "./util.js";
@@ -24,7 +25,6 @@ import { initObjects } from "./objects.js";
 import { initDiff } from "./diff.js";
 import { initPhotometry } from "./photometry.js";
 import "./mapframes.js"; // T81: the frame viewer's A/B, blink, play and A − B drive the map
-import "./passes.js";    // T82: blink SPHEREx's six-month survey passes anywhere on the map (buttons, map tools)
 import "./outliers.js";  // T86: sources in the field with unusual spectra
 import "./tour.js";      // T92: guided tour of the official targets ("▶ Tour", ?tour=1)
 import "./flagsmap.js";  // T60: SPHEREx quality flags as an overlay on the map
@@ -35,6 +35,7 @@ import { nearestBand, parseLam } from "./lambda.js";
 import * as explore from "./explore.js";
 import { initChemistry } from "./chemistry.js";
 import { initHud } from "./hud.js";   // T55: drag the floating panels anywhere
+import { initWheel } from "./wheel.js";   // T124: the thumbwheel scrolls between the map and the analysis
 import { parseDec, parseRa } from "./coords.js";
 import { initCursorPin, isPicking, pinAt, setPicking } from "./cursorpin.js";   // T55: 📍 marker + pick mode
 import * as passes from "./autoblink.js";   // T55: survey passes blink by themselves from level 6
@@ -77,7 +78,8 @@ const app = {
   shownTargetUrl: null,
   goal: null,        // T55 Go: {ra, dec, fovDeg}
   goalPending: false,
-  manualMap: false,  // T90: map tools / frame viewer below drive the map; automatic blinking waits
+  manualMap: false,  // T90: the frame tools (or another base map) drive the map; automatic blinking waits
+  noMap: false,      // ?explore=0 or offline: no map, the panels sit in the page
   mapTool: false,    // T100: a tool on the map itself (Chemistry) holds it: zooming within its field keeps it
   blinkOff: false,   // T100: the Blink switch is off: passes and epochs stand still, a date label picks one
 };
@@ -149,32 +151,27 @@ async function openTarget(targetUrl, expectedId, token, signal) {
   warnings.forEach((w) => showMessage(w, "warn"));
 }
 
-// ---------- live mode: the field form below ("Show" builds a field) ----------
+// ---------- live mode: the one form (Go moves the map, "Build field" builds a field) ----------
 
 function readForm() {
   const f = $("#field-form");
   return { ra: f.ra.value.trim(), dec: f.dec.value.trim(), size: clampSize(Number(f.size.value) || SIZE_DEFAULT) };
 }
 
-/** Both forms show the position: the field form below (with size) and the Go form on the map. */
 function fillForm(req) {
   const f = $("#field-form");
   f.ra.value = req.ra;
   f.dec.value = req.dec;
   if (req.size) f.size.value = String(req.size);
-  const g = $("#go-form");
-  g.ra.value = req.ra;
-  g.dec.value = req.dec;
   syncPresetSelect();
 }
 
-/** Show the matching quick pick in both dropdowns (and why it is interesting), or none once the user typed
+/** Show the matching quick pick in the dropdown (and why it is interesting), or none once the user typed
  *  other coordinates. */
 function syncPresetSelect() {
   const { ra, dec } = readForm();
   const i = app.presets.findIndex((p) => String(p.ra_deg) === ra && String(p.dec_deg) === dec);
   $("#preset").value = i >= 0 ? String(i) : "";
-  $("#go-preset").value = i >= 0 ? String(i) : "";
   showWhy(i >= 0 ? app.presets[i].name : "", i >= 0 ? app.presets[i].why : null);
 }
 
@@ -186,7 +183,7 @@ function showWhy(title, text) {
 const presetRequest = (f) => ({ ra: String(f.ra_deg), dec: String(f.dec_deg), size: clampSize(f.size_arcmin ?? SIZE_DEFAULT) });
 const defaultPreset = () => app.presets.find((p) => p.default) ?? app.presets[0] ?? null;
 
-/** Pre-fill the forms with the default test field (no request; Go or Show). */
+/** Pre-fill the form with the default test field (no request; Go or Build field). */
 function fillDefaults() {
   const f = defaultPreset();
   $("#empty-default").hidden = !f;
@@ -196,7 +193,7 @@ function fillDefaults() {
   $("#empty-default-kind").textContent = f.kind ? ` (${f.kind.charAt(0).toLowerCase()}${f.kind.slice(1)})` : "";
 }
 
-/** ?ra=&dec= (Go), plus &size= for a built field (Show), so a reload or shared link does the same again. */
+/** ?ra=&dec= (Go), plus &size= for a built field, so a reload or shared link does the same again. */
 function setPageUrl(req, push, build = true) {
   const url = new URL(location.href);
   url.searchParams.set("ra", req.ra);
@@ -209,18 +206,17 @@ function setPageUrl(req, push, build = true) {
   else history.replaceState(null, "", url);
 }
 
-/** T95: with the map off (?explore=0, offline ?data=) its screen is hidden, and with it the panels that live on it
- *  since T90: the synthetic badge, messages, build progress and the quick pick's reason move into the page, under the
- *  field form. */
+/** Without the map (?explore=0, offline ?data=) its screen is hidden: the form with the synthetic badge, build
+ *  progress, messages and the quick pick's reason moves to the top of the page, and the Labels switch with it
+ *  (it works in every mode, T40). */
 function panelsOffMap() {
-  const anchor = $("#field-form");
-  if (!anchor) return;
-  for (const id of ["pick-why", "job", "messages", "synthetic-badge"]) {   // inserted after the form: last ends up first
-    const node = document.getElementById(id);
-    if (node) anchor.after(node);
-  }
-  const labels = document.getElementById("labels-toggle")?.closest("label");   // works in every mode (T40)
-  if (labels) anchor.after(labels);
+  app.noMap = true;
+  document.body.classList.add("no-map");
+  $("#explore").hidden = true;
+  const group = $('[data-hud="field"]');
+  $("#analysis").prepend(group);
+  const labels = $("#labels-toggle")?.closest("label");
+  if (labels) group.querySelector(".search").append(labels);
 }
 
 /** Do what the page URL asks for: ?ra=&dec=&size= (or &blink=1) builds that field, ?ra=&dec= alone goes
@@ -364,20 +360,17 @@ function hideTip({ remember = false } = {}) {
 
 async function loadPresets() {
   // The five official fields (presets.json) and, since T65, fields where something moves (discover.json).
-  // Both are optional: without them the forms still work. Same list in both dropdowns: below it builds
-  // the field (Show), on the map it goes there (Go).
+  // Both are optional: without them the form still works.
   const [official, more] = await Promise.all(["presets.json", "discover.json"].map((u) =>
     fetchJson(u).then((d) => d.fields ?? []).catch(() => [])));
   app.presets = [...official.map((f) => ({ ...f, group: "Official test fields" })), ...more];
-  for (const select of [$("#preset"), $("#go-preset")]) {
-    const groups = new Map();
-    app.presets.forEach((f, i) => {
-      if (!groups.has(f.group)) groups.set(f.group, el("optgroup", { label: f.group }));
-      groups.get(f.group).append(el("option", { value: String(i), title: f.why ?? f.kind ?? "" }, f.name));
-    });
-    select.append(...groups.values());
-    select.hidden = app.presets.length === 0;
-  }
+  const groups = new Map();
+  app.presets.forEach((f, i) => {
+    if (!groups.has(f.group)) groups.set(f.group, el("optgroup", { label: f.group }));
+    groups.get(f.group).append(el("option", { value: String(i), title: f.why ?? f.kind ?? "" }, f.name));
+  });
+  $("#preset").append(...groups.values());
+  $("#preset").hidden = app.presets.length === 0;
   $("#surprise").hidden = more.length === 0;
 }
 
@@ -390,22 +383,22 @@ function surprise() {
   onPresetPicked();
 }
 
-/** Quick pick below: build that field (Show). */
+/** A quick pick: on the map go there (jump + pin; the blink comes by itself), without the map build its field. */
 function onPresetPicked() {
   const f = app.presets[Number($("#preset").value)];
   if (!f) return;
   const req = presetRequest(f);
   fillForm(req);
-  setPageUrl(req, true, true);
-  loadField(req);
+  if (app.noMap) {
+    setPageUrl(req, true, true);
+    loadField(req);
+  } else if (goTo(req)) setPageUrl(req, true, false);
 }
 
-/** Quick pick on the map: go there (Go: jump + pin; the blink comes by itself). */
-function onGoPresetPicked() {
-  const f = app.presets[Number($("#go-preset").value)];
-  if (!f) return;
-  const req = presetRequest(f);
-  fillForm(req);
+/** The Go button, and Enter in RA / Dec while the map is there: jump + pin only. */
+function onGo() {
+  const req = readForm();
+  if (!req.ra || !req.dec) return;
   if (goTo(req)) setPageUrl(req, true, false);
 }
 
@@ -456,7 +449,7 @@ function showGoal() {
   pinAt(g.ra, g.dec);                                     // 📍 + RA/Dec on the position, fades after 5 s
 }
 
-/** 📍 button: pick a position on the map. The picked spot goes into the forms and the URL (like Go). */
+/** 📍 button: pick a position on the map. The picked spot goes into the form and the URL (like Go). */
 function onPicked(ra, dec) {
   const req = { ra: ra.toFixed(4), dec: dec.toFixed(4) };
   fillForm(req);
@@ -524,26 +517,16 @@ function bindPage() {
     setPageUrl(req, true, true);
     loadField(req);
   });
-  // T55 Go form on the map: jump + pin only; the blink comes by itself
-  $("#go-form").addEventListener("submit", (e) => {
+  // Go, and Enter in RA / Dec on the map: jump + pin only; the blink comes by itself. (Enter in the field-of-view
+  // box, the Build field button, and Enter anywhere without the map submit the form: build.)
+  $("#go-btn").addEventListener("click", onGo);
+  $("#field-form").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || app.noMap || (e.target.name !== "ra" && e.target.name !== "dec")) return;
     e.preventDefault();
-    const g = $("#go-form");
-    const req = { ra: g.ra.value.trim(), dec: g.dec.value.trim() };
-    if (!req.ra || !req.dec) return;
-    fillForm({ ...req, size: readForm().size });
-    if (goTo(req)) setPageUrl(req, true, false);
+    onGo();
   });
-  $("#go-form").addEventListener("input", (e) => {
-    if (e.target.name !== "ra" && e.target.name !== "dec") return;
-    const f = $("#field-form");
-    f.ra.value = $("#go-form").ra.value;
-    f.dec.value = $("#go-form").dec.value;
-    syncPresetSelect();
-  });
-  $("#go-preset").addEventListener("change", onGoPresetPicked);
   $("#preset").addEventListener("change", () => { hideTip(); onPresetPicked(); });
   $("#surprise").addEventListener("click", () => { hideTip(); surprise(); });
-  $("#to-below").addEventListener("click", () => $("#map-tools").scrollIntoView({ behavior: "smooth" }));
   $("#field-form").addEventListener("focusin", (e) => {
     if (e.target.name === "ra" || e.target.name === "dec") showTip();
   });
@@ -553,9 +536,6 @@ function bindPage() {
   window.addEventListener("resize", placeTip);
   $("#field-form").addEventListener("input", (e) => {
     if (e.target.name !== "ra" && e.target.name !== "dec") return;
-    const g = $("#go-form");
-    g.ra.value = $("#field-form").ra.value;
-    g.dec.value = $("#field-form").dec.value;
     syncPresetSelect();
     $("#empty-default").hidden = true; // the form no longer holds the default field
   });
@@ -585,10 +565,10 @@ function bindPage() {
     }
   });
 
-  // T90: the map tools and the frame viewer below drive the map (T81 mapframes.js, T82 pass buttons):
-  // while they do, the automatic blink leaves the map alone, until the view moves to another tile.
+  // T90: the frame tools in the analysis drive the map (T81 mapframes.js): while they do, the automatic blink
+  // leaves the map alone, until the view moves to another tile.
   const takeOver = (e) => {
-    if (!e.target.closest?.(".layout, #map-tools") || e.target.closest?.("#field-form, #photometry")) return;
+    if (!e.target.closest?.(".layout") || e.target.closest?.("#photometry")) return;
     setManual(true);
   };
   document.addEventListener("pointerdown", takeOver, true);
@@ -615,7 +595,7 @@ function bindPage() {
   });
 }
 
-/** T90: the user drives the map from below (true) or the automatic blink may again (false). */
+/** T90: the user drives the map with the frame tools (true) or the automatic blink may again (false). */
 function setManual(on) {
   if (!on) app.mapTool = false;
   if (app.manualMap === on) return;
@@ -628,7 +608,7 @@ function setManual(on) {
 // ---------- sky map (T30/T36) ----------
 
 /** A field arrived: an automatic one (tile build) is remembered for its tile + band; one asked for
- *  explicitly (Show, a link, Blink this spot) moves the map there and is outlined (web/). */
+ *  explicitly (Build field, a link) moves the map there and is outlined. */
 function syncExplore(target) {
   app.shownTarget = target;
   const c = target?.center;
@@ -719,15 +699,15 @@ async function showEpochLayers(target) {
   }, 800);
 }
 
-/** How much the map shows (on the map), and the cursor / centre position + north-up state (map tools below). */
+/** The readout on the map: the cursor's position (else the view centre), how much the map shows, north up. */
 function updateExplorePos(_view, cursor) {
   const v = explore.view();
   if (!v) return;
   const arc = (a) => (a >= 120 ? `${(a / 60).toFixed(1)}°` : `${Math.round(a)}′`);
-  $("#explore-pos").textContent = `view ${arc(v.fovArcmin)} × ${arc(v.heightArcmin)}`;
   const f = (x) => `${x >= 0 ? "+" : ""}${x.toFixed(4)}°`;
-  const where = cursor ? `cursor RA ${cursor[0].toFixed(4)}° Dec ${f(cursor[1])}` : `RA ${v.ra.toFixed(4)}° Dec ${f(v.dec)}`;
-  $("#map-pos").textContent = `${where} · view ${v.fovArcmin >= 120 ? (v.fovArcmin / 60).toFixed(1) + "°" : Math.round(v.fovArcmin) + "′"}`;
+  const [ra, dec] = cursor ?? [v.ra, v.dec];
+  $("#map-pos").textContent = `RA ${ra.toFixed(4)}° Dec ${f(dec)} · view ${arc(v.fovArcmin)} × ${arc(v.heightArcmin)}`;
+  $("#map-pos").title = cursor ? "Position under the cursor, and how much sky the map shows" : "Centre of the view, and how much sky the map shows";
   const sv = explore.getSky()?.view();
   const tilted = sv && Math.abs(sv.roll) > 1;
   const nb = $("#sky-north");
@@ -740,7 +720,7 @@ function updateExplorePos(_view, cursor) {
 // Survey passes from level 6. Resting at level 7 on one HiPS order-6 tile (~55′, about one screen) builds
 // that tile's field in the background for the band shown (same grid for everyone: built once, then cached);
 // once it is ready and the view is still on that tile, its field epochs blink (aligned frames, traces,
-// detections). A field asked for explicitly (Show, a link, Blink this spot) blinks while the view is on
+// detections). A field asked for explicitly (Build field, a link) blinks while the view is on
 // it. Moving out of the tile or zooming out goes back to the survey passes. No buttons, no popup.
 
 const FIELD_ORDER = 6;
@@ -774,8 +754,7 @@ function tileField(pix) {
 
 const fieldKey = () => { const t = centreTile(); return t === null ? null : `${t}|${fieldVariant()}`; };
 
-/** The explicitly asked-for field (Show, a link, Blink this spot), while the view centre is on it: it
- *  blinks at any zoom, as in web/ before T90. */
+/** The explicitly asked-for field (Build field, a link), while the view centre is on it: it blinks at any zoom. */
 function explicitHere() {
   const t = autoField.explicit;
   return viewOn(t) ? t : null;
@@ -843,7 +822,7 @@ function showBlinkStatus() {
   const key = autoField.key;
   let text;
   if (app.mapTool && app.manualMap) text = "Blink: waits for the chemistry map (untick it, or leave this field, to resume)";
-  else if (app.manualMap) text = "Blink: map tools / frame viewer below (move to another tile to resume)";
+  else if (app.manualMap) text = "Blink paused: the frame tools or another map are in use (move to another tile to resume)";
   else if (!passes.passesOn()) text = "Blink: zoom in to level 6";
   else if (key === null) text = "Blink: survey passes · field epochs at level 7";
   else if (passes.mode() === "epochs") text = "Blink: field epochs";
@@ -925,7 +904,7 @@ function setupBand(layer) {
   else show();
 }
 
-/** The base map in use: T89 false colour, else the one picked under "Map" (default: SPHEREx live). */
+/** The base map in use: T89 false colour, else the one picked under More > Map (default: SPHEREx live). */
 const currentSurvey = () => ($("#band-colour")?.checked ? "spherex-live-rgb" : $("#explore-survey").value || explore.DEFAULT_SURVEY);
 
 async function startExplore() {
@@ -936,15 +915,11 @@ async function startExplore() {
     try {
       const layer = await explore.setSurvey(currentSurvey());
       if (!$("#band-colour").checked) setupBand(layer);
+      // another survey (2MASS, AllWISE, one detector) only shows without the blinking layers over it
+      const other = sel.value !== explore.DEFAULT_SURVEY;
+      setManual(other);
+      if (other) explore.hideOverlay();
     } catch (err) { showMessage(err.message, "warn"); }
-  });
-  $("#explore-blink").addEventListener("click", () => {
-    const v = explore.view();
-    if (!v) return;
-    const req = { ra: v.ra.toFixed(4), dec: v.dec.toFixed(4), size: clampSize(v.fovArcmin / 3) };
-    fillForm(req);
-    setPageUrl(req, true, true);
-    loadField(req);
   });
   const f = readForm();
   let start = {};
@@ -955,9 +930,9 @@ async function startExplore() {
       api: app.dataRoot ? null : app.api,
     });
     sky.on("change", updateExplorePos);
-    // Debug overlay (tile outlines, max-zoom / sharp indicator): on by default since T55; ?debug=0 starts it off
+    // Tile outlines (debug overlay: outlines, max-zoom / sharp indicator): More > Tile outlines, or ?debug=1
     const dbg = $("#sky-debug");
-    dbg.checked = params().get("debug") !== "0";
+    dbg.checked = params().get("debug") === "1";
     explore.setDebug(dbg.checked);
     dbg.addEventListener("change", () => explore.setDebug(dbg.checked));
     setupTilesSwitch();
@@ -1120,31 +1095,28 @@ async function main() {
   initLamPick();
   initStack();
   bindPage();
-  initHud();
+  const p = params();
+  const noMap = p.get("explore") === "0" || Boolean(p.get("data"));
+  // ?explore=0 skips the sky map (embeds, slow connections, and the browser test, which must not depend on
+  // external tile servers being up); offline mode has no tile server either.
+  if (noMap) panelsOffMap();
+  else { initHud(); initWheel(); }
   const pinBtn = $("#pin-btn");
   initCursorPin({
     onPick: onPicked,
     onModeChange: (mode) => pinBtn.setAttribute("aria-pressed", String(mode === "pick")),
   });
   pinBtn.addEventListener("click", () => setPicking(!isPicking()));
-  const p = params();
-  // Map only (Joerg, 2026-11-14): the explore map is the one view of the sky; the frame viewer (image,
-  // blink controls, timeline, frame panels) stays in the code for ?frames=1, offline ?data= and
-  // ?explore=0 (CI browser test). Spectra come from clicks on the map (T79).
-  if (!(p.get("frames") === "1" || p.get("explore") === "0" || p.get("data"))) document.body.classList.add("map-only");
+  // Map only (Joerg, 2026-11-14): the map is the one view of the sky; the frame image stays in the code for
+  // ?frames=1, offline ?data= and ?explore=0 (CI browser test). Spectra come from clicks on the map (T79).
+  if (!(p.get("frames") === "1" || noMap)) document.body.classList.add("map-only");
   if (p.get("api")) app.api = p.get("api");
   if (p.get("data")) {
-    $("#explore").hidden = true; // offline mode has no tile server; an empty map box only confuses
-    $("#map-tools").hidden = true;
-    panelsOffMap();
     await startOffline(p.get("data"));
     return;
   }
   await loadPresets();
-  // ?explore=0 skips the sky map (embeds, slow connections, and the browser test, which must not
-  // depend on external tile servers being up).
-  if (p.get("explore") === "0") { $("#explore").hidden = true; $("#map-tools").hidden = true; panelsOffMap(); }
-  else startExplore();   // not awaited: the map loads in the background
+  if (!noMap) startExplore();   // not awaited: the map loads in the background
   initChemistry(app.api);   // T93: the Chemistry selector, for real fields on the map
   const requested = loadFromUrl();
   if (!requested) {

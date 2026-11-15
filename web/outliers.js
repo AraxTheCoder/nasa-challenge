@@ -51,8 +51,8 @@ function panel() {
         el("span", { id: "ol-status", class: "muted small" })),
       el("div", { id: "ol-body" }));
     box.hidden = true;
-    ($("#discoveries") ?? $("#explore"))?.after(box);
-    const mirror = el("label", { class: "ol-maptoggle small", title: "Ring these sources on the map above" },
+    ($("#analysis-top") ?? $("#explore"))?.after(box);   // T124: at the top of the analysis panels
+    const mirror = el("label", { class: "ol-maptoggle small", title: "Ring these sources on the map" },
       el("input", { type: "checkbox", id: "ol-map-mirror" }), " show on the map");
     mirror.querySelector("input").addEventListener("change", (e) => setMap(e.target.checked));
     box.querySelector(".ol-head").append(mirror);

@@ -2,12 +2,15 @@
 // anywhere: by their grip (⠿) or by any empty part of a panel; inputs, buttons and sliders keep
 // working as usual. Positions are remembered per browser (localStorage, a convenience only: the
 // page works without it); double-clicking a grip docks that panel again. Undragged panels sit in
-// the two docks on the left (default layout, index.html); a dragged one leaves its dock.
+// the dock on the left (index.html); a dragged one leaves it.
+// T124: on wide screens the panels are fixed to the window (they stay while the page scrolls to the
+// analysis); on narrow ones they belong to the map's first screen and scroll away with it.
 
 import { el } from "./util.js";
 
-// v5 (T90): positions relative to the map's screen (.mapstage), which scrolls with the page in web/
-const KEY = "spherex.app.hud.v5";
+// v6 (T124): positions relative to the window (wide screens) or to the map's first screen (.mapstage)
+const KEY = "spherex.app.hud.v6";
+const PINNED = matchMedia("(min-width: 1280px)");   // the same breakpoint as style.css
 const INTERACTIVE = "input, select, button:not(.hud-grip), textarea, a, label, output, summary, [contenteditable]";
 const KEEP = 48;          // px of a panel that always stay on screen
 const THRESHOLD = 3;      // px before a press becomes a drag (so a click stays a click)
@@ -20,9 +23,10 @@ function saveAll(all) {
   try { localStorage.setItem(KEY, JSON.stringify(all)); } catch { /* blocked: not remembered */ }
 }
 
-/** The map's screen the panels float over (T90: .mapstage scrolls with the page); its box in viewport px. */
+/** What the panels are placed in, as a box in viewport px: the window (wide screens: fixed panels), else the
+ *  map's first screen (.mapstage, which scrolls with the page). */
 function stageBox(hud) {
-  const s = hud.closest(".mapstage");
+  const s = PINNED.matches ? null : hud.closest(".mapstage");
   return s ? s.getBoundingClientRect() : { left: 0, top: 0, width: innerWidth, height: innerHeight };
 }
 

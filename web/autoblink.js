@@ -32,7 +32,7 @@ export const paused = () => st.paused;
 /** T100: the Blink switch is off: the shown pass stays until a date label is clicked. */
 export function setStill(on) { st.still = !!on; }
 
-/** T90: the map tools / frame viewer below drive the map: leave the overlays alone until resumed. */
+/** T90: the frame tools (or another base map) drive the map: leave the overlays alone until resumed. */
 export async function setPaused(on) {
   if (st.paused === !!on) return;
   st.paused = !!on;

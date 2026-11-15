@@ -382,11 +382,12 @@ async function loadAll(url, token) {
   }
 }
 
-/** T79: the panel under the frame viewer (field) or right under the map (a map click). */
+/** T79: the panel with the field's frame tools (field) or first among the analysis panels (a map click). */
 function placePanel(underMap) {
   const panel = $("#photometry");
   if (!home.parent) { home.parent = panel.parentNode; home.next = panel.nextSibling; }
-  if (underMap) { if (panel.previousElementSibling !== $("#explore")) $("#explore").after(panel); }
+  const top = $("#analysis-top") ?? $("#explore");
+  if (underMap) { if (panel.previousElementSibling !== top) top.after(panel); }
   else if (panel.parentNode !== home.parent) home.parent.insertBefore(panel, home.next);
 }
 
