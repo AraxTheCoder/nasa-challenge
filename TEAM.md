@@ -378,6 +378,35 @@ Ideas are numbered (I1, I2, …) to refer to them; numbers stay fixed, a new ide
   real search later.
   (from the outlier-heatmap discussion, 2026-11-14) — status: new
 
+- I25 [Codex, community review 2026-11-15] **Keep discussion drafts and reply context while exploring.**
+  `web/community.js` rebuilds the form on render (including a view-count response), tab changes and tile changes;
+  text and attachment choices are lost, while `replyTo` can survive into another tile and cause a rejected post.
+  Preserve drafts per tile/reply, bind submissions to their original tile, keep text after failures, and label
+  the form fields for keyboard/screen-reader users. First community usability improvement — status: new
+- I26 [Codex, community review 2026-11-15] **Request a second look, with reproducible evidence.**
+  Add a post type for a question or observation, optional title, and saved evidence: coordinates, field size,
+  target/release, frame IDs or epoch pair, wavelength, active chemistry/quality layer and settings. A share link
+  should reopen the discussion and restore the available evidence, explaining if cached frames are unavailable.
+  Existing "look here" only moves the map to position/zoom; this extends T120 and complements I7 exports.
+  Start with a question + saved view, then add richer analysis context — status: new
+- I27 [Codex, community review 2026-11-15] **Help volunteers find discussions that need them.**
+  Add an Unanswered/Needs a second look feed, clickable most-discussed tiles (the API already supplies these),
+  and optional discussion pins on the map. Keep tile views distinct from scientific review/coverage: viewing
+  a tile does not mean someone checked it. Feed links should open the actual thread/comment — status: new
+- I28 [Codex, community review 2026-11-15] **Follow a finding and see its outcome.**
+  Save/follow threads with an in-app unread indicator; give observations an explicit outcome such as open,
+  needs more data, known object or likely artifact, with supporting replies and an attribution history.
+  Treat community judgements as provisional; likes or popularity do not establish scientific confirmation.
+  Begin with browser-local bookmarks; persistent identity/ownership is a separate step — status: new
+- I29 [Codex, community review 2026-11-15] **Give newcomers a small first contribution.**
+  Build on T92's tour: show a known mover and a common artifact, explain matched-wavelength comparisons,
+  then invite a question or second look at a real field. Offer short observation prompts (what changed,
+  which epochs, what was checked) and credit useful reviews as well as initial findings — status: new
+- I30 [Codex, community review 2026-11-15] **Give a public community basic moderation tools.**
+  Add report-comment and moderator hide/restore with an audit trail, clear participation guidance and
+  backups for the community SQLite database. Posting is currently anonymous with a chosen display name;
+  ownership/identity is needed before offering trusted author edits/deletes or reviewer roles — status: new
+
 ## Questions / Blockers
 
 Things waiting on a human.
@@ -947,3 +976,5 @@ Append-only, newest at the bottom. Format: `date time [name] done / next / gotch
 - 2026-11-15 [Jonathan] T124 merged to main (Jonathan: "merge it, with everything that happened meanwhile"), status `review` until Jonathan has looked at it. Main was merged into the branch first: T122 "▭ Select region" is the third button top right (under 💬), its hint a pill at the bottom of the map; T123 progress bar unchanged at the top, its text a pill; T126 blink line kept; the red square during a build kept. Gone from the page: the second RA/Dec form, the map-tools bar ("Blink this spot", `web/passes.js`), long hint texts; "Show" is now "Build field"; tile outlines off by default (`?debug=1`). Checks: node tests pass, pytest 263 passed, 1 failed on Windows only (`test_workers_end_when_their_server_is_gone` needs `fork`). The browser test was not run here: CI runs it on this push. [to Mati, Joerg] if CI's browser test fails, the name of the check please; `web/tests/live_check.py` still looks for `#explore-passes` / `#map-tools` (0 matches, harmless).
 - 2026-11-15 [Mati] T127 merged, `review` (Mati: chemistry presets for objects): six object presets above the three place presets, each tried on a real field: Brown dwarfs (Eps Ind B: white dot; WISE 0855 too faint), Young stars (RW Aur: green Pa-α dot, modest), Pulsating cool giants (R Dra: saturated core, water in its glow), Protostars (ρ Oph: magenta dots on red CO₂-ice filaments), Star-forming galaxies (NGC 6240 at z 0.0247: yellow-green dot), Quasars (3C 273 at z 0.158: white dot). New features Hα, Pa-α, CO 2.3 µm, CH₄ (CONTRACTS v0.38). Fixed on the way: the redshift lookup cut 3C 273 off its own field (sorted by size). Browser-checked on real data, fixture browser test 0 failures. [to Joerg] `server/test_limits.py::test_cache_cap_without_public_mode_and_tile_chunks` fails on main here since T125: note in tasks/T125.
 - 2026-11-15 [Jonathan] T16: pitch deck for the local judging is in `docs/pitch/local-judging-pitch.pptx` (10 slides, English, speaker notes; generator `docs/pitch/build_pitch.js`). Story: more data with every telescope generation, more gets past the algorithms, so volunteers are needed; then navigation, chemistry filters, computer assistance, collaboration (T120), checks on real data. Five marked video placeholders (slides 5-9) wait for Jonathan's recordings. Open: `[live URL]` on slide 10 (T14), project name (working name "SPHEREx Blink" used), IRAS / WISE numbers on slide 2 are from memory, the 30 s video or 7-slide deck for the project page. Details: tasks/T16.
+
+- 2026-11-15 [Codex] Community review requested by the user: synced main and inspected T120, community frontend/API/tests, sharing and the tour. Added ideas I25–I30 (draft preservation; reproducible second-look posts; unanswered feed/map discovery; follows/outcomes; newcomer contribution; moderation). Suggested first slice: I25 + a small I26/I27 implementation. Ideas only; no implementation task claimed and no API/code changes. Other agents' working files and untracked pitch.pdf left untouched.
