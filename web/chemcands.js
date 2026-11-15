@@ -3,8 +3,9 @@
 // pairs at bright stars and the rims of saturated holes left out, named after the field's catalogue labels). This
 // module shows them as a numbered list under the chemistry note and as the same numbers in white rings on the map.
 // A click on a row centres the map on the spot (zoom kept) and opens its spectrum; a click on a ring selects its
-// row (the map's own click already opens the spectrum there, T79). Visualization only (Decision 2026-11-14): spots
-// to look at, the spectrum is how the user judges; nothing here says what a spot is.
+// row and opens its spectrum (T141: the ring takes the click, else the map's own click would make the spot a new
+// analysis region, T138, and clear the picture). Visualization only (Decision 2026-11-14): spots to look at, the
+// spectrum is how the user judges; nothing here says what a spot is.
 //
 // Catalogues (ticked above the list, remembered): the spots are looked up there (pipeline/catcheck.py, positions
 // moved by proper motion to SPHEREx's date), then listed uncatalogued first, other types next, the preset's expected
@@ -139,7 +140,8 @@ function hook() {
   sky?.addEventListener("pointerup", (e) => {
     const d0 = down;
     down = null;
-    if (!d0 || Math.hypot(e.clientX - d0.x, e.clientY - d0.y) > 4 || !st.placed.length) return;
+    // e.defaultPrevented: a 📍 pick (cursorpin.js) or another ring took the click
+    if (e.defaultPrevented || !d0 || Math.hypot(e.clientX - d0.x, e.clientY - d0.y) > 4 || !st.placed.length) return;
     const rect = sky.getBoundingClientRect();
     const x = e.clientX - rect.left, y = e.clientY - rect.top;
     let best = null, bd = Infinity;
@@ -147,7 +149,11 @@ function hook() {
       const dd = Math.hypot(p.x - x, p.y - y);
       if (dd <= p.r + 6 && dd < bd) { bd = dd; best = p; }
     }
-    if (best) select(best.k, false);            // the map's own click opens the spectrum there (T79)
+    if (!best) return;
+    e.preventDefault();                         // T141: the ring takes the click (see the top)
+    select(best.k, false);
+    const it = st.items[best.k];
+    openSpectrum(it.ra_deg, it.dec_deg, title(it, best.k));
   });
 }
 

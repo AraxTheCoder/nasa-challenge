@@ -6,14 +6,21 @@ One pass over the field's exposures (the same field cutouts pipeline/fieldspectr
 (D1–3 = 0.75–2.4 µm, D4 = 2.4–3.8, D5 = 3.8–4.4, D6 = 4.4–5.0 µm) and epoch; the deep image of a group is the
 median of its epoch means (an asteroid or a transient in one epoch doesn't make a source). Large-scale background
 (16 px block medians) removed, lightly smoothed, peaks >= DETECT_SIGMA in any group. Left out: catalogued sources
-(a label within CAT_ARCSEC), the glow around bright stars, the coverage edge. The strongest MAX_NEW stay.
+(a label within CAT_ARCSEC), the glow around bright stars, the coverage edge.
+T141: the labels only hold Gaia stars to G 16 (and none when ESA's Gaia TAP doesn't answer), SPHEREx's deep images
+reach G ~ 19-20: so each detection is first matched against Gaia DR3 to G < GAIA_MATCH_G (one VizieR cone per field,
+moved by proper motion to SPHEREx's date). A match is that Gaia star (measured as a star, like the labels: up to
+MAX_GAIA, ids "g001"…); only the rest are SPHEREx-only (up to MAX_NEW, ids "x001"…). Before, Barnard's Star's
+field had 113 "SPHEREx-only" sources, most of them Gaia stars.
 Memory: running sums only (groups × epochs × 2 arrays of the field grid; ~60 MB for an 82′ field).
 
     spherex_sources(target, catalogue_sources, compute=False)   -> stored ones only (cheap, for cache checks)
     spherex_sources(target, catalogue_sources, compute=True)    -> found now if not stored (the measurement job)
 
-Cached as data/field_spectra/<target id>.sources.json. Sources come in pipeline.fieldspectra's shape, with
-"source": "spherex", ids "x001"…, "snr" per group, and "red": seen only at >= 3.8 µm (cold brown dwarfs).
+Cached as data/field_spectra/<target id>.sources.json, with the detections themselves: when VizieR didn't answer,
+only the Gaia match is done again on the next measurement, not the pass over the images. Sources come in
+pipeline.fieldspectra's shape, with "snr" per group; SPHEREx-only ones have "source": "spherex" and "red": seen only
+at >= 3.8 µm (cold brown dwarfs).
 """
 from __future__ import annotations
 
@@ -25,7 +32,7 @@ from pathlib import Path
 
 import numpy as np
 
-VERSION = 1
+VERSION = 2                  # T141: Gaia match, detections stored
 GROUPS = ("0.75–2.4 µm", "2.4–3.8 µm", "3.8–4.4 µm", "4.4–5.0 µm")
 GROUP_OF_DETECTOR = {1: 0, 2: 0, 3: 0, 4: 1, 5: 2, 6: 3}
 DETECT_SIGMA = 5.0
@@ -35,6 +42,11 @@ BRIGHT_MAG, BRIGHT_ARCSEC = 9.0, 40.0   # peaks this close to a star this bright
 EDGE_PX = 3
 BLOCK_PX = 16
 MAX_NEW = 150
+MAX_GAIA = 100               # T141: detections that are Gaia stars, measured as such (comparison stars)
+MAX_DETECTIONS = 400         # stored, strongest first (MAX_NEW + MAX_GAIA + room for second peaks on one star)
+GAIA_MATCH_G = 20.5          # T141: SPHEREx's deep images reach G ~ 19-20 for ordinary stars
+GAIA_MATCH_ROWS = 30000      # brightest first; in the densest fields the faintest are cut (a flagged source's
+                             # catalogue check asks Gaia again)
 THREADS = 4
 _lock = threading.Lock()
 
@@ -156,8 +168,8 @@ def _name(ra: float, dec: float) -> str:
     return f"SPHEREx J{hh:02d}{mm:02d}{ss:04.1f}{sg}{dd:02d}{dm:02d}{ds:02d}"
 
 
-def _keep(peaks, target, catalogue_sources, mjd) -> list[dict]:
-    """Field pixels -> sky; catalogued ones, the glow of bright stars and the weakest left out."""
+def _detections(peaks, target, catalogue_sources, mjd) -> list[dict]:
+    """Field pixels -> sky, strongest first; catalogued ones (a label) and the glow of bright stars left out."""
     from .build import output_wcs
     from .fieldspectra import positions_at
     c = target["center"]
@@ -176,18 +188,83 @@ def _keep(peaks, target, catalogue_sources, mjd) -> list[dict]:
         ra %= 360
         if near(ra, dec, cat, CAT_ARCSEC) or near(ra, dec, bright, BRIGHT_ARCSEC):
             continue
-        snr = dict(zip(GROUPS, p["snr"]))
-        red = max(p["snr"][2], p["snr"][3]) >= DETECT_SIGMA and p["snr"][0] < FAINT_SIGMA
-        out.append({"name": _name(ra, dec), "source": "spherex",
-                    "kind": "SPHEREx-only source" + (", only at 3.8–5 µm" if red else ""),
-                    "otype": None, "mag": None, "mag_band": None, "named": False, "red": red, "snr": snr,
-                    "ra_deg": round(ra, 7), "dec_deg": round(dec, 7), "mjd0": round(mjd, 5),
-                    "dra_deg_day": 0.0, "ddec_deg_day": 0.0, "aliases": []})
-        if len(out) >= MAX_NEW:
+        out.append({"ra_deg": round(ra, 7), "dec_deg": round(dec, 7), "snr": [float(v) for v in p["snr"]]})
+        if len(out) >= MAX_DETECTIONS:
             break
-    for k, s in enumerate(out):
-        s["id"] = f"x{k + 1:03d}"
     return out
+
+
+def gaia_stars(target: dict, mjd: float) -> list[dict] | None:
+    """T141: Gaia DR3 stars (G < GAIA_MATCH_G) over the field from VizieR, brightest first, moved by their proper
+    motion from J2016.0 to mjd (SPHEREx's date). None when VizieR doesn't answer."""
+    from .labels import GAIA_VIZIER, J2016_MJD, _asu, _float
+    c = target["center"]
+    img = target.get("image") or {}
+    radius = int(img["width"]) * float(img.get("pixel_scale_arcsec") or 6.15) / 3600 / 2 * math.sqrt(2) + 0.01
+    params = {"-source": GAIA_VIZIER, "-c": f"{c['ra_deg']:.6f} {c['dec_deg']:+.6f}", "-c.rd": f"{radius:.5f}",
+              "-out": "Source,RA_ICRS,DE_ICRS,pmRA,pmDE,Gmag", "Gmag": f"<{GAIA_MATCH_G}", "-sort": "Gmag",
+              "-out.max": str(GAIA_MATCH_ROWS)}
+    try:
+        rows, _url = _asu(params)
+    except Exception:  # noqa: BLE001 - matched on the next measurement
+        return None
+    years = (mjd - J2016_MJD) / 365.25
+    out = []
+    for r in rows:
+        ra, dec = _float(r.get("RA_ICRS")), _float(r.get("DE_ICRS"))
+        if ra is None or dec is None:
+            continue
+        pmra, pmdec = _float(r.get("pmRA")) or 0.0, _float(r.get("pmDE")) or 0.0           # mas/yr
+        cosd = max(math.cos(math.radians(dec)), 1e-6)
+        out.append({"id": r.get("Source"), "g": _float(r.get("Gmag")),
+                    "ra_deg": (ra + pmra / 3.6e6 / cosd * years) % 360, "dec_deg": dec + pmdec / 3.6e6 * years,
+                    "dra_deg_day": pmra / 3.6e6 / cosd / 365.25, "ddec_deg_day": pmdec / 3.6e6 / 365.25})
+    return out
+
+
+def _classify(dets: list[dict], gaia: list[dict], mjd: float) -> list[dict]:
+    """T141: detections -> sources, strongest first. A Gaia star within CAT_ARCSEC: that star (its name and motion,
+    measured as a star like the labels; MAX_GAIA, a second peak on the same star dropped); the rest SPHEREx-only
+    (MAX_NEW)."""
+    if gaia:
+        gra = np.array([s["ra_deg"] for s in gaia])
+        gdec = np.array([s["dec_deg"] for s in gaia])
+    used, stars, new = set(), [], []
+    for d in dets:
+        ra, dec, s4 = d["ra_deg"], d["dec_deg"], d["snr"]
+        j = None
+        if gaia:
+            sep = 3600 * np.hypot(((gra - ra + 180) % 360 - 180) * math.cos(math.radians(dec)), gdec - dec)
+            k = int(np.argmin(sep))
+            j = k if sep[k] <= CAT_ARCSEC else None
+        if j is not None:
+            if j not in used and len(stars) < MAX_GAIA:
+                used.add(j)
+                g = gaia[j]
+                stars.append({"name": f"Gaia DR3 {g['id']}", "source": "gaia_dr3", "kind": "star", "otype": "*",
+                              "mag": None if g["g"] is None else round(g["g"], 2), "mag_band": "G", "named": False,
+                              "snr": dict(zip(GROUPS, s4)), "ra_deg": round(g["ra_deg"], 7),
+                              "dec_deg": round(g["dec_deg"], 7), "mjd0": round(mjd, 5),
+                              "dra_deg_day": g["dra_deg_day"], "ddec_deg_day": g["ddec_deg_day"], "aliases": []})
+        elif len(new) < MAX_NEW:
+            red = max(s4[2], s4[3]) >= DETECT_SIGMA and s4[0] < FAINT_SIGMA
+            new.append({"name": _name(ra, dec), "source": "spherex",
+                        "kind": "SPHEREx-only source" + (", only at 3.8–5 µm" if red else ""),
+                        "otype": None, "mag": None, "mag_band": None, "named": False, "red": red,
+                        "snr": dict(zip(GROUPS, s4)), "ra_deg": ra, "dec_deg": dec, "mjd0": round(mjd, 5),
+                        "dra_deg_day": 0.0, "ddec_deg_day": 0.0, "aliases": []})
+        if len(new) >= MAX_NEW and len(stars) >= MAX_GAIA:
+            break
+    for k, s in enumerate(new):
+        s["id"] = f"x{k + 1:03d}"
+    for k, s in enumerate(stars):
+        s["id"] = f"g{k + 1:03d}"
+    return new + stars
+
+
+def _keep(peaks, target, catalogue_sources, mjd, gaia=None) -> list[dict]:
+    """Field pixels -> named sources (no Gaia given: every detection that isn't a label is SPHEREx-only)."""
+    return _classify(_detections(peaks, target, catalogue_sources, mjd), gaia or [], mjd)
 
 
 def _find(target: dict, catalogue_sources: list[dict], progress=None) -> dict:
@@ -226,35 +303,44 @@ def _find(target: dict, catalogue_sources: list[dict], progress=None) -> dict:
             sums[k] += np.where(ok, img, 0.0)
             counts[k] += ok
             used += 1
-    if not sums:
-        return {"sources": [], "exposures_used": 0}
-    imgs, covs = deep_images(sums, counts)
-    snrs = [snr_map(d, cov) for d, cov in zip(imgs, covs)]
     mjds = sorted(f["mjd"] for f in target.get("frames", []) if f.get("mjd"))
     mjd = mjds[len(mjds) // 2] if mjds else 61000.0
+    if not sums:
+        return {"detections": [], "mjd": mjd, "exposures_used": 0}
+    imgs, covs = deep_images(sums, counts)
+    snrs = [snr_map(d, cov) for d, cov in zip(imgs, covs)]
     peaks = find_peaks(snrs, covs)
-    return {"sources": _keep(peaks, target, catalogue_sources, mjd), "peaks": len(peaks), "exposures_used": used}
+    return {"detections": _detections(peaks, target, catalogue_sources, mjd), "mjd": mjd, "peaks": len(peaks),
+            "exposures_used": used}
 
 
 def spherex_sources(target: dict, catalogue_sources: list[dict], compute: bool = False, progress=None) -> list[dict]:
-    """SPHEREx-only sources of the field: stored ones (compute=False: never reads an image), or found now and
-    stored (compute=True). Found again when the catalogue sources changed."""
+    """Sources found in the field's own images: stored ones (compute=False: never reads an image or asks a
+    catalogue), or found now and stored (compute=True). Found again when the catalogue sources changed; T141: when
+    the Gaia match had no answer, only the match is done again (compute=True)."""
     from .fieldspectra import _key
     path = cache_path(target["id"])
     key = _key(catalogue_sources)
     try:
         hit = json.loads(path.read_text(encoding="utf-8"))
-        if hit.get("version") == VERSION and hit.get("catalogue_key") == key:
-            return hit["sources"]
+        if hit.get("version") != VERSION or hit.get("catalogue_key") != key:
+            hit = None
     except (OSError, ValueError):
-        pass
+        hit = None
+    if hit is not None and (hit.get("gaia_checked") or not compute):
+        return hit["sources"]
     if not compute or not (target.get("image") or {}).get("width"):
         return []                                           # nothing stored / no field grid (a bare test target)
     import time
     t0 = time.time()
-    res = _find(target, catalogue_sources, progress)
+    res = (_find(target, catalogue_sources, progress) if hit is None
+           else {k: hit[k] for k in ("detections", "mjd", "peaks", "exposures_used") if k in hit})
+    mjd, dets = res.get("mjd", 61000.0), res.get("detections") or []
+    gaia = gaia_stars(target, mjd) if dets else []
     out = {"version": VERSION, "target_id": target["id"], "catalogue_key": key, "groups": list(GROUPS),
-           "detect_sigma": DETECT_SIGMA, "seconds": round(time.time() - t0, 1), **res}
+           "detect_sigma": DETECT_SIGMA, **res, "seconds": round(time.time() - t0, 1),
+           "gaia_checked": gaia is not None, "gaia_stars": len(gaia or []),
+           "sources": _classify(dets, gaia or [], mjd)}
     with _lock:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(f".{threading.get_ident()}.part")

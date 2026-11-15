@@ -1,5 +1,6 @@
 // T139: a fresh copy of the shown field (its labels or known objects arrived) must not stop its epoch blink, and the
 // next view change must not swap the old copy back; T134's checks stay (any other replacement still stops the timer).
+// T141: a field built for a map click (T138, the camera stays put) blinks while its centre is in view.
 // Same harness as field_focus_check.mjs: the real app.js with controlled I/O and timers, no browser.
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
@@ -16,7 +17,7 @@ globalThis.location = { href: 'http://test/', search: '' };
 globalThis.CustomEvent = class { constructor(type, data) { Object.assign(this, data); } };
 const intervals = new Map();
 let nextTimer = 0, picks = [], shown = [], mode = 'epochs';
-const view = { ra: 10, dec: 20 };
+const view = { ra: 10, dec: 20, fovArcmin: 40, heightArcmin: 25 };
 globalThis.setInterval = (fn) => { intervals.set(++nextTimer, fn); return nextTimer; };
 globalThis.clearInterval = (id) => intervals.delete(id);
 globalThis.clearTimeout = noop;
@@ -51,11 +52,11 @@ const hook = registerHooks({
         `export const ${name} = globalThis.__focusAdapters[${JSON.stringify(key)}]?.[${JSON.stringify(name)}] ?? (() => {});`).join('\n') };
     }
     if (url === appURL) return { format: 'module', shortCircuit: true,
-      source: source.replace(/\nmain\(\);\s*$/, '\nexport { app, autoField, showEpochLayers, refreshShown, decideSource };') };
+      source: source.replace(/\nmain\(\);\s*$/, '\nexport { app, autoField, showEpochLayers, refreshShown, decideSource, explicitHere };') };
     return next(url, context);
   },
 });
-const { app, autoField, showEpochLayers, refreshShown, decideSource } = await import(appURL);
+const { app, autoField, showEpochLayers, refreshShown, decideSource, explicitHere } = await import(appURL);
 hook.deregister();
 const metadata = { layers: [{ epoch: 1, url: '/epoch1' }, { epoch: 2, url: '/epoch2' }, { epoch: 3, url: '/epoch3' }] };
 let deferred = null;
@@ -113,4 +114,23 @@ finish({ ok: true, json: async () => metadata });
 await pending;
 tick();
 assert.deepEqual(picks, [0, 1], 'a fresh copy during loading: the blink starts and goes on');
-console.log('PASS blink refresh: fresh copies of the field keep its blink and stay shown; other replacements stop the timer');
+
+// T141: a field built for a map click 10' east of the view centre (14' wide: the view centre isn't on it).
+const east = (arcmin) => 10 + arcmin / 60 / Math.cos((20 * Math.PI) / 180);
+const clicked = { id: 'clicked', center: { ra_deg: east(10), dec_deg: 20 }, size_arcmin: 14, labels_requested: true };
+app.shownTarget = clicked;
+autoField.explicit = clicked;
+app.analysisFocus = null;
+assert.equal(explicitHere(), null, 'without a click selected: only when the view centre is on the field (as before)');
+app.analysisFocus = { key: 'k', ra: clicked.center.ra_deg, dec: 20, size: 14 };
+assert.equal(explicitHere(), clicked, 'the clicked field counts as here while its centre is in view');
+picks = [];
+await showEpochLayers(clicked);
+tick();
+assert.deepEqual(picks, [0, 1], 'and its epochs blink');
+view.ra = east(-15);                                    // panned: its centre is now 25' away, out of the 25' x 40' view
+assert.equal(explicitHere(), null);
+tick();
+assert.deepEqual(picks, [0, 1], 'out of view: its timer stops changing the map (T134)');
+console.log('PASS blink refresh: fresh copies of the field keep its blink and stay shown; other replacements stop the ' +
+  'timer; a clicked field blinks while its centre is in view');

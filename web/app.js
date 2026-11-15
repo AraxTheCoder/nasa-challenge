@@ -846,19 +846,33 @@ function tileField(pix) {
 
 const fieldKey = () => { const t = centreTile(); return t === null ? null : `${t}|${fieldVariant()}`; };
 
-/** The explicitly asked-for field (Build field, a link), while the view centre is on it: it blinks at any zoom. */
+/** The explicitly asked-for field (Build field, a link), while the view centre is on it: it blinks at any zoom.
+ *  T141: a field built for a map click (T138: the camera stays put, so the click can be far from the view centre)
+ *  also while its centre is anywhere in view; automatic tile fields are off while a click is selected, so without
+ *  this only the survey passes blinked after such a click. */
 function explicitHere() {
   const t = autoField.explicit;
-  return viewOn(t) ? t : null;
+  return viewOn(t) || (app.analysisFocus && centreInView(t)) ? t : null;
+}
+
+/** Arcmin from the view centre to field t's centre (Infinity without a view or a field). */
+function fromViewCentre(t) {
+  const v = explore.view();
+  if (!t?.center || !v) return Infinity;
+  const d = Math.PI / 180, { ra_deg: ra, dec_deg: dec } = t.center;
+  const c = Math.sin(dec * d) * Math.sin(v.dec * d) + Math.cos(dec * d) * Math.cos(v.dec * d) * Math.cos((ra - v.ra) * d);
+  return (Math.acos(Math.min(1, c)) / d) * 60;
 }
 
 /** Is the view centre on field t (within half its side of its centre)? */
 function viewOn(t) {
+  return fromViewCentre(t) <= (t?.size_arcmin ?? 0) / 2;
+}
+
+/** T141: is field t's centre in the visible map (the circle that fits in the view)? */
+function centreInView(t) {
   const v = explore.view();
-  if (!t?.center || !v) return false;
-  const d = Math.PI / 180, { ra_deg: ra, dec_deg: dec } = t.center;
-  const c = Math.sin(dec * d) * Math.sin(v.dec * d) + Math.cos(dec * d) * Math.cos(v.dec * d) * Math.cos((ra - v.ra) * d);
-  return (Math.acos(Math.min(1, c)) / d) * 60 <= t.size_arcmin / 2;
+  return !!v && fromViewCentre(t) <= Math.min(v.fovArcmin, v.heightArcmin) / 2;
 }
 
 /** Called on every view / band change and when a field is ready: pick the source, start a build after a rest. */

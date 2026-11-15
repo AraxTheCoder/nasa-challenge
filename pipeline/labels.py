@@ -3,7 +3,8 @@
 Sources:
 - SIMBAD (names, object types, proper motions; positions at J2000). The main CDS host is sometimes
   down, so official mirrors are tried in order.
-- Gaia DR3 at ESA (positions at J2016.0 + proper motions), brighter than GAIA_MAX_G.
+- Gaia DR3 at ESA (positions at J2016.0 + proper motions), brighter than GAIA_MAX_G. T141: when ESA's TAP doesn't
+  answer (it doesn't from some networks), the same stars from VizieR's copy I/355/gaiadr3.
 - T52: VSX (AAVSO variable-star index, via VizieR): variable type, period and range as `note`.
 - T52: CatWISE2020 (IRSA): sources red in W1-W2 (brown dwarfs) or with a significant proper motion,
   each moved from its own mean epoch.
@@ -22,6 +23,7 @@ import argparse
 import io
 import json
 import math
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -34,6 +36,11 @@ SIMBAD_TAP = (
 )
 GAIA_TAP = "https://gea.esac.esa.int/tap-server/tap"
 GAIA_MAX_G = 16.0
+# T141: ESA's Gaia TAP didn't answer from Mati's network all day (0 Gaia labels in every field, 15 s lost per field):
+# then the same catalogue from VizieR (positions also at J2016.0), and ESA isn't asked again for GAIA_TAP_PAUSE_S
+GAIA_VIZIER = "I/355/gaiadr3"
+GAIA_TAP_PAUSE_S = 600
+_gaia_tap_down_until = 0.0
 J2000_MJD, J2016_MJD = 51544.5, 57388.5
 TIMEOUT_S = 15  # per mirror; a hanging host must not eat the build (T38)
 VIZIER_ASU = ("https://vizier.cfa.harvard.edu/viz-bin/asu-tsv",   # CDS answered 'page unavailable' 2026-11-14
@@ -248,18 +255,47 @@ def simbad_labels(target: dict, grid: Grid) -> tuple[list[dict], dict | None]:
     return [], None
 
 
+def _gaia_vizier(c: dict, radius_deg: float) -> tuple[dict, dict]:
+    """T141: the ESA query's stars from VizieR's Gaia DR3 (I/355/gaiadr3), as the same {column: masked array}."""
+    import numpy as np
+    params = {"-source": GAIA_VIZIER, "-c": f"{c['ra_deg']:.6f} {c['dec_deg']:+.6f}", "-c.rd": f"{radius_deg:.5f}",
+              "-out": "Source,RA_ICRS,DE_ICRS,pmRA,pmDE,Gmag", "Gmag": f"<{GAIA_MAX_G}", "-sort": "Gmag",
+              "-out.max": str(GAIA_CAP * 3)}
+    rows, url = _asu(params)
+    def num(key):                                       # empty cells (no proper motion) -> masked
+        vals = (_float(r.get(key)) for r in rows)
+        return np.ma.masked_invalid(np.array([np.nan if v is None else v for v in vals], dtype=float))
+    cols = {"source_id": np.ma.asarray(np.array([int(r.get("Source") or 0) for r in rows], dtype=np.int64)),
+            "ra": num("RA_ICRS"), "dec": num("DE_ICRS"), "pmra": num("pmRA"), "pmdec": num("pmDE"),
+            "phot_g_mean_mag": num("Gmag")}
+    query = " ".join(f"{k}={v}" for k, v in params.items())
+    return cols, {"service": f"Gaia DR3 via VizieR {GAIA_VIZIER} " + url, "query": query, "retrieved_utc": _now(),
+                  "note": "ESA's Gaia TAP did not answer; the same catalogue from VizieR"}
+
+
 def gaia_labels(target: dict, grid: Grid) -> tuple[list[dict], dict | None]:
     import numpy as np
+    global _gaia_tap_down_until
     c = target["center"]
     adql = (f"SELECT TOP {GAIA_CAP * 3} source_id, ra, dec, pmra, pmdec, phot_g_mean_mag FROM gaiadr3.gaia_source WHERE "
             f"1 = CONTAINS(POINT(ra, dec), CIRCLE({c['ra_deg']}, {c['dec_deg']}, {grid.radius_deg:.5f})) "
             f"AND phot_g_mean_mag < {GAIA_MAX_G} ORDER BY phot_g_mean_mag")
-    try:
-        cols = _tap(GAIA_TAP, adql)
-    except Exception as e:
-        print("Gaia unavailable:", str(e)[:120])
-        return [], None
-    prov = {"service": "Gaia DR3 TAP (ESA) " + GAIA_TAP, "query": adql, "retrieved_utc": _now()}
+    cols = prov = None
+    errors = []
+    if time.monotonic() >= _gaia_tap_down_until:
+        try:
+            cols = _tap(GAIA_TAP, adql)
+            prov = {"service": "Gaia DR3 TAP (ESA) " + GAIA_TAP, "query": adql, "retrieved_utc": _now()}
+        except Exception as e:  # noqa: BLE001 - VizieR next
+            errors.append(f"ESA: {str(e)[:100]}")
+            _gaia_tap_down_until = time.monotonic() + GAIA_TAP_PAUSE_S
+    if cols is None:
+        try:
+            cols, prov = _gaia_vizier(c, grid.radius_deg)
+        except Exception as e:  # noqa: BLE001 - reported, the other catalogues still label the field
+            errors.append(f"VizieR: {str(e)[:100]}")
+            print("Gaia unavailable:", "; ".join(errors))
+            return [], None
     if not len(cols.get("source_id", [])):
         return [], prov
     ra, _ = _num(cols["ra"]); dec, _ = _num(cols["dec"])

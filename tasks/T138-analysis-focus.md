@@ -28,3 +28,14 @@ Validation: 11 Node suites pass (including extended field_focus_check and T139 b
   `loadObjects()` now call `refreshShown(fresh)` instead of `app.shownTarget = fresh; publishTarget(fresh)` (it also
   updates autoField and the running blink). If your "retain point selection across target/label refreshes" touches
   those lines, keep the refreshShown call; it still ends in publishTarget(fresh), so viewer:target fires as before.
+- 2026-11-15 [Mati] T141 (on Mati's word, Decision in TEAM.md), around your click selection:
+  - photometry.js hookMap: the 280 ms timer returns if `e.defaultPrevented`: a map ring (chemcands.js, outliers.js)
+    takes the click with preventDefault and opens the spectrum itself. Before, a ring click also built a field at the
+    ring and cleared the picture / lists (the ring handlers run after yours, so the pointerup check can't see it).
+  - app.js `explicitHere()`: while `app.analysisFocus` is set, its field also counts as here while its centre is
+    anywhere in view (`centreInView`), not only with the view centre within half a field. With the camera kept
+    (preserveView) and tile fields off during a focus, most clicks left only the survey passes blinking.
+  - Not changed: a click still builds a field centred there (your design). Mati's analysis noted the cost on his
+    8 GB machine (four overlapping 14′ fields from four clicks near Barnard's Star; no local cap on parallel builds);
+    a proposal follows separately.
+
