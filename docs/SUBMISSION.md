@@ -7,8 +7,9 @@ the challenge (`docs/CHALLENGE.md`) is answered under "How it answers the challe
 
 ## Still open before submitting (humans)
 
-1. **Project link = the deployed tool** (T14): its public URL goes into the form's "Project" field and into the
-   first line of "Project Details".
+1. **The deployed tool must answer at https://nasa.jbarkoczi.de/ before submitting** (T14; on 2026-11-15 ~20:30
+   CET the name had no DNS entry yet). Once it is up, open it once without login, check that the viewer shows there
+   (not only under `/web/`), and fix the URL below if the path differs.
 
 # Form section "Project Summary"
 
@@ -46,7 +47,7 @@ identical bytes.
 
 ## Project
 
-**OPEN:** the public URL of the deployed tool (T14).
+https://nasa.jbarkoczi.de/
 
 # Form section "Project Information"
 
@@ -55,7 +56,7 @@ identical bytes.
 Rich-text field. Paste from the rendered page (see Handoff in `tasks/T15-submission.md`) so headings, lists and bold
 survive.
 
-**Try it:** OPEN (the deployed tool's URL) · **Source code** (GNU GPL v3 or later):
+**Try it:** https://nasa.jbarkoczi.de/ · **Source code** (GNU GPL v3 or later):
 https://github.com/AraxTheCoder/nasa-challenge
 
 ### What it does
