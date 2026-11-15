@@ -35,7 +35,9 @@ def _build(tdir) -> dict | None:
         lock = _locks.setdefault(str(tdir), threading.Lock())
     with lock:
         if meta.is_file() and png.is_file() and meta.stat().st_mtime >= tj.stat().st_mtime:
-            return json.loads(meta.read_text(encoding="utf-8"))
+            cached = json.loads(meta.read_text(encoding="utf-8"))
+            if cached.get("version") == flags.MASK_VERSION:
+                return cached
         target = json.loads(tj.read_text(encoding="utf-8"))
         if target.get("synthetic"):
             return {"status": "no_data", "message": "synthetic target: there are no SPHEREx flags"}
@@ -43,7 +45,7 @@ def _build(tdir) -> dict | None:
         if not m["n_frames"]:
             return {"status": "no_data", "message": "none of the field's images could be read"}
         Image.fromarray(m["rgba"], "RGBA").save(png, "PNG")
-        out = {"status": "ready", "n_frames": m["n_frames"], "bad_fraction": round(m["bad_fraction"], 4),
+        out = {"status": "ready", "version": flags.MASK_VERSION, "n_frames": m["n_frames"], "bad_fraction": round(m["bad_fraction"], 4),
                "counts": m["counts"], "min_share": flags.MIN_SHARE, "image": "flags.png",
                "meanings": {n: {"kind": flags.NAMES[n][1], "meaning": flags.NAMES[n][2]} for n in m["counts"]}}
         meta.write_text(json.dumps(out), encoding="utf-8")
