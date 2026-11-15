@@ -1,5 +1,5 @@
 // SPHEREx Blink: page controller. T124: the sky map stays behind the page; everything floats over it.
-//  - First screen: the map with its panels (hud.js). "Go" moves the map to the typed RA/Dec and pins it
+//  - First screen: the map with its panels (hud.js). "Go" centres/pins the typed RA/Dec and selects its analysis
 //    (cursorpin.js). Blinking starts by itself: from level 6 the survey passes (autoblink.js), at level 7
 //    resting on one HiPS order-6 tile builds that tile's field quietly and blinks its epochs; the band slider
 //    and "False colour" apply to all of it. "Build field" asks for a field of a chosen size.
@@ -23,7 +23,7 @@ import { $, el, fmtElapsed } from "./util.js";
 import { checkTarget, clearTarget, initViewer, showTarget, stopBlink } from "./viewer.js";
 import { initObjects } from "./objects.js";
 import { initDiff } from "./diff.js";
-import { initPhotometry } from "./photometry.js";
+import { initPhotometry, openSpectrum } from "./photometry.js";
 import "./mapframes.js"; // T81: the frame viewer's A/B, blink, play and A − B drive the map
 import "./outliers.js";  // T86: sources in the field with unusual spectra
 import "./tour.js";      // T92: guided tour of the official targets ("▶ Tour", ?tour=1)
@@ -79,6 +79,7 @@ const app = {
   jobTimer: null,
   shownTarget: null,
   shownTargetUrl: null,
+  analysisFocus: null,  // selected point/region; automatic tile builds cannot replace it
   goal: null,        // T55 Go: {ra, dec, fovDeg}
   goalPending: false,
   manualMap: false,  // T90: the frame tools (or another base map) drive the map; automatic blinking waits
@@ -142,13 +143,13 @@ function publishTarget(target) {
   document.title = `${target.name ?? target.id} · SPHEREx Blink`;
 }
 
-async function openTarget(targetUrl, expectedId, token, signal, autoKey = null) {
+async function openTarget(targetUrl, expectedId, token, signal, autoKey = null, preserveView = false) {
   const target = await fetchJson(targetUrl, signal);
   if (token !== app.loadToken) return;
   if (autoKey) {
     autoField.ready.set(autoKey, target);
     // A completed background build is useful in cache, but cannot take over a different view/tool.
-    if (fieldKey() !== autoKey || app.manualMap || explicitHere()) {
+    if (app.analysisFocus || fieldKey() !== autoKey || app.manualMap || explicitHere()) {
       if (autoField.building === autoKey) autoField.building = null;
       showBlinkStatus();
       return;
@@ -158,7 +159,7 @@ async function openTarget(targetUrl, expectedId, token, signal, autoKey = null) 
   app.shownTargetUrl = targetUrl;
   app.shownTarget = target;
   publishTarget(target);
-  syncExplore(target, autoKey);
+  syncExplore(target, autoKey, preserveView);
   if (app.labelsOn && !target.labels_requested) setLabels(true);
   loadObjects(target);
   checkUpdates(target);
@@ -250,7 +251,11 @@ function loadFromUrl() {
 
 /** Build (or fetch the cached) field req. quiet (T55 automatic builds): no progress panel, no error popup:
  *  progress and errors go to the blink indicator instead. */
-async function loadField(req, { quiet = false, autoKey = null } = {}) {
+async function loadField(req, { quiet = false, autoKey = null, preserveView = false, keepFocus = false } = {}) {
+  if (!quiet && !keepFocus) {
+    app.analysisFocus = null;
+    document.dispatchEvent(new CustomEvent("analysis:clear"));
+  }
   const { token, signal } = beginLoad({ quiet });
   if (!quiet) stopBlink();
   $("#empty-default").hidden = true;
@@ -270,7 +275,7 @@ async function loadField(req, { quiet = false, autoKey = null } = {}) {
     };
     const { id, targetUrl } = await requestField(app.api, req, { onProgress, signal });
     if (token !== app.loadToken) return;
-    await openTarget(targetUrl, id, token, signal, autoKey);
+    await openTarget(targetUrl, id, token, signal, autoKey, preserveView);
   } catch (err) {
     if (err.name === "AbortError" || token !== app.loadToken) return;
     if (quiet) {
@@ -399,7 +404,7 @@ function surprise() {
   onPresetPicked();
 }
 
-/** A quick pick: on the map go there (jump + pin; the blink comes by itself), without the map build its field. */
+/** A quick pick centres the map and selects that position for spectrum/region analysis. */
 function onPresetPicked() {
   const f = app.presets[Number($("#preset").value)];
   if (!f) return;
@@ -408,14 +413,14 @@ function onPresetPicked() {
   if (app.noMap) {
     setPageUrl(req, true, true);
     loadField(req);
-  } else if (goTo(req)) setPageUrl(req, true, false);
+  } else if (goTo(req) && !app.analysisFocus) setPageUrl(req, true, true);
 }
 
-/** The Go button, and Enter in RA / Dec while the map is there: jump + pin only. */
+/** Go centres/pins the position and selects its spectrum and analysis region. */
 function onGo() {
   const req = readForm();
   if (!req.ra || !req.dec) return;
-  if (goTo(req)) setPageUrl(req, true, false);
+  if (goTo(req) && !app.analysisFocus) setPageUrl(req, true, true);
 }
 
 async function showApiStatus(fieldRequested) {
@@ -432,7 +437,7 @@ async function showApiStatus(fieldRequested) {
   }
 }
 
-// ---------- T55 "Go": centre the position, zoomed all the way in, 📍 on it (no build) ----------
+// ---------- Go: centre/pin the position and select its analysis region ----------
 
 const GO_ORDER = 7;            // deepest live HiPS order (3.2″ texels): Go zooms to where it is sharp
 
@@ -451,6 +456,8 @@ function goTo(req, opts = {}) {
     return false;
   }
   clearMessages();
+  app.analysisFocus = null;
+  document.dispatchEvent(new CustomEvent("analysis:clear"));
   app.goal = { ra, dec, fovDeg: opts.fovDeg ?? null };
   app.goalPending = !explore.getSky();                   // then startExplore shows it once the map is up
   if (!app.goalPending) showGoal();
@@ -462,14 +469,33 @@ function showGoal() {
   const g = app.goal;
   if (!g) return;
   explore.goTo(g.ra, g.dec, g.fovDeg ?? explore.fovForOrder(GO_ORDER) ?? undefined);
-  pinAt(g.ra, g.dec);                                     // 📍 + RA/Dec on the position, fades after 5 s
+  pinAt(g.ra, g.dec);
+  openSpectrum(g.ra, g.dec, null, { focusRegion: true });
 }
 
-/** 📍 button: pick a position on the map. The picked spot goes into the form and the URL (like Go). */
-function onPicked(ra, dec) {
-  const req = { ra: ra.toFixed(4), dec: dec.toFixed(4) };
+/** Point selection: the spectrum and region tools refer to the same sky position. */
+function focusAnalysis(ra, dec) {
+  if (app.dataRoot || !Number.isFinite(ra) || !Number.isFinite(dec) || dec < -90 || dec > 90) return;
+  const req = { ra: (((ra % 360) + 360) % 360).toFixed(5), dec: dec.toFixed(5), size: readForm().size };
+  const key = `${req.ra}|${req.dec}|${req.size}`;
+  if (app.analysisFocus?.key === key && (app.explicitLoading || app.shownTarget)) return;
+  app.analysisFocus = { key, ra: Number(req.ra), dec: Number(req.dec), size: req.size };
+  clearTimeout(autoField.timer);
+  autoField.explicit = null;
+  app.shownTarget = null;
+  app.shownTargetUrl = null;
+  publishTarget(null);  // no old chemistry/outlier results while the selected region builds
+  explore.hideOverlay();
+  setManual(false);
+  passes.setMode("passes");
   fillForm(req);
-  setPageUrl(req, true, false);
+  setPageUrl(req, true, true);
+  loadField(req, { preserveView: true, keepFocus: true });
+}
+
+/** 📍 picks follow the same analysis path as a direct map click. */
+function onPicked(ra, dec) {
+  openSpectrum(ra, dec, null, { focusRegion: true });
 }
 
 // ---------- offline mode ----------
@@ -554,7 +580,7 @@ function bindPage() {
     setPageUrl(req, true, true);
     loadField(req);
   });
-  // Go, and Enter in RA / Dec on the map: jump + pin only; the blink comes by itself. (Enter in the field-of-view
+  // Go, and Enter in RA / Dec on the map: centre, pin and select the analysis region. (Enter in the field-of-view
   // box, the Build field button, and Enter anywhere without the map submit the form: build.)
   $("#go-btn").addEventListener("click", onGo);
   $("#field-form").addEventListener("keydown", (e) => {
@@ -630,6 +656,8 @@ function bindPage() {
       clearMessages();
       app.shownTarget = null;
       app.shownTargetUrl = null;
+      app.analysisFocus = null;
+      document.dispatchEvent(new CustomEvent("analysis:clear"));
       clearTarget();
       fillDefaults();
     }
@@ -650,7 +678,7 @@ function setManual(on) {
 
 /** A field arrived: an automatic one (tile build) is remembered for its tile + band; one asked for
  *  explicitly (Build field, a link) moves the map there and is outlined. */
-function syncExplore(target, autoKey = null) {
+function syncExplore(target, autoKey = null, preserveView = false) {
   app.shownTarget = target;
   const c = target?.center;
   if (!c) return;
@@ -659,7 +687,7 @@ function syncExplore(target, autoKey = null) {
     if (autoField.building === autoKey) autoField.building = null;
   } else if (!app.dataRoot) {
     autoField.explicit = target;
-    explore.goTo(c.ra_deg, c.dec_deg, Math.max(0.25, (target.size_arcmin * 3) / 60));
+    if (!preserveView) explore.goTo(c.ra_deg, c.dec_deg, Math.max(0.25, (target.size_arcmin * 3) / 60));
     explore.markField(c.ra_deg, c.dec_deg, target.size_arcmin);
   }
   if (app.dataRoot) return;
@@ -846,7 +874,7 @@ function decideSource() {
   // T115: the asked-for field first while the view is on it. A field built earlier for the same tile (the default
   // view's tile at Barnard's Star is always built first) replaced it at once: the tour's first stop and a link
   // to Barnard's Star showed the 86' tile field
-  const ready = explicitHere() || (key && autoField.ready.get(key));
+  const ready = explicitHere() || (!app.analysisFocus && key && autoField.ready.get(key));
   if (ready && ready !== app.shownTarget) {               // a field built earlier for this tile + band: show it
     app.shownTarget = ready;
     app.shownTargetUrl = new URL(`/api/targets/${encodeURIComponent(ready.id)}/target.json`, app.api).href;
@@ -861,7 +889,7 @@ function decideSource() {
   if (moved) {
     clearTimeout(autoField.timer);
     autoField.error = null;
-    if (key && !ready && autoField.building !== key) {
+    if (key && !ready && !app.analysisFocus && autoField.building !== key) {
       autoField.timer = setTimeout(() => buildTile(key), AUTO_BUILD_MS);
     }
   }
@@ -869,7 +897,7 @@ function decideSource() {
 }
 
 function buildTile(key) {
-  if (fieldKey() !== key || app.manualMap) return;
+  if (fieldKey() !== key || app.manualMap || app.analysisFocus) return;
   if (app.explicitLoading) { autoField.key = null; return; }   // T111: asked-for field first; decided again on arrival
   const [pix, variant] = key.split("|");
   const req = { ...tileField(Number(pix)), auto: true, detector: Number(variant.slice(1)) };
@@ -1157,6 +1185,10 @@ async function main() {
   initObjects();
   initDiff();
   initPhotometry();
+  document.addEventListener("analysis:position", (e) => {
+    const { ra, dec } = e.detail ?? {};
+    focusAnalysis(ra, dec);
+  });
   initLamPick();
   initStack();
   bindPage();

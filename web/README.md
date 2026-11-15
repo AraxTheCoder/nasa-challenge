@@ -117,3 +117,11 @@ By default the page shows only the explore map: the field's epochs, traces and n
 and a click anywhere gives that point's spectrum and light curve (T79). The frame viewer (frame image,
 blink A/B, A − B, play, wavelength filter, timeline, frame panels) is still in the code: add `?frames=1`
 to the URL. Offline folders (`?data=`) and `?explore=0` show it automatically.
+
+
+Map selection (T138): clicking the map, picking with 📍, Go or a preset selects a point spectrum and a field
+centred there, using the form's field size (all bands). Direct clicks preserve the camera; Go centres it.
+Old field results clear while the new field loads. The selected point survives label/target refreshes and
+panning; automatic tile builds do not replace the selected analysis. A new selection/region replaces it.
+Named-source links in existing analysis lists open the point spectrum while keeping their field context.
+The Unusual spectra comparison still starts through its own control.

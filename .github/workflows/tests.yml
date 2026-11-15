@@ -47,6 +47,7 @@ jobs:
         run: |
           python web/tests/browser_test.py browser-test-out
           python web/tests/analysis_browser_test.py browser-test-out
+          python web/tests/selection_browser_test.py browser-test-out
           python web/tests/community_browser_test.py
 
       - name: Screenshots of the browser test

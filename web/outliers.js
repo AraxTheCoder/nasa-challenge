@@ -337,6 +337,9 @@ function render() {
   const body = $("#ol-body");
   if (!d) return;
   const parts = [];
+  const c = st.target?.center;
+  if (c) parts.push(el("p", { id: "ol-scope", class: "small muted" },
+    `Region: RA ${fmtNum(c.ra_deg, 4)}°, Dec ${fmtNum(c.dec_deg, 4)}° · ${st.target.size_arcmin ?? "?"}′`));
   if (d.status === "not_started") {
     const go = el("button", { type: "button" }, "Analyse sources: spectra + chemistry profiles");
     go.addEventListener("click", () => load(true));
@@ -555,7 +558,7 @@ function hookMap() {
   box.addEventListener("pointerup", (e) => {
     const d0 = down;
     down = null;
-    if (!st.mapOn || !d0 || Math.hypot(e.clientX - d0.x, e.clientY - d0.y) > 4 || !st.placed.length) return;
+    if (e.defaultPrevented || !st.mapOn || !d0 || Math.hypot(e.clientX - d0.x, e.clientY - d0.y) > 4 || !st.placed.length) return;
     const r = box.getBoundingClientRect();
     const x = e.clientX - r.left, y = e.clientY - r.top;
     let best = null, bd = Infinity;

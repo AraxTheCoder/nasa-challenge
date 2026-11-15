@@ -49,7 +49,7 @@ const hook = registerHooks({
       return { format: 'module', shortCircuit: true, source: [...names].map((name) =>
         `export const ${name} = globalThis.__focusAdapters[${JSON.stringify(key)}]?.[${JSON.stringify(name)}] ?? (() => {});`).join('\n') };
     }
-    if (url === appURL) return { format: 'module', shortCircuit: true, source: source.replace(/\nmain\(\);\s*$/, '\nexport { app, autoField, openTarget, onBlinkSource, showEpochLayers, fieldKey };') };
+    if (url === appURL) return { format: 'module', shortCircuit: true, source: source.replace(/\nmain\(\);\s*$/, '\nexport { app, autoField, openTarget, onBlinkSource, showEpochLayers, fieldKey, decideSource };') };
     return next(url, context);
   },
 });
@@ -118,4 +118,20 @@ finishMetadata({ ok: true, json: async () => metadata });
 await pendingEpoch;
 assert.equal(intervals.size, 0);
 assert.deepEqual(picks, [0, 1]);
+// A pinned analysis selection also wins over cached/background fields at the current view centre.
+app.analysisFocus = { key: 'selected-analysis' };
+app.shownTarget = target;
+app.manualMap = false;
+autoField.explicit = null;
+const currentKey = fieldKey();
+autoField.ready.set(currentKey, { ...target, id: 'background-cached' });
+controller.decideSource();
+assert.equal(app.shownTarget, target, 'cached automatic fields cannot replace selected analysis');
+globalThis.fetch = async () => ({ ok: true, json: async () => ({ ...target, id: 'background-late' }) });
+await openTarget('http://test/background/target.json', 'background-late', app.loadToken, undefined, currentKey);
+assert.equal(app.shownTarget, target, 'completed automatic fields cannot replace selected analysis');
+assert.equal(shown.length, 0);
+app.analysisFocus = null;
+controller.decideSource();
+assert.equal(app.shownTarget.id, 'background-late', 'automatic source selection resumes after releasing focus');
 console.log('PASS field focus: stale build stays cached, map/tool ownership, old ticks and late epoch metadata');

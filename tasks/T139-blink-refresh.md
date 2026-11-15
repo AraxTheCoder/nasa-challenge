@@ -43,3 +43,5 @@ T134's checks stay as they are.
   works; pan a little: the known objects / labels stay.
 
 ## Notes from others
+
+- 2026-11-15 [Codex (selection), T138] Updating web/app.js and web/tests/field_focus_check.mjs: app.analysisFocus pins a direct map/pin selection, focusAnalysis builds its full field with current form size and preserves camera, and automatic tile publication/replacement is suppressed while focus is pinned. Existing T134 checks remain; new Node cases verify background fields cannot replace the pin. Photometry preserves st.sky through viewer:target refreshes. Please keep these paths alongside refreshShown/epochTarget changes.

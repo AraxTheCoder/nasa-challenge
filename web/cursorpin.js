@@ -106,6 +106,7 @@ export function initCursorPin(opts = {}) {
     const r = skyRect();
     const sky = explore.skyAt(e.clientX - r.left, e.clientY - r.top);
     if (!sky) return;
+    e.preventDefault();  // handled pick; the point-spectrum click handler must not select it twice
     pinAt(sky[0], sky[1]);
     st.onPick?.(sky[0], sky[1]);
   }, true);

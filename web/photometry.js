@@ -392,10 +392,10 @@ function measureAtStage(e) {
 }
 
 /** T86: open the spectrum of a named source (e.g. from the unusual-spectra list), same as a map click there. */
-export function openSpectrum(ra, dec, name) { return loadSky(ra, dec, name); }
+export function openSpectrum(ra, dec, name, options = {}) { return loadSky(ra, dec, name, options); }
 
 /** T79: a click on the map: every exposure at that sky point, no field needed. */
-async function loadSky(ra, dec, name = null) {
+async function loadSky(ra, dec, name = null, { focusRegion = false } = {}) {
   const api = getApiBase();
   if (!api) return;
   const token = ++st.token;
@@ -409,6 +409,7 @@ async function loadSky(ra, dec, name = null) {
   $("#ph-body").replaceChildren(el("p", { class: "muted small" },
     `Measuring every SPHEREx exposure at RA ${fmtNum(ra, 4)}°, Dec ${fmtNum(dec, 4)}° (the first time takes ~15-30 s)…`));
   $("#ph-status").textContent = "measuring…";
+  if (focusRegion) document.dispatchEvent(new CustomEvent("analysis:position", { detail: { ra, dec } }));
   $("#photometry").scrollIntoView({ block: "nearest", behavior: "smooth" });
   await loadAll(`${api.replace(/\/$/, "")}/api/photometry?ra=${ra.toFixed(5)}&dec=${dec.toFixed(5)}`, token);
 }
@@ -434,23 +435,25 @@ function hookMap() {
   box.dataset.phClick = "1";
   let proj = null, down = null, timer = null;
   sky.addDrawHook((ctx, p) => { proj = p; mapMarker(ctx, p); });
-  box.addEventListener("pointerdown", (e) => { down = e.isPrimary ? { x: e.clientX, y: e.clientY } : null; });
+  box.addEventListener("pointerdown", (e) => { clearTimeout(timer); down = e.isPrimary && e.button === 0 ? { x: e.clientX, y: e.clientY } : null; });
   box.addEventListener("pointerup", (e) => {
     const d = down;
     down = null;
-    if (!d || !proj || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
+    if (e.defaultPrevented || !d || !proj || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
     if (e.target.closest?.("button, a, input, select, label, .paths-tip")) return;
     clearTimeout(timer);
     const canvas = box.querySelector("canvas") ?? box;
     const r = canvas.getBoundingClientRect();
     const px = e.clientX - r.left, py = e.clientY - r.top;
+    // Resolve the sky position now; a later pan must not change what this click selected.
+    const snap = nearestLabel(px, py);
+    const pos = snap ? [snap.ra_deg, snap.dec_deg] : proj.fromScreen(px, py);
     timer = setTimeout(() => {
-      const snap = nearestLabel(px, py);   // a labelled dot within a few px wins
-      const pos = snap ? [snap.ra_deg, snap.dec_deg] : proj.fromScreen(px, py);
-      if (pos) loadSky(((pos[0] % 360) + 360) % 360, pos[1]);
+      if (pos) loadSky(((pos[0] % 360) + 360) % 360, pos[1], snap?.name ?? null, { focusRegion: true });
     }, 280);
   });
   box.addEventListener("dblclick", () => clearTimeout(timer));
+  box.addEventListener("pointercancel", () => { down = null; clearTimeout(timer); });
 }
 
 function setMeasuring(on) {
@@ -463,7 +466,7 @@ function setMeasuring(on) {
 
 export function initPhotometry() {
   $("#ph-measure").addEventListener("click", () => setMeasuring(!st.measuring));
-  $("#ph-centre").addEventListener("click", () => { st.pos = null; drawMarker(); load(); });
+  $("#ph-centre").addEventListener("click", () => { st.pos = null; st.sky = null; placePanel(false); drawMarker(); getSky()?.redraw(); load(); });
   $("#ph-catcher").addEventListener("click", measureAtStage);
   // T79: a plain click on the image measures too; clicks on labels/paths keep opening the inspector.
   $("#stage").addEventListener("click", (e) => {
@@ -473,8 +476,18 @@ export function initPhotometry() {
   document.addEventListener("explore:ready", hookMap);
   hookMap();
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && st.measuring) setMeasuring(false); });
+  document.addEventListener("analysis:clear", () => {
+    ++st.token;
+    st.sky = null;
+    st.pos = null;
+    st.data = null;
+    $("#photometry").hidden = true;
+    getSky()?.redraw();
+  });
   document.addEventListener("viewer:target", (e) => {
     st.target = e.detail?.target ?? null;
+    // A point spectrum is independent of field epochs and catalogue-label refreshes.
+    if (st.sky) { getSky()?.redraw(); if (st.data) render(); return; }
     st.pos = null;
     st.sky = null;
     placePanel(false);
@@ -493,4 +506,4 @@ export function initPhotometry() {
 }
 
 // for web/tests and the console: open the spectrum panel at a sky position, as a map click there would
-globalThis.spherexSpectrumAt = (ra, dec, name = null) => loadSky(ra, dec, name);
+globalThis.spherexSpectrumAt = (ra, dec, name = null) => loadSky(ra, dec, name, { focusRegion: true });

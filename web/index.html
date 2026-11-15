@@ -23,7 +23,7 @@
     <div id="sky" class="sky-stage" aria-label="Sky map: drag to move, scroll or pinch to zoom, double-click to zoom in"></div>
 
     <div class="hud-dock">
-      <!-- where: one form. Go moves the map (no build); Build field asks the Live API for that field. -->
+      <!-- Go centres the map and selects the analysis position; Build field uses the chosen field size. -->
       <div class="hud" data-hud="field">
         <header class="hud-panel search">
           <form id="field-form" class="field-form" autocomplete="off" aria-describedby="form-tip-text">
@@ -31,9 +31,9 @@
               <input name="ra" type="text" required placeholder="08h55m10.8s or 133.795" spellcheck="false"></label>
             <label title="Declination: decimal degrees (-7.245) or -7d14m42.5s, -07:14:42.5">Dec
               <input name="dec" type="text" required placeholder="-7d14m42.5s or -7.245" spellcheck="false"></label>
-            <button type="button" id="go-btn" class="primary" title="Centre the map on this position, zoomed in fully">Go</button>
+            <button type="button" id="go-btn" class="primary" title="Centre the map and analyse this position">Go</button>
             <button type="button" id="pin-btn" aria-pressed="false"
-                    title="Pick a position on the map: the 📍 follows the mouse, a click takes the spot (Esc cancels)">📍</button>
+                    title="Pick a position for spectrum and region analysis (Esc cancels)">📍</button>
             <select id="preset" aria-label="Test fields" title="The five test fields named in the challenge, and more fields where something moves" hidden>
               <option value="">Test fields…</option>
             </select>
