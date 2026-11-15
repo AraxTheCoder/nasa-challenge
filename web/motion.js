@@ -9,10 +9,14 @@ import { currentTarget, targetBase } from "./viewer.js";
 // The server decides whether the clicked spot is a moving catalogued star (≥ 0.3″/yr, within 8″): the viewer's
 // copy of the field doesn't always carry its labels (they come on request). 404 "none" = no box.
 const cache = new Map();          // `${target id}|${ra}|${dec}` -> answer
-let autoStart = false;            // the next box measures right away instead of offering a button (the tour)
+// The next boxes measure right away instead of offering a button (the tour). T118: a deadline, not a one-shot
+// flag: the spectrum panel re-renders while its spectrum loads and every render makes a new box; with a one-shot
+// flag a later box asked with start=0 before the job existed, showed the button and stopped polling.
+let autoUntil = 0;
+const AUTO_MS = 60000;
 
-/** The next motion box starts measuring by itself (T92: the tour's "Measure its speed"). */
-export function measureNext() { autoStart = true; }
+/** The next motion boxes (for a minute, until one sees the job) start measuring by themselves (T92: the tour). */
+export function measureNext() { autoUntil = Date.now() + AUTO_MS; }
 
 const COMPASS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
 const dir = (pa) => COMPASS[Math.round(((pa % 360) + 360) % 360 / 45) % 8];
@@ -48,6 +52,7 @@ async function fetchMotion(where, start, box, token) {
     if (!r) { box.remove(); return; }
     const label = { name: (r.name ?? "this star").replace(/^\* /, ""), pm_mas_yr: r.catalogue_pm_mas_yr };
     if (r.status !== "building" && r.status !== "not_started") cache.set(key, r);
+    if (start && (r.status === "building" || r.status === "ready")) autoUntil = 0;   // T118: the job is on its way
     box.hidden = false;
     fill(box, label, r, where);
     if (r.status !== "building") return;
@@ -82,8 +87,7 @@ export function motionBox(ra, dec) {
   if (hit) fill(box, { name: (hit.name ?? "this star").replace(/^\* /, "") }, hit, where);
   else {
     box.hidden = true;                                   // shown once the server says it's a moving star
-    fetchMotion(where, autoStart, box, box.dataset.token);
-    autoStart = false;
+    fetchMotion(where, Date.now() < autoUntil, box, box.dataset.token);
   }
   return box;
 }
