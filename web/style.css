@@ -526,6 +526,9 @@ body.map-only #ph-measure { display: none !important; }
 .chem-list .chem-row:has(input:disabled) { opacity: 0.5; }
 .chem-list p { order: -1; margin: 0 0 4px; white-space: normal; }
 .chem-line { display: block; margin: 2px 0; }
+/* T103: the open list must lie over the legend below it (#chem-note is a later glass card: its backdrop
+   filter makes a stacking context of its own, so the list's z-index alone did not help) */
+.hud-panel:has(.chem-pick[open]) { position: relative; z-index: 30; }
 /* T92: guided tour */
 .tour-start { position: absolute; top: 12px; right: 12px; z-index: 7; background: rgb(15 26 43 / 0.8); color: var(--text);
   border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-weight: 600;
