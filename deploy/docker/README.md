@@ -16,10 +16,13 @@ Viewer and API share one origin, so `web/api.js` uses `location.origin` as the A
 | Limits | `--public`: per-IP rates (client IP = first `X-Forwarded-For` entry), 4 jobs at once, cache cap 12 GB + 5 GB disk kept free |
 | Admin token | `SPHEREX_ADMIN_TOKEN` in `deploy/docker/.env` (gitignored; needed for `refresh=1` and `POST /api/settings`) |
 
+**Update to the latest main:** `deploy/docker/upgrade.sh` (from anywhere). It pulls main, rebuilds the API image only
+when `requirements.lock` / the Dockerfile changed, restarts the API (and nginx when `nginx.conf` changed), and waits
+until the API answers. web/ changes are live right after the pull (no-cache + ETag).
+
 ```
 cd deploy/docker
 docker compose up -d --build          # first start; containers restart by themselves after a reboot
-git pull && docker compose restart api   # deploy new code (web/ changes are live at once: no-cache + ETag)
 docker compose up -d --build          # after requirements.lock changed
 docker compose logs -f api            # API log
 docker compose down                   # stop
