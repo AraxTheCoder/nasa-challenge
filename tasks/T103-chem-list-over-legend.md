@@ -1,6 +1,6 @@
 # T103: Chemistry list hidden under its own legend
 
-- **Owner:** Mati  ·  **Status:** review (not yet seen in a browser)
+- **Owner:** Mati  ·  **Status:** done (seen in a browser by Joerg's session, 2026-11-15)
 - **Branch:** `main`
 - **Depends on / feeds:** T93 / T96
 
