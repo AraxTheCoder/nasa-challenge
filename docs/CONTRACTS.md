@@ -1,4 +1,7 @@
-# Contracts (v0.29)
+# Contracts (v0.30)
+
+v0.30 (T06): detections may carry `evidence` (how often seen, where absent, S/N); `detect.run` now fills
+`detections` from the field's cached SPHEREx images (`detect.movers`). Additive.
 
 v0.29 (T60): `GET /api/targets/<id>/flags` and `flags.png`: where in a field SPHEREx's quality flags make the
 data unreliable, as a summary and an RGBA overlay on the field grid. New endpoints only. See "Quality flags".
@@ -300,6 +303,10 @@ from the geocentre.
 - `synthetic`: `true` if the source was injected by us. Must be shown in the UI.
 - `score`: 0–1, higher is more convincing.
 - `motion.pa_deg`: direction of motion, degrees east of north.
+- `evidence` (v0.30, optional, written by `detect.movers`, T06): `{moments, images, absent_in, sn}`: at how many
+  moments it was seen, in how many images, in how many images of the same spot at other times it was *not*
+  there (same detector), and its best signal-to-noise. `detect.classify` uses it: one moment, both
+  simultaneous detectors, absent otherwise = `unknown` with a low score (no motion measured yet).
 - `reason` (v0.9, optional): one plain-words sentence why the detection got its status, e.g.
   "follows (4) Vesta (JPL) within 0.4 px on 3 frame(s)" or "seen in one frame only". Shown in the UI.
 - Pipeline for detections: T06 finds tracks → `detect.known_objects` (T07/T51: asteroids from a local copy
@@ -319,7 +326,8 @@ python -m pipeline.labels <target_dir>                   # T19: SIMBAD + Gaia la
 python -m pipeline.photometry <target_dir> --ra <deg> --dec <deg>   # T49: fluxes in every frame
 python -m pipeline.stack <target_dir> [--object <id|name>]          # T23: shift-and-stack image
 python -m pipeline.mirror harvest|build|find             # T31: local SPHEREx image index
-python -m detect.run <target_dir> [--vmag 20]            # T51: known objects + classify (+ T06 later)
+python -m detect.run <target_dir> [--vmag 20]            # T51: movers (T06) + known objects + classify
+python -m detect.movers <target_dir>                     # T06: what the mover search finds (prints, writes nothing)
 python -m detect.known_objects <target_dir> [--vmag 20]  # T07: known asteroids/comets
 python -m detect.classify <target_dir>                   # T08: status/score/reason per detection
 python web/warm.py [--only <name>] [--refresh]           # T05: pre-build the official test fields

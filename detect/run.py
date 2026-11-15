@@ -2,12 +2,13 @@
 
     python -m detect.run data/targets/<id>        # updates target.json in place
 
-1. Mover detection (T06, not yet): finds tracks -> `detections`.
+1. Mover detection (T06, `detect.movers`): finds tracks in the field's cached SPHEREx images -> `detections`.
 2. JPL known objects (T07): catalogued asteroids and comets in the field -> `known_objects`.
 3. Classification (T08): known / unknown / artifact per detection; only when there are detections.
 
-Until T06 exists, no provenance entry is named "detect", so the viewer keeps saying "Mover detection
-has not run" and lists the known objects as catalogued, not as missed detections. A failed JPL
+Without cached SPHEREx images (old or copied fields) the mover search is skipped and no provenance entry
+is named "detect", so the viewer keeps saying "Mover detection has not run" and lists the known objects as
+catalogued, not as missed detections. A failed mover search or JPL
 lookup never fails the build: `known_objects` stays empty and the error goes into provenance.
 """
 from __future__ import annotations
@@ -20,6 +21,7 @@ from pathlib import Path
 
 from .classify import classify_detections
 from .known_objects import DEFAULT_VMAG, Jpl, add_known_objects
+from .movers import find_movers
 
 
 def _now() -> str:
@@ -31,7 +33,12 @@ def detect_target(target: dict, jpl: Jpl | None = None, vmag_lim: float = DEFAUL
     if target.get("synthetic"):
         return target  # the fixture already carries its synthetic objects
 
-    # 1. T06 (Jonathan): find tracks here and put them into target["detections"].
+    try:                                             # 1. T06: tracks from the field's SPHEREx images
+        find_movers(target)
+    except Exception as e:  # noqa: BLE001 - detection is an extra: the field is still worth showing
+        target["detections"] = []
+        target.setdefault("provenance", []).append({
+            "service": "mover search (T06) failed", "query": f"{type(e).__name__}: {e}"[:500], "retrieved_utc": _now()})
 
     try:
         add_known_objects(target, jpl, vmag_lim)
