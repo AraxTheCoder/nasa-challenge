@@ -30,9 +30,10 @@ can inspect. Volunteers comparing images in this way have already found most kno
 
 ## Link to project demo
 
-<https://cdn.jsdelivr.net/gh/AraxTheCoder/nasa-challenge@d901d0b4d890120b0b9de85ed95056c172eed3b4/docs/demo/spherex-blink-demo-30s.mp4>
+<https://cdn.jsdelivr.net/gh/AraxTheCoder/nasa-challenge@725e92de1f5096d53af127496fad0ee5df47f2c9/docs/demo/spherex-blink-demo-30s.mp4>
 
-The 30-second video (1920×1080, sound AI-generated and marked in the video) plays in the browser. It is
+The 30-second video (1920×1080; picture and sound AI-generated, marked "AI-generated video and audio" for its
+whole length) plays in the browser. It is
 `docs/demo/spherex-blink-demo-30s.mp4` in the repository, served by jsDelivr from the public GitHub repository and
 pinned to one commit, so the link never changes. Checked 2026-11-15: HTTP 200, `video/mp4`, identical bytes.
 
@@ -227,8 +228,8 @@ the results and checked them on real data in the browser.
 
 The tool contains no AI-generated images, video or audio. Every image it shows is computed from SPHEREx data or
 from the other surveys named above. The only simulated data are two small test fields, labelled "synthetic" in
-the data and with a badge and watermark in the viewer. The demo video shows screen recordings of the tool; its
-sound is AI-generated, and the video says so with a visible mark ("Audio: AI-generated").
+the data and with a badge and watermark in the viewer. The demo video, picture and sound, is AI-generated;
+it says so with a visible mark for its whole length ("AI-generated video and audio").
 
 ## Team
 
