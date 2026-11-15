@@ -9,8 +9,6 @@ the challenge (`docs/CHALLENGE.md`) is answered under "How it answers the challe
 
 1. **Project link = the deployed tool** (T14): its public URL goes into the form's "Project" field and into the
    first line of "Project Details".
-2. **The AI tool that made the demo video and its sound**: its name and link go into the last row of "Space Agency
-   Partner & Other Data".
 
 # Form section "Project Summary"
 
@@ -260,6 +258,9 @@ What each is used for: "Project Details" and `README.md`, "Data credits" (acknow
 
 # Form section "Space Agency Partner & Other Data" (Link Text → Link Url)
 
+Data sources only (Mati's choice, 2026-11-15). Software and AI tools are named in "Project Details" (Tools,
+languages and hardware) and "Use of AI"; the full pinned library list is `requirements.lock` in the repository.
+
 | Link Text | Link Url |
 |---|---|
 | Gaia Data Release 3 (ESA) | https://www.cosmos.esa.int/web/gaia/dr3 |
@@ -269,30 +270,8 @@ What each is used for: "Project Details" and `README.md`, "Data credits" (acknow
 | HiPS sky-map standard (IVOA; CDS SPHEREx maps per detector) | https://www.ivoa.net/documents/HiPS/ |
 | Minor Planet Center orbit catalogue (MPCORB) | https://minorplanetcenter.net/iau/MPCORB.html |
 | IMCCE SkyBoT | https://ssp.imcce.fr/webservices/skybot/ |
-| Astropy | https://www.astropy.org/ |
-| astropy-healpix | https://github.com/astropy/astropy-healpix |
-| reproject | https://reproject.readthedocs.io/ |
-| PyVO | https://pyvo.readthedocs.io/ |
-| NumPy | https://numpy.org/ |
-| SciPy | https://scipy.org/ |
-| Pillow | https://python-pillow.org/ |
-| Requests | https://requests.readthedocs.io/ |
-| FastAPI | https://fastapi.tiangolo.com/ |
-| Uvicorn | https://uvicorn.dev/ |
-| SQLite | https://www.sqlite.org/ |
-| pytest | https://pytest.org/ |
-| Playwright | https://playwright.dev/ |
-| Node.js | https://nodejs.org/ |
-| GitHub Actions | https://github.com/features/actions |
-| FFmpeg (AI label on the demo video) | https://ffmpeg.org/ |
-| jsDelivr (serves the demo video) | https://www.jsdelivr.com/ |
-| Claude Code (Anthropic), AI coding assistant | https://claude.com/product/claude-code |
-| OpenAI Codex, AI coding assistant | https://openai.com/codex/ |
-| **OPEN:** the AI tool that generated the demo video and its sound | **OPEN** |
 
-All links opened on 2026-11-15 (openai.com shows scripts a bot check; it opens in a browser). The code in the
-repository was written for this project, by AI coding assistants under the team's direction; beyond the tools above
-we have not knowingly included code, text or images from other projects.
+All links opened on 2026-11-15.
 
 ## Use of AI
 
