@@ -650,6 +650,7 @@ function onBlinkSource(m) {
 // T32: the field's epochs as map layers, blinking by themselves (T55), so epochs can be compared in the map;
 // T81: the frames as layers too (A/B, blink, play and A − B in the map: mapframes.js).
 let epochTimer = null;
+let epochCall = 0;               // T102: the latest showEpochLayers call
 let epochShown = 0;
 let epochVariant = null;
 
@@ -662,6 +663,9 @@ function epochSuffix(l) {
 }
 
 async function showEpochLayers(target) {
+  // T102: called from several places (field ready, band / colour, mode); a call overtaken by a newer one stops
+  // after each await, otherwise every call appended its own date row and started a timer that was never stopped
+  const call = ++epochCall;
   const box = $("#explore-epochs");
   clearInterval(epochTimer);
   box.replaceChildren();
@@ -673,11 +677,13 @@ async function showEpochLayers(target) {
     if (!res.ok) return;
     info = await res.json();
   } catch { return; }
+  if (call !== epochCall) return;
   if (app.shownTarget !== target || !info.layers?.length || passes.mode() !== "epochs") return;
   const abs = (l) => ({ ...l, url: new URL(l.url, app.api).href });
   epochVariant = `${target.id}|${passes.colour() ? "rgb" : explore.detector()}`;
   const layers = await explore.setFieldLayers(info.layers.map((l) => ({ ...abs(l), url: abs(l).url + epochSuffix(l) })),
     (info.frame_layers ?? []).map(abs), new URL(`/api/hips/${encodeURIComponent(target.id)}`, app.api).href);
+  if (call !== epochCall) return;
   if (!layers.length || app.shownTarget !== target || passes.mode() !== "epochs") return;
   // T55: when, not "Ep. n": the epoch's month(s) from its label "Epoch 1 · 2025-06-03 – 2025-06-10 · …"
   const labels = layers.map((l) => {
@@ -693,10 +699,11 @@ async function showEpochLayers(target) {
   };
   // no caption for real data; synthetic layers stay visibly labelled (CLAUDE.md)
   labels.forEach((b, j) => b.addEventListener("click", () => { if (!app.manualMap) pick(j); }));   // T100: by hand
-  box.append(...(info.synthetic ? [el("span", { class: "muted small" }, "synthetic:")] : []), ...labels);
+  box.replaceChildren(...(info.synthetic ? [el("span", { class: "muted small" }, "synthetic:")] : []), ...labels);
   box.hidden = false;
   pick(0);
   // always blinking (like the passes), while nobody drives the map from below
+  clearInterval(epochTimer);
   epochTimer = setInterval(() => {
     if (!app.manualMap && !app.blinkOff) pick((epochShown + 1) % layers.length);
   }, 800);
