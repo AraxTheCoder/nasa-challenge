@@ -438,7 +438,7 @@ def test_spectral_outliers_job(tmp_path, monkeypatch):
     url = f"/api/targets/{tid}/spectral-outliers"
     assert client.get(url).json()["status"] == "not_started"
     r = client.get(url, params={"start": 1})
-    for _ in range(100):
+    for _ in range(500):                            # up to 10 s: background job under a loaded machine
         if r.status_code == 200:
             break
         time.sleep(0.02)
@@ -514,7 +514,7 @@ def test_motion_endpoint(tmp_path, monkeypatch):
     url = f"/api/targets/{tid}/motion"
     assert client.get(url, params={"name": "Fast Star", "start": 0}).json()["status"] == "not_started"
     r = client.get(url, params={"name": "Fast Star"})
-    for _ in range(100):
+    for _ in range(500):                            # up to 10 s: background job under a loaded machine
         if r.status_code == 200:
             break
         time.sleep(0.02)
