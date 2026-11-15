@@ -17,7 +17,8 @@ Static viewer, no build step: plain HTML/CSS and ES modules.
 | `paths.js`, `paths.css` | names and motion paths on the image, label priority + hover (T22, T34) |
 | `inspector.js` | side panel for a clicked object: what it is, how it moves, frame by frame (T23) |
 | `objects.js` | objects panel: known / unknown / artifact detections, known objects, synthetic badge (T13) |
-| `chemistry.js` | Chemistry (T93): for the shown field, the map of a chemical feature (ices, PAH, hydrogen lines) minus its continuum, as a map layer, with a plain-words note; takes the map from the automatic blink (`map:take`); T96/T108: several ticked at once = one colour picture; T107: presets at the top of the list |
+| `chemistry.js` | Chemistry (T93): for the shown field, the map of a chemical feature (ices, PAH, hydrogen lines) minus its continuum, as a map layer, with a plain-words note; takes the map from the automatic blink (`map:take`); T96/T108: several ticked at once = one colour picture; T107: presets at the top of the list; T127: presets for objects |
+| `chemcands.js` | Spots to check (T128): the spots where the chemistry picture's features show, as a numbered list under its note and rings on the map; a click centres the spot and opens its spectrum |
 | `photometry.js` | spectrum + change-at-same-wavelength charts from `/api/targets/<id>/photometry` (T49) |
 | `explore.js`, `sky.js`, `healpix.js` | sky map: own WebGL HiPS renderer, surveys, the field's epochs (T30, T36, T41, T42) |
 | `traces.js` | the field's objects drawn on the sky map (T35) |

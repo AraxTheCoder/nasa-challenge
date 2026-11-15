@@ -3,6 +3,8 @@
     GET /api/chemistry/features                                 the features (id, name, µm, kind, what), T107 presets
     GET /api/targets/<id>/chemistry?feature=<f>&z=<z>           T109: the map at a redshift (key <f>_z<z·10⁴>)
     GET /api/targets/<id>/redshift                              T109: galaxies with a measured redshift in the field
+    GET /api/targets/<id>/chemistry/candidates?maps=<k>[-<k>...][&cats=simbad,gaia,...&preset=<id>]
+                                                                T128: spots where the picture's features show
     GET /api/targets/<id>/chemistry?feature=<f>                 cached result, else {"status": "not_started"}
     GET /api/targets/<id>/chemistry?feature=<f>&start=1         start; 202 {"status": "building", done, total},
                                                                 then 200 {"status": "ready", ...stats, "layer"}
@@ -36,13 +38,16 @@ def _features():
 
 @router.get("/api/chemistry/features")
 def features():
+    from pipeline.catcheck import CATALOGUES, DEFAULT
     from pipeline.chemistry import COMBINE_COLOURS, COMBINE_MAX, PRESETS, SHOWS
     hexes = lambda cs: ["#" + "".join(f"{round(255 * v):02x}" for v in c) for c in cs]
     return {"features": [{"id": k, "name": n, "um": um, "half_width_um": hw, "kind": kind, "what": what,
                           "shows": SHOWS[k]}                                  # T96: its direction in a combination
                          for k, (n, um, hw, kind, what) in _features().items()],
             "combine": {"max": COMBINE_MAX, "colours": {str(k): hexes(v) for k, v in COMBINE_COLOURS.items()}},
-            "presets": PRESETS}                                                 # T107
+            "presets": PRESETS,                                                 # T107
+            "catalogues": [{"id": k, "name": n, "what": w, "default": k in DEFAULT}   # T128: for the candidates
+                           for k, (n, w) in CATALOGUES.items()]}
 
 
 def _run(target_dir, tid: str, feature: str, job: dict, z: float = 0.0) -> None:
@@ -120,6 +125,42 @@ def redshift(tid: str, request: Request):
     if out["provenance"] is not None:                  # SIMBAD answered: keep it (no answer: ask again next time)
         cache.parent.mkdir(exist_ok=True)
         cache.write_text(json.dumps(out, indent=1, ensure_ascii=False), encoding="utf-8")
+    return {"status": "ready", "id": tid, **out}
+
+
+@router.get("/api/targets/{tid}/chemistry/candidates")   # T128: before .../chemistry/{name}, which would take it
+def chemistry_candidates(tid: str, request: Request, maps: str = "", cats: str = "", preset: str = ""):
+    """T128: the spots of a chemistry picture (maps = its keys joined by "-", as in the layer name) where its features
+    show: ranked, named after the field's catalogue labels. cats=simbad,gaia,...: each spot looked up in those
+    catalogues (pipeline/catcheck.py, cached per field), then uncatalogued first, other types next, the preset's
+    expected types (`expects`) last. Visualization only: spots to look at."""
+    from pipeline.chemistry import PRESETS, candidates
+    d = request.app.state.builder.target_dir(tid) if _ID.match(tid) else None
+    if d is None or not (d / "target.json").is_file():
+        return JSONResponse({"status": "error", "message": "no such field"}, status_code=404)
+    keys = [k for k in maps.split("-") if k]
+    if not keys:
+        return JSONResponse({"status": "error", "message": "maps=<key>[-<key>...] needed"}, status_code=400)
+    try:
+        out = candidates(d, keys)
+    except ValueError as e:                               # unknown map, mixed redshifts, the same feature twice
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=400)
+    except LookupError as e:                              # a map not made yet (or made on another grid)
+        return JSONResponse({"status": "not_made", "message": str(e)}, status_code=404)
+    want = [c for c in cats.split(",") if c]
+    if want:
+        from pipeline import catcheck
+        if any(c not in catcheck.CATALOGUES for c in want):
+            return JSONResponse({"status": "error", "message": f"catalogues: {', '.join(catcheck.CATALOGUES)}"},
+                                status_code=400)
+        import json
+        frames = json.loads((d / "target.json").read_text(encoding="utf-8")).get("frames") or []
+        mjds = sorted(f["mjd"] for f in frames if f.get("mjd"))
+        year = catcheck._year_of_mjd(mjds[len(mjds) // 2]) if mjds else 2025.9     # SPHEREx's date for the field
+        res = catcheck.check(d, [(it["ra_deg"], it["dec_deg"]) for it in out["items"]], want, year)
+        expects = next((p.get("expects") for p in PRESETS if p["id"] == preset), None)
+        out["items"] = catcheck.tag(out["items"], res, expects)
+        out.update(checked=[c for c in want if c not in res["failed"]], failed=res["failed"], preset=preset or None)
     return {"status": "ready", "id": tid, **out}
 
 

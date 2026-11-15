@@ -31,21 +31,49 @@ limits.register_active(lambda: len(_jobs))    # T58: field-spectra runs count ag
 
 
 @lru_cache(maxsize=64)
-def _outliers(path: str, mtime: float) -> dict:
+def _analysis_lock_for(path: str):
+    return threading.Lock()
+
+
+@lru_cache(maxsize=64)
+def _outliers(path: str, mtime: float, sources_json: str) -> dict:
     from pipeline import fieldspectra, spectral_outliers
-    fs = json.loads(open(path, encoding="utf-8").read())
+    from pathlib import Path
+    from pipeline import profile_matches
+    from detect.variability import VERSION as variability_version
+    derived = Path(path).with_suffix(".analysis.json")
+    stamp = [mtime, spectral_outliers.VERSION, profile_matches.VERSION, variability_version, sources_json]
+    if derived.is_file():
+        try:
+            hit = json.loads(derived.read_text(encoding="utf-8"))
+            if hit.get("stamp") == stamp:
+                return hit["result"]
+        except (ValueError, OSError):
+            pass
+    fs = _read_field(path, mtime)
+    fs = {**fs, "sources": json.loads(sources_json)}
     fieldspectra.seed_spectra(fs)          # measured from the command line: clicks on its sources answer at once too
-    out = spectral_outliers.find_outliers(fs)
+    blends = spectral_outliers._blends(fs["sources"])
+    out = spectral_outliers.find_outliers(fs, blends=blends)
+    out["chemistry_profiles"] = profile_matches.find_matches(fs, blends=blends)
     try:                                   # T61: sources that change brightness (the same spectra, the level)
         from detect.variability import find_variables
         out["variability"] = find_variables(fs)
     except Exception as e:  # noqa: BLE001 - the outlier list must not depend on it
         traceback.print_exc()
         out["variability"] = {"status": "error", "message": f"{type(e).__name__}: {e}", "variables": [], "blended": []}
-    return {**out, "field": {"target_id": fs["target_id"], "n_sources": len(fs["sources"]),
+    result = {**out, "field": {"target_id": fs["target_id"], "n_sources": len(fs["sources"]),
                              "n_exposures": len(fs["exposures"]), "missing": len(fs["missing"]),
                              "seconds": fs.get("seconds"), "version": fs.get("version"),
                              "fieldspectra_version": fieldspectra.VERSION}}
+    fieldspectra._write(derived, {"stamp": stamp, "result": result})
+    return result
+
+
+@lru_cache(maxsize=8)
+def _read_field(path: str, mtime: float) -> dict:
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def _cached(target: dict) -> dict | None:
@@ -53,11 +81,15 @@ def _cached(target: dict) -> dict | None:
     p = fieldspectra.cache_path(target["id"])
     if not p.is_file():
         return None
-    fs_head = json.loads(p.read_text(encoding="utf-8"))
+    mtime = p.stat().st_mtime
+    fs_head = _read_field(str(p), mtime)
+    sources = fieldspectra.sources_of(target)
     if fs_head.get("version") != fieldspectra.VERSION or \
-            fs_head.get("sources_key") != fieldspectra._key(fieldspectra.sources_of(target)):
+            fs_head.get("sources_key") != fieldspectra._key(sources):
         return None                         # older method or the labels changed: measure again
-    return _outliers(str(p), p.stat().st_mtime)
+    sources_json = json.dumps(sources, sort_keys=True)
+    with _analysis_lock_for(str(p)):  # concurrent polls of this field share one analysis
+        return _outliers(str(p), mtime, sources_json)
 
 
 def _state(target: dict, start: bool) -> dict:

@@ -451,6 +451,24 @@ def test_spectral_outliers_job(tmp_path, monkeypatch):
     assert "variables" in body["variability"] and "status" not in body["variability"]   # T61 ran, no error
     assert len(list((tmp_path / "spectra").glob("*.json"))) == 60          # clicks on these sources are instant
 
+    from server import fieldspectra as api
+    assert "chemistry_profiles" in body and "groups" in body
+    # Catalogue reclassification invalidates derived analysis without remeasuring images.
+    target["labels"][5]["otype"] = "G"
+    (tmp_path / tid / "target.json").write_text(json.dumps(target))
+    changed = client.get(url).json()
+    assert changed["n_judged"] == 59
+    assert not changed["items"]
+    assert any(n["id"] == "s5" and "peers" in n["why"] for n in changed["not_judged"])
+    # Simulate a server restart: the disk result must bypass both expensive analyses.
+    api._outliers.cache_clear()
+    api._read_field.cache_clear()
+    def unexpected(*args, **kwargs):
+        raise AssertionError("cached analysis was recomputed")
+    monkeypatch.setattr("pipeline.spectral_outliers.find_outliers", unexpected)
+    monkeypatch.setattr("pipeline.profile_matches.find_matches", unexpected)
+    assert client.get(url).json() == changed
+
 
 def test_hips_epoch_layers_per_detector_and_false_colour(tmp_path):
     """T89: e<ep>d<n> = one detector's frames of the epoch, e<ep>c = false colour of all of them."""

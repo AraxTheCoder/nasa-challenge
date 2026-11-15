@@ -16,9 +16,11 @@
 // T127: presets for kinds of objects too (brown dwarfs, young stars, cool giants, protostars, star-forming galaxies,
 // quasars), listed as "Objects" above the T107 "Places". A preset with needs_z (galaxies, quasars) is made only at
 // the object's redshift; with z = 0 the note says so instead of measuring.
+// T128: once a picture is on the map, chemcands.js lists the spots where its features show (rings + a list).
 
 import { $, el, fmtNum } from "./util.js";
 import * as explore from "./explore.js";
+import { clearCandidates, setCatalogues, showCandidates } from "./chemcands.js";   // T128: spots where the picture's features show
 
 const st = { api: null, target: null, z: 0, zTouched: false, zAsked: null, features: [], presets: [], presetBtns: new Map(), combine: { max: 3, colours: {} }, sel: [], boxes: new Map(),
   ready: new Map(), token: 0, shown: null, picked: null };
@@ -69,6 +71,7 @@ function syncControls() {
 function off() {
   st.token++;
   st.shown = null;
+  clearCandidates();
   st.sel = [];
   syncControls();
   note([]);
@@ -142,6 +145,7 @@ async function ensure(id, token, k, n) {
 
 async function apply() {
   const token = ++st.token;
+  clearCandidates();
   const ids = inOrder(st.sel);
   if (!st.target || !ids.length) return;
   const need = presetOf(ids);
@@ -171,6 +175,7 @@ async function apply() {
   const ok = await explore.showLayer(layer);
   if (token !== st.token) return;
   const png = `${base()}/${keys.join("-")}.png`;
+  if (ok) showCandidates(base(), keys, (k) => byId(k.replace(/_z\d+$/, ""))?.name ?? k, presetOf(ids)?.id);   // T128
   const tail = [ok ? null : "(The map layer could not be shown here.) ",
     el("a", { href: png, target: "_blank", rel: "noopener" }, ids.length > 1 ? "picture" : "map image")];
   if (ids.length === 1) {
@@ -294,6 +299,7 @@ export async function initChemistry(api) {
     const body = await (await fetch(`${st.api}/api/chemistry/features`)).json();
     st.features = body.features ?? [];
     if (body.combine) st.combine = body.combine;
+    setCatalogues(body.catalogues);                                          // T128
     st.presets = (body.presets ?? []).filter((p) => p.features.length <= st.combine.max && p.features.every(byId));
   } catch { st.features = []; st.presets = []; }
   const presetBtn = (p) => {

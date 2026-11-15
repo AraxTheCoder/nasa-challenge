@@ -1,5 +1,8 @@
 """T86: sources whose spectrum is out of distribution for their field.
 
+Version 3 fits stars, galaxies/quasars and unclassified sources separately. Sparse groups
+are unjudged rather than scored against another population.
+
 Input: a field's spectra (T85, `pipeline.fieldspectra.measure_field`). What "ordinary" means is learned from
 the field itself, not from a stellar model (Mati's rules, tasks/T75 notes):
 
@@ -18,7 +21,7 @@ the field itself, not from a stellar model (Mati's rules, tasks/T75 notes):
 
 Output: a ranked list with a plain-words reason per source ("brighter than its neighbours' kind at 3.2–5.0 µm
 (+80 %): warm dust or a cool companion?"), the band residuals for a chart, and caveats (blended with a
-brighter neighbour, known variable, a galaxy among stars).
+brighter neighbour, known variable, uncertain source type).
 
     from pipeline.spectral_outliers import find_outliers
     find_outliers(field_spectra)                  # dict as returned by measure_field
@@ -36,7 +39,7 @@ import numpy as np
 
 from .anomaly import BINS, CLEAN_MASKED
 
-VERSION = 2                  # 2: chart data (points, envelope)
+VERSION = 3                  # 3: independent peer groups
 MIN_CELL_SNR = 5.0           # a band's median flux must be this far above its error to count
 MIN_BANDS = 8                # bands (over all epochs) a source needs to be judged
 N_COMPONENTS = 2             # principal shapes on top of the mean shape
@@ -293,16 +296,16 @@ def _fmt(um):
     return f"{um:.2f}".rstrip("0").rstrip(".")
 
 
-def find_outliers(fs: dict) -> dict:
+def _find_group(fs: dict, blends) -> dict:
     sources = fs["sources"]
     Y, S, N, epochs = band_cube(fs)
     ns, ne, nb = Y.shape
     n_bands = np.isfinite(Y).any(1).sum(1)
     judged = n_bands >= MIN_BANDS
-    blends = _blends(sources)
     variable = np.array([_is(s.get("otype"), VARIABLE_HINTS) or s.get("source") == "vsx" for s in sources], bool)
-    galaxy = np.array([_is(s.get("otype"), GALAXY_HINTS) for s in sources], bool)
-    base = judged & np.array([b is None for b in blends], bool) & ~variable & ~galaxy
+    base = judged & np.array([b is None for b in blends], bool) & ~variable
+    if base.sum() < 3:
+        base = judged & np.array([b is None for b in blends], bool)
     if ns == 0 or base.sum() < 3:
         return {"version": VERSION, "items": [], "scores": {}, "n_sources": ns, "n_judged": int(judged.sum()),
                 "summary": f"Can't judge: {int(base.sum())} unblended sources with enough clean bands (need 3).",
@@ -356,8 +359,6 @@ def find_outliers(fs: dict) -> dict:
                            f" ({abs(blends[i]['dmag'])} mag {'brighter' if blends[i]['dmag'] < 0 else 'fainter'})")
         if variable[i]:
             caveats.append("known variable star: its own brightness changes are taken out per epoch, colour changes are not")
-        if galaxy[i]:
-            caveats.append("a galaxy: expected to look different from the stars around it")
         jag = _jagged(Zc[i])
         if jag:
             caveats.append("jagged: neighbouring bands disagree, so the position may be off or it changed within an epoch")
@@ -388,6 +389,60 @@ def find_outliers(fs: dict) -> dict:
             "scatter_pct": [round(float(10 ** s - 1) * 100, 1) for s in scatter],
             "not_judged": _not_judged(fs, sources, judged, n_bands),
             "method": _method(int(ref.sum()), K)}
+
+
+def peer_group(source: dict) -> str:
+    from .chemistry import GALAXY_OTYPES
+    otype = (source.get("otype") or "").strip()
+    kind = (source.get("kind") or "").lower()
+    if otype in GALAXY_OTYPES or any(k in kind for k in ("galaxy", "quasar")):
+        return "galaxies"
+    if "*" in otype or otype in {"BD?", "Y*O", "Y*?"} or any(k in kind for k in ("star", "dwarf")) or source.get("source") in {"gaia_dr3", "vsx"}:
+        return "stars"
+    return "unclassified"
+
+
+def find_outliers(fs: dict, blends=None) -> dict:
+    """Learn and score each catalogue population independently; never borrow another population's model."""
+    if blends is None:
+        blends = _blends(fs["sources"])
+    groups = {}
+    items, points, not_judged, scores = [], [], [], {}
+    n_judged = n_reference = 0
+    for group in dict.fromkeys(peer_group(s) for s in fs["sources"]):
+        indices = [i for i, s in enumerate(fs["sources"]) if peer_group(s) == group]
+        sub = {k: ([v[i] for i in indices] if k in {
+            "sources", "flux_ujy", "err_ujy", "wavelength_um", "bandwidth_um", "masked_fraction"} else v)
+               for k, v in fs.items()}
+        result = _find_group(sub, [blends[i] for i in indices])
+        groups[group] = {k: result[k] for k in ("summary", "method", "envelope", "n_reference", "components") if k in result}
+        groups[group]["n_sources"] = len(indices)
+        if "points" not in result:
+            not_judged.extend({"id": s["id"], "name": s["name"], "why": f"too few clean, unblended {group} peers (need 3)"} for s in sub["sources"])
+            continue
+        n_judged += result["n_judged"]
+        n_reference += result["n_reference"]
+        for it in result["items"]:
+            it["index"] = indices[it["index"]]
+            it["peer_group"] = group
+            it["reason"] = it["reason"].replace("ordinary sources here", f"ordinary {group} here")
+            items.append(it)
+        points.extend({**p, "peer_group": group} for p in result["points"])
+        not_judged.extend(result["not_judged"])
+        scores.update(result["scores"])
+    items.sort(key=lambda it: -it["score"])
+    return {"version": VERSION, "items": items, "points": points, "scores": scores,
+            "n_sources": len(fs["sources"]), "n_judged": n_judged, "n_reference": n_reference,
+            "not_judged": not_judged, "groups": groups,
+            "bands_um": [round(float(c), 3) for c in CENTRES],
+            "colours": {k: list(v) for k, v in COLOUR_BANDS.items()},
+            "summary": (f"{len(items)} of {n_judged} sources stand out within their peer group." if items else
+                        f"Nothing out of the ordinary: {n_judged} sources judged within their peer groups." if n_judged else
+                        "Not enough clean peers to judge spectra in this field."),
+            "method": "Stars, galaxies/quasars and unclassified sources use separate models and scatter. "
+                      "Groups with fewer than 3 clean, unblended peers are not scored. "
+                      "Shape only, with per-source and epoch brightness removed; deviations require ≥10% and ≥3σ "
+                      "in neighbouring bands (or one at ≥6σ), with epoch agreement."}
 
 
 def _band_mean(row, lo, hi):
@@ -452,8 +507,8 @@ def main(argv=None) -> int:
     t = json.loads((args.target_dir / "target.json").read_text(encoding="utf-8"))
     out = find_outliers(fieldspectra.measure_field(t))
     print(out["summary"])
-    print(f"reference {out.get('n_reference')} sources, {out.get('components')} components; "
-          f"field scatter per band % {out.get('scatter_pct')}")
+    for name, group in out["groups"].items():
+        print(f"{name}: {group['summary']}")
     for it in out["items"][:args.n]:
         print(f"  {it['score']:6.1f}  {it['name']:<28} {it.get('otype') or '':<6} mag {it.get('mag')}  {it['reason']}"
               + (f"  [{'; '.join(it['caveats'])}]" if it["caveats"] else ""))
