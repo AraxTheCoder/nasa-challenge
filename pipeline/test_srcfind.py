@@ -60,17 +60,59 @@ def test_red_uncatalogued_source_kept_catalogued_bright_glow_and_edge_left_out()
     assert s["name"].startswith("SPHEREx J0855")
 
 
+DET = {"ra_deg": 1.01, "dec_deg": 1.0, "snr": [9.0, 9.0, 9.0, 9.0]}
+
+
 def test_stored_only_without_compute_and_found_again_when_labels_change(tmp_path, monkeypatch):
     monkeypatch.setattr(fieldspectra, "ROOT", tmp_path)
+    monkeypatch.setattr(srcfind, "gaia_stars", lambda t, mjd: [])                   # no network
     target = {"id": "t", "center": {"ra_deg": 1.0, "dec_deg": 1.0}, "image": {"width": 10}}
     cat = [{"id": "l1", "ra_deg": 1.0, "dec_deg": 1.0}]
     assert srcfind.spherex_sources(target, cat) == []                               # nothing stored: no work
     calls = []
-    monkeypatch.setattr(srcfind, "_find", lambda t, c, p=None: calls.append(1) or {"sources": [{"id": "x001"}]})
-    assert srcfind.spherex_sources(target, cat, compute=True) == [{"id": "x001"}]
-    assert srcfind.spherex_sources(target, cat) == [{"id": "x001"}] and len(calls) == 1   # stored
+    monkeypatch.setattr(srcfind, "_find", lambda t, c, p=None: calls.append(1) or {"detections": [DET], "mjd": 61000.0})
+    assert [s["id"] for s in srcfind.spherex_sources(target, cat, compute=True)] == ["x001"]
+    assert [s["id"] for s in srcfind.spherex_sources(target, cat)] == ["x001"] and len(calls) == 1   # stored
     assert srcfind.spherex_sources(target, cat + [{"id": "l2", "ra_deg": 2.0, "dec_deg": 2.0}]) == []   # labels changed
     assert json.loads((tmp_path / "t.sources.json").read_text())["version"] == srcfind.VERSION
+
+
+def test_gaia_stars_are_named_and_kept_only_the_rest_spherex_only():
+    """T141: a detection on a Gaia star (positions moved by its motion) is that star, measured as one; the rest stay
+    SPHEREx-only. A second peak on the same star is dropped."""
+    mjd = 61000.0
+    gaia = [{"id": "4472832130942575872", "g": 17.3, "ra_deg": 10.0, "dec_deg": 20.0,
+             "dra_deg_day": 1e-6, "ddec_deg_day": 2e-6}]
+    dets = [{"ra_deg": 10.0 + 2 / 3600, "dec_deg": 20.0, "snr": [30.0, 25.0, 12.0, 8.0]},     # 1.9" from the star
+            {"ra_deg": 10.0, "dec_deg": 20.0 - 3 / 3600, "snr": [9.0, 8.0, 6.0, 5.0]},          # its second peak
+            {"ra_deg": 10.05, "dec_deg": 20.0, "snr": [1.0, 2.0, 7.0, 6.0]}]                   # nothing there
+    got = srcfind._classify(dets, gaia, mjd)
+    assert [s["id"] for s in got] == ["x001", "g001"]
+    new, star = got
+    assert new["source"] == "spherex" and new["red"] and new["name"].startswith("SPHEREx J")
+    assert star["source"] == "gaia_dr3" and star["name"] == "Gaia DR3 4472832130942575872" and star["mag"] == 17.3
+    assert star["ra_deg"] == 10.0 and star["ddec_deg_day"] == 2e-6 and star["mjd0"] == mjd   # the star's own motion
+    from pipeline.spectral_outliers import peer_group
+    assert peer_group(star) == "stars"
+
+
+def test_gaia_retried_without_another_pass_over_the_images(tmp_path, monkeypatch):
+    """T141: VizieR down at the first measurement: stored as SPHEREx-only and not checked; the next measurement does
+    only the Gaia match (the stored detections), not the pass over the exposures again."""
+    monkeypatch.setattr(fieldspectra, "ROOT", tmp_path)
+    target = {"id": "t", "center": {"ra_deg": 1.0, "dec_deg": 1.0}, "image": {"width": 10}}
+    finds = []
+    monkeypatch.setattr(srcfind, "_find", lambda t, c, p=None: finds.append(1) or {"detections": [DET], "mjd": 61000.0})
+    monkeypatch.setattr(srcfind, "gaia_stars", lambda t, mjd: None)                 # VizieR doesn't answer
+    assert [s["source"] for s in srcfind.spherex_sources(target, [], compute=True)] == ["spherex"]
+    assert srcfind.spherex_sources(target, []) and len(finds) == 1                   # stored (read path: no retry)
+    star = {"id": "7", "g": 15.0, "ra_deg": DET["ra_deg"], "dec_deg": DET["dec_deg"], "dra_deg_day": 0.0,
+            "ddec_deg_day": 0.0}
+    monkeypatch.setattr(srcfind, "gaia_stars", lambda t, mjd: [star])
+    assert [s["name"] for s in srcfind.spherex_sources(target, [], compute=True)] == ["Gaia DR3 7"]
+    assert len(finds) == 1                                                          # no second pass
+    stored = json.loads((tmp_path / "t.sources.json").read_text())
+    assert stored["gaia_checked"] and stored["gaia_stars"] == 1 and stored["detections"] == [DET]
 
 
 def test_spherex_only_judged_with_stars_and_uncatalogued_listed_first(monkeypatch):

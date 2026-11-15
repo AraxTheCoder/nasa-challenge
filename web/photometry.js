@@ -458,6 +458,9 @@ function hookMap() {
     const snap = nearestLabel(px, py);
     const pos = snap ? [snap.ra_deg, snap.dec_deg] : proj.fromScreen(px, py);
     timer = setTimeout(() => {
+      // T141: a ring on the map (chemistry Spots, Unusual spectra) took this click: its handler runs after this one
+      // (preventDefault) and opens the spectrum itself; no new analysis region there (that cleared the lists)
+      if (e.defaultPrevented) return;
       if (pos) loadSky(((pos[0] % 360) + 360) % 360, pos[1], snap?.name ?? null, { focusRegion: true });
     }, 280);
   });

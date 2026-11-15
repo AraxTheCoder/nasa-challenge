@@ -1,4 +1,9 @@
-# Contracts (v0.43)
+# Contracts (v0.44)
+
+v0.44 (T135, T141): spectral-outliers also measures sources found in SPHEREx's own images: ids `g…` are Gaia DR3
+stars found there (`source: "gaia_dr3"`), ids `x…` SPHEREx-only ones (`source: "spherex"`, `red`); items of `x…`
+sources carry `tag`, `catalogues` and `catalogues_failed`. Gaia labels (`gaia_dr3`) may come from VizieR's copy of
+Gaia DR3 when ESA's TAP doesn't answer (the provenance says which). See Spectral outliers and Label below.
 
 v0.43 (T133): community coverage from distinct visiting browser IDs, a coverage overview endpoint and
 coverage metadata on tiles/views/counts. The viewer adds a separate Community workspace and optional
@@ -296,7 +301,8 @@ view (C) should prefer pairs over arbitrary frame combinations.
 - `positions`: one per frame, catalogue position moved to that frame's time with the proper
   motion (parallax ignored, < 0.1 px). For a fast star the label follows it across epochs.
 - `source`: `simbad` (names, object types; tries the CDS host, then the Harvard and IDIA mirrors)
-  or `gaia_dr3` (stars brighter than G = 16; `mag` is Gaia G). `synthetic` (v0.11) only in synthetic
+  or `gaia_dr3` (stars brighter than G = 16; `mag` is Gaia G; v0.44: from ESA's Gaia TAP, or VizieR's
+  I/355/gaiadr3 when ESA doesn't answer, same stars and epoch, the provenance names the service). `synthetic` (v0.11) only in synthetic
   fixtures: a made-up object; the viewer marks it as not real.
 - `named`: `true` for a human-readable name (Barnard's star, V3214 Oph), `false` for catalogue
   numbers (Gaia DR3 …, ZTF J…). Suggested UI default: show named labels, the rest on demand.
@@ -539,6 +545,15 @@ answers at once. T86 (`pipeline.spectral_outliers`) ranks them. Answer (200):
   source's pairs (same detector, wavelengths within half a bandwidth, >= 0.5 d apart, field-calibrated);
   `change_mag` > 0 = fainter later. `variables` lists uncatalogued ones first. On an internal error:
   `{status: "error", message, variables: [], blended: []}`; the rest of the answer is unaffected.
+- Sources found in SPHEREx's own images (v0.44, T135/T141, `pipeline.srcfind`): besides the catalogue labels, peaks
+  >= 5σ in the field's deep images (median over epochs, per detector group) that are no label and not the glow of a
+  bright star. One within 8″ of a Gaia DR3 star (G < 20.5, moved by its motion to SPHEREx's date) is that star:
+  id `g…`, `source: "gaia_dr3"`, `name` "Gaia DR3 …", `mag` its G. The rest are SPHEREx-only: id `x…`,
+  `source: "spherex"`, `name` "SPHEREx J…", `kind` "SPHEREx-only source[, only at 3.8–5 µm]", `red` (seen only at
+  >= 3.8 µm), `snr` per detector group. Both are judged with the stars. Items of `x…` sources are looked up in the
+  catalogues (`/chemistry/candidates`' check, motion-corrected) and carry `catalogues` {`<cat>`: match or null},
+  `catalogues_failed` [cats that didn't answer] and `tag`: `new` (in none), `untyped` (only in catalogues without a
+  type), `other` (SIMBAD knows it); `new` ones are listed first. A missing match doesn't establish a new object.
 - Synthetic targets: 200 `{"status": "no_data"}`. Unknown target: 404.
 
 ### Public limits (v0.22, T58)

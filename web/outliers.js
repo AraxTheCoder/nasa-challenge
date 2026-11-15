@@ -566,7 +566,12 @@ function hookMap() {
       const dd = Math.hypot(p.x - x, p.y - y);
       if (dd <= p.r + 6 && dd < bd) { bd = dd; best = p; }
     }
-    if (best) selectSource(best.it.id, true);     // the map's own click also opens its spectrum (T79)
+    if (!best) return;
+    // T141: the ring takes the click (the map's own click would make its spot a new analysis region since T138 and
+    // clear this list) and opens the spectrum itself, as the map's click did (T79)
+    e.preventDefault();
+    selectSource(best.it.id, true);
+    openSpectrum(best.it.ra_deg, best.it.dec_deg, best.it.name);
   });
 }
 
