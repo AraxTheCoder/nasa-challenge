@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # T14: bring the public tool (https://nasa.jbarkoczi.de/) up to date with main. Run from anywhere:
 #   deploy/docker/upgrade.sh
-# Pulls main, rebuilds the API image only when its Python packages changed, restarts what changed,
-# and waits until the API answers again.
+# Pulls main, then compares the checkout with the commit the running API was last deployed from
+# (deploy/docker/.deployed, not committed): something else may have pulled the same checkout already
+# (e.g. a dev server's auto-pull), so "the pull brought nothing" does not mean "the API is current".
+# Rebuilds the API image only when its Python packages changed, restarts what changed, waits for health.
 set -euo pipefail
 cd "$(dirname "$0")"
 repo=$(git rev-parse --show-toplevel)
+state=.deployed
 
 branch=$(git -C "$repo" rev-parse --abbrev-ref HEAD)
 if [ "$branch" != "main" ]; then
@@ -13,24 +16,36 @@ if [ "$branch" != "main" ]; then
   exit 1
 fi
 
-before=$(git -C "$repo" rev-parse HEAD)
-git -C "$repo" pull --ff-only --quiet
-after=$(git -C "$repo" rev-parse HEAD)
+# another process may be pulling the same checkout at this moment (FETCH_HEAD race): retry a few times
+pull_failed=0
+for i in 1 2 3; do
+  if err=$(git -C "$repo" pull --ff-only --quiet 2>&1); then pull_failed=0; break; fi
+  pull_failed=1
+  sleep 5
+done
+[ "$pull_failed" = 1 ] && echo "warning: git pull failed (deploying the checkout as it is): $err" >&2
 
-changed() { [ "$before" != "$after" ] && git -C "$repo" diff --name-only "$before" "$after" | grep -qE "$1"; }
+head=$(git -C "$repo" rev-parse HEAD)
+deployed=$(cat "$state" 2>/dev/null || echo none)
 
-if [ "$before" = "$after" ]; then
+changed() {   # does anything matching $1 differ between the deployed commit and the checkout?
+  [ "$deployed" = none ] && return 0
+  git -C "$repo" diff --name-only "$deployed" "$head" 2>/dev/null | grep -qE "$1" || \
+    ! git -C "$repo" cat-file -e "$deployed^{commit}" 2>/dev/null
+}
+
+if [ "$deployed" = "$head" ]; then
   echo "Already at $(git -C "$repo" log --oneline -1)."
-  docker compose up -d                        # make sure it runs (e.g. after a reboot without the service)
+  docker compose up -d                        # make sure it runs
 else
-  echo "Updated to $(git -C "$repo" log --oneline -1)."
+  echo "Deploying $(git -C "$repo" log --oneline -1) (was ${deployed:0:7})."
   if changed '^(requirements\.lock|deploy/docker/Dockerfile|\.dockerignore)$'; then
     echo "Python packages changed: rebuilding the API image."
     docker compose up -d --build
   else
     docker compose up -d                      # applies compose.yaml changes, if any
-    docker compose restart api                # new server code
   fi
+  docker compose restart api                  # new server code
   if changed '^deploy/docker/nginx\.conf$'; then
     docker compose restart web
   fi
@@ -40,8 +55,9 @@ fi
 port=$(docker compose port web 80)
 for i in $(seq 1 30); do
   if curl -sf "http://$port/api/health" >/dev/null; then
+    echo "$head" > "$state"
     echo "Up: http://$port/ (public: https://nasa.jbarkoczi.de/)"
-    exit 0
+    exit $(( pull_failed ? 2 : 0 ))
   fi
   sleep 2
 done

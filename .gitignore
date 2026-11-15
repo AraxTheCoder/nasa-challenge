@@ -33,3 +33,6 @@ dist/
 
 # browser test screenshots (python web/tests/browser_test.py browser-test-out)
 browser-test-out/
+
+# T14: commit the Docker deploy last went live with (deploy/docker/upgrade.sh)
+deploy/docker/.deployed
