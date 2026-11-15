@@ -88,3 +88,26 @@ def test_cache_sweep_evicts_least_recently_used(tmp_path):
     r = limits.sweep(data, cap_bytes=2500, busy_ids=frozenset({"busy"}))
     left = sorted(p.name for p in (data / "targets").iterdir())
     assert left == ["busy", "new"] and not s.exists() and r["removed"] == 3
+
+
+def test_cache_cap_without_public_mode_and_tile_chunks(tmp_path):
+    """T97: the sweep has its own switch and covers data/raw/s3chunks."""
+    data = tmp_path / "data"
+    (data / "targets").mkdir(parents=True)
+    chunks = data / "raw" / "s3chunks"
+    chunks.mkdir(parents=True)
+    for k in range(3):
+        f = chunks / f"c{k}.npy"
+        f.write_bytes(b"z" * 1000)
+        t = time.time() - 100 * (3 - k)
+        os.utime(f, (t, t))
+    limits.configure(False, cache_gb=1.5e-6, sweep_s=3600)          # 1500 bytes, no other limits
+    t = limits.start_sweeper(data)
+    assert t is not None
+    for _ in range(100):
+        if len(list(chunks.iterdir())) == 1:
+            break
+        time.sleep(0.02)
+    assert [p.name for p in chunks.iterdir()] == ["c2.npy"]
+    client = TestClient(create_app(data / "targets", fixture=True))
+    assert all(client.get("/api/targets").status_code == 200 for _ in range(40))   # no rate limit without --public

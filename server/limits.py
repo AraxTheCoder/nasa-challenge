@@ -10,9 +10,11 @@ A public server must not be made to download unlimited SPHEREx data, flood JPL /
   {"status": "busy"} + Retry-After (everyone).
 - **refresh=1 and POST /api/settings only with the admin token** (env SPHEREX_ADMIN_TOKEN, `?token=` or header
   `X-Admin-Token`); without it `refresh` is ignored and settings answer 403.
-- **Cache cap:** a background sweep keeps data/targets, data/raw/cutouts, data/spectra, data/field_spectra and
-  data/sky_labels under SPHEREX_CACHE_GB (default 20), evicting the least recently used first; a field that is
-  being built is never evicted. The orbit catalogue, image index and HiPS tile cache are left alone.
+- **Cache cap:** a background sweep keeps data/targets, data/raw/cutouts, data/raw/s3chunks, data/spectra,
+  data/field_spectra and data/sky_labels under `--cache-gb` / SPHEREX_CACHE_GB (default 20 with --public),
+  evicting the least recently used first; a field that is being built is never evicted. The orbit catalogue,
+  image index and HiPS tile cache are left alone. T97: the cap also works without --public (a team server that
+  runs for days): set the size and only the sweep runs, none of the other limits.
 
 Configured once at start (`configure(...)`, from server/__main__.py); every check is a no-op when disabled, so the
 team's servers behave exactly as before.
@@ -41,7 +43,7 @@ class Config:
     jobs_per_hour: float = 30.0         # new expensive jobs per IP ...
     jobs_burst: float = 10.0            # ... of which this many at once
     max_active: int = 4                 # expensive jobs running on the whole server
-    cache_gb: float = 20.0
+    cache_gb: float = 0.0               # 0 = no cache sweep (T97: its own switch, also without --public)
     sweep_s: float = 600.0
     trust_proxy: bool = False           # take the client IP from X-Forwarded-For (behind a reverse proxy)
 
@@ -147,12 +149,12 @@ def is_admin(request: Request | None) -> bool:
 
 def _entries(data_root: Path) -> list[Path]:
     out: list[Path] = []
-    for sub, kind in (("targets", "dir"), ("raw/cutouts", "dir"), ("spectra", "file"),
+    for sub, kind in (("targets", "dir"), ("raw/cutouts", "dir"), ("raw/s3chunks", "any"), ("spectra", "file"),
                       ("field_spectra", "file"), ("sky_labels", "file")):
         d = data_root / sub
         if not d.is_dir():
             continue
-        out += [p for p in d.iterdir() if (p.is_dir() if kind == "dir" else p.is_file())]
+        out += [p for p in d.iterdir() if kind == "any" or (p.is_dir() if kind == "dir" else p.is_file())]
     return out
 
 
@@ -198,7 +200,7 @@ def sweep(data_root: Path, cap_bytes: int, busy_ids=frozenset()) -> dict:
 
 
 def start_sweeper(data_root: Path, busy_ids_fn=lambda: frozenset()) -> threading.Thread | None:
-    if not CFG.enabled or CFG.cache_gb <= 0:
+    if CFG.cache_gb <= 0:               # T97: runs whenever a size is set, with or without --public
         return None
 
     def loop():
