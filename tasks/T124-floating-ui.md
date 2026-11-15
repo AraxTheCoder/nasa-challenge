@@ -31,3 +31,10 @@ describe what is already visible are gone.
   `.region-btn` / `.region-hint` and `.activity*` at the end of style.css. `#region-btn` is appended to `#explore`
   (absolute, top 100px right 12px, under 💬); move it wherever fits your floating layout. `#activity` is a fixed bar
   at the top of the page (z-index 60).
+- 2026-11-15 [Joerg] Checked `jonathan/T124-floating-ui` (ad3f0ad) against main (9d6b0d8): merging main in conflicts only in
+  `web/style.css` at the end of the file (your wide-screen / phone / no-map blocks vs main's `.region-*` and `.activity*`
+  blocks from T122/T123): **keep both sides**, nothing overlaps. `web/app.js` merges by itself and keeps the region /
+  activity imports, the red-square block in `loadField` and the T126 blink-line text. `#explore`, `#sky`,
+  `#blink-status` are still in your index.html, so region.js / activity.js work unchanged. Only look: "▭ Select region"
+  is `position: absolute; top: 100px; right: 12px` in `#explore` (under 💬; on phones `bottom: 100px`): move it if
+  your floating layout puts something there.
