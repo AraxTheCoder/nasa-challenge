@@ -1,6 +1,6 @@
 # T143: Optimization experiment (branch only)
 
-- **Owner:** Mati  ·  **Status:** review (experiment branch, not merged)
+- **Owner:** Mati  ·  **Status:** review (merged to main 2026-11-15 ~22:00 CET on Mati's word)
 - **Branch:** `mati/T143-optimize-experiment` (not merged to main until Mati has tried it)
 - **Depends on / feeds:** T81/T124 (map layers, Jonathan), T41/T81 server/hips.py, T49/T66 photometry, T125 cache sweep
 
