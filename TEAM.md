@@ -43,6 +43,7 @@ Mati). When you finish a task, move its row to Done in the same commit.
 | ID | Task | Owner | Status | Branch | Notes |
 |---|---|---|---|---|---|
 | T136 | C: Brief, cautious analysis copy with hover/focus details and corrected spectral hints | Codex (analysis) | doing | `main` | [tasks/T136](tasks/T136-analysis-copy.md). User requested less text and explicit uncertainty |
+| T137 | C: Chemistry list scrolls inside the window (it ran past the bottom since T124); the floating panels fold to one line (– next to the grip, remembered) | Mati | doing | `mati/T137-fold-panels` | [tasks/T137](tasks/T137-fold-panels.md). Asked by Mati; touches Jonathan's web/hud.js (note in tasks/T124) |
 | T94 | C: Missing tiles on the map: failed tiles never asked again (holes until reload), false-colour field epochs 422, holes near the poles when zooming in | Jonathan | doing | `main` | [tasks/T94](tasks/T94-missing-tiles.md) |
 | T122 | C: Analysis region drawn with the mouse: a "Select region" tool on the map; drag a rectangle and the field (the red square: what is downloaded and analysed) is built there with that size (square, 5–210′) | Joerg | done | `joerg/T122-T123-region-progress` | [tasks/T122](tasks/T122-region-select.md). Asked by Joerg |
 | T123 | C: Progress bar for everything that runs: one bar at the top of the page with what is happening now (field build step + n of m, spectra, unusual spectra, motion, chemistry, flags, map tiles) | Joerg | done | `joerg/T122-T123-region-progress` | [tasks/T123](tasks/T123-activity-bar.md). Asked by Joerg |
