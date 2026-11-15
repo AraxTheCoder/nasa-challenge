@@ -171,3 +171,14 @@ def test_redshift_lookup_keeps_only_galaxies(monkeypatch):
                                                       else np.ma.asarray(np.array(v)) for k, v in rows.items()})
     out = C.galaxy_redshifts({"center": {"ra_deg": 246.79, "dec_deg": -24.54}, "size_arcmin": 30})
     assert [g["name"] for g in out["galaxies"]] == ["NGC 6240"]
+
+
+def test_z_must_be_finite():
+    """T113: z = inf / nan is a ValueError (400), not an OverflowError (500)."""
+    for bad in (float("inf"), float("nan"), -0.1, 1.5):
+        try:
+            C.z_of(bad)
+        except ValueError:
+            continue
+        raise AssertionError(bad)
+    assert C.z_of(0.02472) == 0.0247

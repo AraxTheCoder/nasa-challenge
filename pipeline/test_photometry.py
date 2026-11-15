@@ -289,3 +289,16 @@ def _worker_body(server_pid):
     from pipeline import photometry as ph
     ph._watch_parent(server_pid, poll_s=0.1)
     time.sleep(30)                                     # would idle on long after the server, without the watchdog
+
+
+def test_far_away_position_is_not_on_the_image():
+    """T113: a point far from the image is "not on it" (None), not an astropy error (was a 500 for the field's
+    spectrum at ra=0 dec=0 on a field at RA 247)."""
+    from pipeline import photometry
+    w = WCS(naxis=2)
+    w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+    w.wcs.crval = [246.79, -24.54]
+    w.wcs.crpix = [50.5, 50.5]
+    w.wcs.cdelt = [-6.15 / 3600, 6.15 / 3600]
+    xs, ys = photometry._sky_to_pixel(w, [(0.0, 0.0), (66.79, 24.54), (246.79, -24.54)], 100, 100)
+    assert np.isnan(xs[0]) and np.isnan(xs[1]) and abs(xs[2] - 49.5) < 1e-6 and abs(ys[2] - 49.5) < 1e-6
