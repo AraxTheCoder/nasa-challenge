@@ -204,16 +204,24 @@ Anything simulated or injected in this project is labelled as synthetic in the d
 
 ## AI-use disclosure
 
-This project was built with the help of Claude (Anthropic) through Claude Code, used for
-planning, code, documentation and repo coordination. Each team member worked with their own
-Claude Code session; the rules those sessions follow are in `CLAUDE.md`. Some tasks (T129–T140, marked
-"Codex" in `TEAM.md`) were done with OpenAI Codex. All results were reviewed by the team. The project
-contains no AI-generated images, video or audio.
+The code, tests and documentation were written by AI coding assistants under the team's direction: Claude
+(Anthropic) through Claude Code, one session per team member, and OpenAI Codex for some tasks (T129–T140,
+marked "Codex" in `TEAM.md`). The rules the Claude Code sessions follow are in `CLAUDE.md`. The team decided
+what to build, reviewed the results and checked them on real data. The tool contains no AI-generated images,
+video or audio; the sound of the demo video is AI-generated and marked as such in the video.
 
 ## Team
 
-_TODO: names._
+Team `_P$YcHoNaUt$_`: Jonathan, Jörg, Mateusz.
 
 ## License
 
-_TODO._
+Copyright (C) 2026 Jonathan, Jörg, Mateusz (team `_P$YcHoNaUt$_`).
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General
+Public License as published by the Free Software Foundation, either version 3 of the License, or (at your
+option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License in `LICENSE` for more details. SPDX: `GPL-3.0-or-later`.
+
+The data the tool shows belong to their archives and missions; see "Data credits".

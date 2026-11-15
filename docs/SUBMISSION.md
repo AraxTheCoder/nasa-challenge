@@ -7,15 +7,12 @@ challenge". Deadline: **Sunday, November 15, 2026, 23:59 local time** (CET, 22:5
 
 ## Still open before submitting (humans)
 
-1. **Demo link** (T16, Jonathan): a video of 30 seconds or less, or at most 7 slides, on a public link.
+1. **Demo link:** upload `spherex-blink-showcase-v8-30s-ai-audio-marked.mp4` (in Mati's Downloads: the 30.0 s
+   video with a visible "Audio: AI-generated" mark; the unmarked original must not be used) to a public link
+   (YouTube "unlisted" or Google Drive "anyone with the link") and paste it below.
 2. **Live tool URL** (T14 is still open). Without one, judges can only run the tool from the README. Judges who
    cannot open a link cannot judge the project, so a public URL matters most.
-3. **Team names**, as each member wants them printed.
-4. **Joerg: the name of the second AI tool.** The "Codex" sessions in TEAM.md (T129–T140) are written below as
-   OpenAI Codex. Correct it if that is wrong.
-5. **Licence:** the repository is public but has no licence (README: TODO). Without one, "open source" may not be
-   claimed, so the text below doesn't claim it.
-6. **On the live form:** required fields, character limits, and the exact name of the AI field.
+3. **On the live form:** required fields, character limits, and the exact name of the AI field.
 
 ## Project name
 
@@ -23,7 +20,7 @@ SPHEREx Blink
 
 ## High-level project summary
 
-SPHEREx Blink is a free web tool that lets anyone see how the sky changes in NASA's SPHEREx data. Type the
+SPHEREx Blink is a free, open-source web tool that lets anyone see how the sky changes in NASA's SPHEREx data. Type the
 coordinates of any patch of sky, or pick one of the five test targets. The tool fetches the real SPHEREx images of
 that spot from NASA's archive, lines them up and plays them like a short video. Anything that moves or changes
 between SPHEREx's visits stands out. This is the blink method that found Pluto, run on live data in a browser.
@@ -36,12 +33,12 @@ can inspect. Volunteers comparing images in this way have already found most kno
 
 ## Link to project demo
 
-**OPEN** (T16).
+**OPEN:** public link to the 30-second video `spherex-blink-showcase-v8-30s-ai-audio-marked.mp4`.
 
 ## Link to final project
 
-- Code: <https://github.com/AraxTheCoder/nasa-challenge> (public, checked 2026-11-15 18:24 UTC; the old address
-  `jabra11/nasa-challenge` redirects there). How to run it: README, "How to run" (Python 3.12+, one command).
+- Code: <https://github.com/AraxTheCoder/nasa-challenge> (public, open source under the GNU GPL v3 or
+  later; the old address `jabra11/nasa-challenge` redirects there). How to run it: README, "How to run" (Python 3.12+, one command).
 - Live tool: **OPEN** (T14).
 
 ## Detailed project description
@@ -212,26 +209,28 @@ for map tiles and image cutouts.
 - **Minor Planet Center** orbit catalogue MPCORB; **IMCCE SkyBoT** (Berthier et al. 2006).
 - Open-source software: astropy, astropy-healpix, reproject, pyvo, numpy, scipy, Pillow, requests, FastAPI,
   uvicorn; Playwright for tests.
-- No code, text or images from other projects are in the repository beyond these libraries (confirmed by Joerg
-  for his parts; **OPEN:** Jonathan and Mati confirm).
+- The code in the repository was written for this project, by AI coding assistants under the team's direction
+  (see "Use of AI"). Beyond the libraries above, we have not knowingly included code, text or images from other
+  projects.
 
 The acknowledgement texts the archives ask for are in `README.md`, "Data credits".
 
 ## Use of AI
 
-We used AI coding assistants throughout: Claude (Anthropic) through Claude Code, by all three team members, and
-OpenAI Codex for some tasks (community workspace, shared spectral analysis, redshift search, map selection,
-brightness panel). They helped with planning, writing code, tests and documentation, and kept the three team
-members' work in sync. The rules the Claude Code sessions followed are public in the repository (`CLAUDE.md`), and
+The code, tests and documentation were written by AI coding assistants under the team's direction: Claude
+(Anthropic) through Claude Code, used by all three team members, and OpenAI Codex for some tasks (community
+workspace, shared spectral analysis, redshift search, map selection, brightness panel). The assistants also
+planned work with us and kept the three team members' work in sync. The rules the Claude Code sessions followed are public in the repository (`CLAUDE.md`), and
 so are the task board and a log of who did what (`TEAM.md`, `tasks/`). The team decided what to build, reviewed
 the results and checked them on real data in the browser.
 
-The project contains no AI-generated images, video or audio. Every image the tool shows is computed from SPHEREx
-data or from the other surveys named above. The only simulated data are two small test fields, labelled
-"synthetic" in the data and with a badge and watermark in the viewer.
-
-**OPEN:** if the demo video or slides use AI-generated pictures or voice, they need a visible mark.
+The tool contains no AI-generated images, video or audio. Every image it shows is computed from SPHEREx data or
+from the other surveys named above. The only simulated data are two small test fields, labelled "synthetic" in
+the data and with a badge and watermark in the viewer. The demo video shows screen recordings of the tool; its
+sound is AI-generated, and the video says so with a visible mark ("Audio: AI-generated").
 
 ## Team
 
-**OPEN:** names as each member wants them printed.
+Team name (exactly these characters, underscores included): `_P$YcHoNaUt$_`
+
+Members: Jonathan, Jörg, Mateusz
