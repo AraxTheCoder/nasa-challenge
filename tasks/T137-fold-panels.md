@@ -1,0 +1,57 @@
+# T137: Chemistry list scrolls; floating panels fold
+
+- **Owner:** Mati  ·  **Status:** review
+- **Branch:** `mati/T137-fold-panels`
+- **Depends on / feeds:** T124 (floating panels, Jonathan), T93/T127 (chemistry list)
+
+## Goal
+1. The Chemistry dropdown never runs past the bottom of the window: it is capped at the space below its button and
+   scrolls (on wide screens it had no cap since the T124 floating UI; the T127 presets made it longer).
+2. Each floating panel group (Field, Map) can be folded to one line: a – button next to its ⠿ grip; folded it shows
+   ⠿ + its name, a click opens it again. Remembered per browser. Status (build progress, messages) stays visible.
+
+## Plan
+- [x] chemistry.js: cap the open list to the window (on open and on resize); style.css: overflow-y auto.
+- [x] hud.js: fold button by the grip, folded tab (grip + name), remembered in localStorage; style.css rules.
+- [x] Light checks only (node syntax, no browser runs); Mati looks at it.
+- [x] hud.js place(): all of a moved panel inside the window, 8 px margin, below the fixed page header; never wider
+      than the window; again on window resize and when the panel itself grows (ResizeObserver).
+
+## Findings
+- The Chemistry list never had a height cap on wide screens; only the phone layout (T117) had `max-height: 55vh`.
+  Since T124 the map is fixed behind the panels, so the page can't scroll to a list running past the window.
+
+## Handoff
+- **Chemistry:** when it opens, the list is capped at the space between its top and the window's bottom (min 160 px)
+  and scrolls; again on resize. On narrow screens (list inside its panel) style.css's 55vh stays.
+- **Folding:** each group (`[data-hud]`: Field, Map) gets a – right after its ⠿ grip. Folded, the group shows only a
+  one-line tab "⠿ Field +" / "⠿ Map +" (drag it by ⠿, double-click ⠿ docks it, click the name opens it). Build
+  progress (`.job`) and messages stay visible; the chemistry note and the Spots list fold with the Map group.
+  Remembered in localStorage `spherex.app.hudFold.v1`. Not active without the map (`?explore=0`, offline): initHud
+  isn't called there.
+- A group moved while folded takes its width when it opens (measured at the left edge, then put back).
+- Checks: node syntax of hud.js / chemistry.js. No Node suite covers either; no browser run (Mati looks at it).
+- **To look at:** open the Chemistry dropdown on a field: it ends above the window's bottom and scrolls with the
+  mouse wheel. Click – next to ⠿ on each panel: one line remains; click "Map +" / "Field +": back as before; reload:
+  the folded state stays.
+
+## Notes from others
+- **On screen (added after Mati's "not flow outside the screen", answer: when dragged or resized):** `place()` keeps all
+  of a moved group inside the window (8 px margin) and below the fixed page header (54 px); a group larger than the
+  window keeps its top-left corner (grip) in view. `max-width` = window − 16 px. Re-placed on window resize and when
+  the group itself changes size (ResizeObserver: chemistry note, Spots list, longer chips), not while dragging. The
+  saved position stays what was dragged; it is clamped again on load. Docked (never moved) groups are unchanged.
+  **To look at:** drag a panel against each edge: it stops 8 px inside, not under the header; make the window
+  narrower: moved panels follow; move the Map panel low, then turn a chemistry picture on: the panel moves up so the
+  note and the Spots list stay inside.
+- **Fix (Mati: "it jumps under my cursor", "a margin on top I can't drag to"):** style.css (T133) gives a moved panel
+  `margin-top: 54px` (under the page header), and on narrow screens the dock is what a moved panel is placed in. relPos()
+  measures where the panel shows, place() set left/top as if they counted from the screen's corner: every drag started
+  54 px lower (62 + 8 more on narrow screens), every re-place (resize, ResizeObserver) slid it 54 px down, and my
+  header limit counted the header twice (a 62 px band under it was unreachable). Now place() measures where the panel
+  landed and shifts left/top by what is off, so it shows exactly where asked. No margins any more: a panel goes up to the
+  window's edges and the header's bottom edge. A panel that isn't shown (map hidden) isn't placed; one that was moved
+  but hidden at page load gets its saved position when it shows.
+  Checked with a Node geometry simulation of place()/relPos() (fake panel with the 54 px margin and the narrow-screen
+  dock offset): drag, 5 re-places, both corners land exactly; the version before the fix reproduced the jump and drift.
+

@@ -21,6 +21,8 @@
 // explore.js's public draw hook and pointer events on #sky only: no change to the map's own code.
 
 import { $, el, fmtNum } from "./util.js";
+import { analysisNote } from "./analysisnote.js";
+import { outlierCopy, LIMITS } from "./analysiscopy.js";
 import { targetBase } from "./viewer.js";
 import { openSpectrum } from "./photometry.js";
 import { getSky } from "./explore.js";
@@ -145,7 +147,7 @@ function colourChart(d, W) {
     g.append(dot);
     if (p.id === st.sel) g.append(svg("circle", { cx, cy, r: r + 4, class: "ol-ring", stroke: C_SEL }));
     const hit = svg("circle", { cx, cy, r: Math.max(8, r + 3), class: "ol-hit" },
-      svg("title", {}, `${p.name}${p.otype && p.otype !== "*" ? ` (${p.otype})` : ""}: ${p.outlier ? `stands out, score ${fmtNum(p.score, 0)}` : "ordinary"}. Click to show its bands.`));
+      svg("title", {}, `${p.name}${p.otype && p.otype !== "*" ? ` (${p.otype})` : ""}: ${p.outlier ? `stands out, score ${fmtNum(p.score, 0)}` : "not flagged by this model"}. Click to show its bands.`));
     hit.addEventListener("click", () => selectSource(p.id));
     g.append(hit);
   }
@@ -219,14 +221,14 @@ function vizBlock(d) {
     el("figure", { class: "ol-fig", style: `width:${W}px` },
       el("figcaption", { class: "small" }, "Colours: galaxies at rest, other sources as observed"),
       colourChart(d, W),
-      el("p", { class: "ol-legend small muted" }, key("ol-sw-ord", "ordinary (defines normal)"), key("ol-sw-odd", "stands out", C_ODD),
+      el("p", { class: "ol-legend small muted" }, key("ol-sw-ord", "reference sources"), key("ol-sw-odd", "stands out", C_ODD),
         key("ol-sw-sel", "selected", C_SEL), " · click a dot")),
     el("figure", { class: "ol-fig", style: `width:${W}px` },
-      el("figcaption", { class: "small" }, el("strong", {}, p.name), p.outlier ? "" : " (ordinary)", `: its bands vs. ${p.peer_group ?? "peers"}`),
+      el("figcaption", { class: "small" }, el("strong", {}, p.name), p.outlier ? "" : " (not flagged)", `: its bands vs. ${p.peer_group ?? "peers"}`),
       shapeChart(d, p, W),
       el("p", { class: "ol-legend small muted" }, key("ol-sw-pt", p.outlier ? "this source" : "this source", p.outlier ? C_ODD : "#8b93a7"),
-        key("ol-sw-line", "an ordinary source of its kind", C_SEL), key("ol-sw-env", `68 % of ${p.peer_group ?? "peer"} references`)),
-      it ? el("p", { class: "small" }, it.reason) : el("p", { class: "small muted" }, "Fits its peer group: no consistent deviation.")));
+        key("ol-sw-line", "peer model", C_SEL), key("ol-sw-env", `68 % of ${p.peer_group ?? "peer"} references`)),
+      it ? analysisNote(outlierCopy(it).brief, outlierCopy(it).detail) : analysisNote("No consistent model deviation", "This check found no consistent deviation from the peer model. Weak features or model limitations can still be present.", "muted small")));
 }
 
 /** T135: SPHEREx-only sources (found in SPHEREx's own images) carry a catalogue lookup: "not catalogued", the
@@ -234,11 +236,11 @@ function vizBlock(d) {
 function tagOf(it) {
   if (!it.tag) return null;
   const m = it.catalogues ?? {};
-  const text = it.tag === "new" ? "not catalogued"
+  const text = it.tag === "new" ? "no catalogue match"
     : it.tag === "other" ? `SIMBAD: ${m.simbad?.kind ?? m.simbad?.otype}`
     : `in ${(Object.values(m).find(Boolean)?.name ?? "").split(" ").slice(0, -1).join(" ") || "a catalogue"}`;
   return el("span", { class: `small ${it.tag === "new" ? "ol-new" : "muted"}`,
-    title: `Found in SPHEREx's own images; looked up in ${Object.keys(m).join(", ")}${it.catalogues_failed?.length ? ` (no answer: ${it.catalogues_failed.join(", ")})` : ""}` }, text);
+    title: `A missing catalogue match does not establish a new object. Found in SPHEREx's own images; looked up in ${Object.keys(m).join(", ")}${it.catalogues_failed?.length ? ` (no answer: ${it.catalogues_failed.join(", ")})` : ""}` }, text);
 }
 
 function item(it) {
@@ -250,8 +252,8 @@ function item(it) {
         .filter(Boolean).join(" · ")),
       el("span", { class: "ol-score small", title: "Ranking score: summed significance of the consistent deviations (halved for blends)" },
         `score ${fmtNum(it.score, 0)}`)),
-    el("div", { class: "ol-row ol-detail" }, residualChart(it), el("p", { class: "small" }, it.reason)),
-    it.caveats?.length ? el("p", { class: "muted small ol-caveat" }, `Caveat: ${it.caveats.join("; ")}.`) : null);
+    el("div", { class: "ol-row ol-detail" }, residualChart(it), analysisNote(outlierCopy(it).brief, outlierCopy(it).detail)),
+    it.caveats?.length ? analysisNote("Measurement caveats", it.caveats.join("; ") + ". " + LIMITS, "muted small ol-caveat") : null);
   li.addEventListener("click", (e) => { if (!e.target.closest("button")) selectSource(it.id); });
   return li;
 }
@@ -261,12 +263,9 @@ function varBlock(d) {
   const v = d.variability;
   if (!v || v.status === "error") return null;
   const vars = v.variables ?? [];
-  const fresh = vars.filter((r) => !r.catalogued_variable).length;
-  const head = el("h4", { class: "ol-subhead" }, "Changes brightness");
-  const note = el("p", { class: vars.length ? "small" : "small muted" }, vars.length
-    ? `${vars.length} source${vars.length === 1 ? "" : "s"} change brightness between exposures at the same wavelength` +
-      (fresh ? `; ${fresh} not catalogued as variable (listed first).` : ", all catalogued variables.")
-    : "No source changes brightness clearly between exposures at the same wavelength.");
+  const head = el("h4", { class: "ol-subhead" }, "Possible variability");
+  const note = analysisNote(vars.length ? `${vars.length} source${vars.length === 1 ? "" : "s"} flagged · cause uncertain` : "No variability passed this check",
+    "Repeated differences at similar wavelengths can indicate variability. Blends, extended sources, calibration and sampling can affect the result. Not being catalogued as variable does not establish a new discovery.", "muted small");
   if (!vars.length) return el("div", { class: "ol-var" }, head, note);
   const shown = st.allVar ? vars : vars.slice(0, SHOW);
   const list = el("ol", { class: "ol-list" }, ...shown.map((r) => {
@@ -274,9 +273,8 @@ function varBlock(d) {
     name.addEventListener("click", () => openSpectrum(r.ra_deg, r.dec_deg, r.name));
     return el("li", { class: "ol-item" },
       el("div", { class: "ol-row" }, name,
-        el("span", { class: `small ${r.catalogued_variable ? "muted" : "ol-new"}` }, r.catalogued_variable ? `known variable (${r.otype})` : "not catalogued"),
-        el("span", { class: "ol-score small", title: "90 % of its same-wavelength pairs change less than this" }, `±${fmtNum(r.amplitude_mag, 2)} mag`)),
-      el("p", { class: "small" }, r.reason));
+        el("span", { class: `small ${r.catalogued_variable ? "muted" : "ol-new"}` }, r.catalogued_variable ? `catalogued variable (${r.otype})` : "not listed as variable"),
+        analysisNote(`±${fmtNum(r.amplitude_mag, 2)} mag`, `${r.reason}. 90% of same-wavelength pairs change less than this amplitude; this is not a physical variability model. Instrumental effects and blends may contribute.`, "ol-score small")));
   }));
   const parts = [head, note, list];
   if (vars.length > SHOW) {
@@ -284,9 +282,7 @@ function varBlock(d) {
     more.addEventListener("click", () => { st.allVar = !st.allVar; render(); });
     parts.push(more);
   }
-  parts.push(el("p", { class: "muted small" }, `${v.n_judged ?? 0} sources judged` +
-    (v.blended?.length ? `; ${v.blended.length} that change but have a bright neighbour or are extended are left out` : "") +
-    ". " + (v.method ?? "")));
+  parts.push(analysisNote(`${v.n_judged ?? 0} sources compared`, `${v.blended?.length ?? 0} blended or extended sources left out. ${v.method ?? ""} Significance depends on the adopted error model.`, "muted small"));
   return el("div", { class: "ol-var" }, ...parts);
 }
 
@@ -294,40 +290,46 @@ function redshiftBlock(d) {
   const rank = { estimated: 0, catalogue: 1, ambiguous: 2, insufficient_evidence: 3, insufficient_data: 4 };
   const shifts = [...(d.redshifts?.sources ?? [])].sort((a, b) => (rank[a.status] ?? 5) - (rank[b.status] ?? 5));
   if (!shifts.length) return null;
-  const rows = shifts.map((r) => {
+  const row = (r) => {
     const name = el("button", { type: "button", class: "link" }, r.name);
     name.addEventListener("click", () => openSpectrum(r.ra_deg, r.dec_deg, r.name));
-    const text = r.status === "catalogue" ? `z = ${r.z} · catalogue (${r.origin}${r.quality ? `, quality ${r.quality}` : ""})` :
-      r.status === "estimated" ? `z ≈ ${r.z} · experimental spectrum estimate` :
-      r.status === "ambiguous" ? "redshift uncertain · competing shifts or search boundary" : "redshift uncertain · insufficient spectral evidence";
-    return el("li", { class: "ol-item" }, name, ` · ${text}`,
-      r.z_interval ? el("p", { class: "small muted" }, `Local fit range ${r.z_interval[0]}–${r.z_interval[1]}; systematic uncertainty is not included.`) : null,
-      r.alternatives?.length ? el("details", {}, el("summary", { class: "small" }, "Possible shifts and supporting features"),
-        ...r.alternatives.map((a) => el("p", { class: "small" },
-          `z ≈ ${a.z} · ${a.profile_name}: ${a.features.filter((f) => f.status === "detected").map((f) => f.name).join(", ")}`))) : null);
-  });
+    const brief = r.status === "catalogue" ? `z = ${r.z} · catalogue` :
+      r.status === "estimated" ? `z ≈ ${Number(r.z.toFixed(3))} · tentative` : "Redshift uncertain";
+    const alternatives = (r.alternatives ?? []).map((a) => `z ≈ ${a.z}, ${a.profile_name}: ${a.features.filter((f) => f.status === "detected").map((f) => f.name).join(", ")}`).join("; ");
+    const detail = r.status === "catalogue" ? `From ${r.origin}${r.quality ? `, quality ${r.quality}` : ""}. A published catalogue value, not remeasured here; source association and catalogue quality still matter.` :
+      `Experimental feature-template search over z=0–1. ${r.reason ?? "Insufficient usable spectral evidence"}. ` +
+      (r.z_interval ? `Local fit interval ${r.z_interval[0]}–${r.z_interval[1]}; systematic and template uncertainty are not included. ` : "An uncertain shift is not applied. ") +
+      (alternatives ? `Possible fits: ${alternatives}. ` : "") + "This is not a confirmed redshift or object classification.";
+    return el("li", { class: "ol-item" }, name, " · ", analysisNote(brief, detail));
+  };
+  const accepted = shifts.filter((r) => r.status === "catalogue" || r.status === "estimated");
+  const uncertain = shifts.filter((r) => r.status !== "catalogue" && r.status !== "estimated");
   return el("section", {}, el("h4", {}, "Redshifts"),
-    el("p", { class: "small muted" }, "Catalogue values are preferred. Missing values are estimated experimentally from multiple emission features over z = 0–1. Uncertain shifts are left out of chemistry matching and galaxy comparisons."),
-    el("ul", { class: "ol-list" }, ...rows.slice(0, SHOW)),
-    rows.length > SHOW ? el("details", {}, el("summary", {}, `Show ${rows.length - SHOW} more`), el("ul", { class: "ol-list" }, ...rows.slice(SHOW))) : null);
+    analysisNote("Catalogue or tentative spectral estimate", "Catalogue values take priority. Missing values are fitted experimentally over z=0–1. Ambiguous shifts and poor fits are excluded from automatic matching. Objects outside this range and absorption-only spectra can remain unresolved.", "muted small"),
+    accepted.length ? el("ul", { class: "ol-list" }, ...accepted.slice(0, SHOW).map(row)) : null,
+    accepted.length > SHOW ? el("details", {}, el("summary", {}, `Show ${accepted.length - SHOW} more`), el("ul", { class: "ol-list" }, ...accepted.slice(SHOW).map(row))) : null,
+    uncertain.length ? el("details", {}, el("summary", {}, `${uncertain.length} unresolved shift${uncertain.length === 1 ? "" : "s"}`), el("ul", { class: "ol-list" }, ...uncertain.map(row))) : null);
 }
 
 function profileBlock(d) {
   const profiles = d.chemistry_profiles;
   if (!profiles) return null;
   const matches = profiles.matches ?? [];
+  const labels = { brown_dwarfs: "brown dwarf", young_stars: "young star", cool_giants: "cool giant",
+    protostars: "protostar", starburst: "star-forming galaxy", quasars: "quasar", ionised_gas: "ionised gas",
+    cloud_ices: "ice absorption", cloud_edge: "illuminated cloud edge" };
   return el("section", { class: "ol-profiles" },
-    el("h4", {}, "Automatic chemistry-profile candidates"),
-    el("p", { class: "small muted" }, profiles.method),
+    el("h4", {}, "Chemistry candidates"),
+    analysisNote("Feature patterns · identities unconfirmed", `${profiles.method} Significance is model-dependent and has not been calibrated as a classification probability.`, "muted small"),
     matches.length ? el("ul", { class: "ol-list" }, ...matches.map((m) => {
       const name = el("button", { type: "button", class: "link" }, m.name);
       name.addEventListener("click", () => openSpectrum(m.ra_deg, m.dec_deg, m.name));
-      return el("li", { class: "ol-item" }, name, ` · ${m.profile_name}${m.redshift_origin !== "rest" ? ` · z=${m.z} (${m.redshift_origin})` : ""}`,
-        el("p", { class: "small" }, m.features.map((f) => f.status === "insufficient_coverage"
-          ? `${f.name ?? f.feature}: insufficient coverage` : `${f.name ?? f.feature}: ${f.pct > 0 ? "+" : ""}${f.pct}% (${f.significance}σ, ${f.epochs_agree}/${f.epochs_seen} epochs agree)`).join(" · ")),
-        el("p", { class: "small muted" }, m.caveats.join(" ")));
-    })) : el("p", { class: "small muted" }, "No multi-feature candidates meet the thresholds. Missing wavelength coverage can prevent a match."),
-    profiles.skipped?.length ? el("p", { class: "small muted" }, "Galaxy and quasar profiles remain unscored where a reliable redshift is unavailable.") : null);
+      const evidence = m.features.map((f) => f.status === "insufficient_coverage"
+        ? `${f.name ?? f.feature}: insufficient coverage` : `${f.name ?? f.feature}: ${f.pct > 0 ? "+" : ""}${f.pct}%, ${f.significance}σ, ${f.epochs_agree}/${f.epochs_seen} epochs agree (${f.status === "detected" ? "threshold passed" : "below threshold"})`).join("; ");
+      return el("li", { class: "ol-item" }, name, " · ", analysisNote(`Possible ${labels[m.profile] ?? m.profile_name.toLowerCase()}`,
+        `${evidence}. ${m.redshift_origin && m.redshift_origin !== "rest" ? `z=${m.z} (${m.redshift_origin}). ` : ""}${(m.caveats ?? []).join(" ")} ${LIMITS}`));
+    })) : analysisNote("No candidates passed this check", "Missing wavelength coverage, low signal or a mismatched template can prevent a match. This does not rule out the object types being sought.", "muted small"),
+    profiles.skipped?.length ? analysisNote("Some redshift profiles unchecked", "A reliable redshift was unavailable; galaxy/quasar profiles were not evaluated for those sources.", "muted small") : null);
 }
 
 function render() {
@@ -338,15 +340,13 @@ function render() {
   if (d.status === "not_started") {
     const go = el("button", { type: "button" }, "Analyse sources: spectra + chemistry profiles");
     go.addEventListener("click", () => load(true));
-    parts.push(el("p", { class: "small" }, "Measures every catalogue source of this field in every SPHEREx exposure " +
-      "(~20 s the first time) and lists the ones whose spectral shape doesn't fit what ordinary sources here look like, " +
-      "and the ones that change brightness. Also checks chemistry profiles automatically using the same measured spectra."), go);
+    parts.push(analysisNote("Compare spectra and feature patterns", "Measures catalogue and image-detected sources using the available exposures, then checks model deviations, possible variability and chemistry patterns. Results are candidates; noisy or incomplete measurements can remain unjudged."), go);
   } else if (d.status === "building") {
     parts.push(el("p", { class: "small" }, d.total ? `Reading exposures… ${d.done}/${d.total}` : "Reading exposures…"));
   } else if (d.status === "ready") {
     const items = d.items ?? [];
     const nj = d.not_judged ?? [];
-    parts.push(el("p", { class: items.length ? "" : "muted" }, d.summary ?? ""));
+    parts.push(analysisNote(items.length ? `${items.length} ${items.length === 1 ? "spectrum" : "spectra"} flagged · interpretation uncertain` : d.n_judged ? "No deviations passed this check" : "Insufficient data for comparison", `${d.summary ?? ""} ${LIMITS}`, items.length ? "" : "muted small"));
     parts.push(redshiftBlock(d));
     parts.push(profileBlock(d));
     parts.push(vizBlock(d));
@@ -359,17 +359,15 @@ function render() {
         parts.push(more);
       }
     }
-    parts.push(el("p", { class: "muted small" },
-      `${d.field?.n_sources ?? "?"} sources in ${d.field?.n_exposures ?? "?"} exposures; ${d.n_judged ?? 0} had enough clean bands` +
-      (nj.length ? ` (${nj.length} not judged: insufficient clean bands or peers)` : "") + ". " +
-      "Bars: how far each band is from its peer group's ordinary shape (solid = the consistent deviations). " + (d.method ?? "")));
+    parts.push(analysisNote(`${d.n_judged ?? 0}/${d.field?.n_sources ?? "?"} sources compared · ${d.field?.n_exposures ?? "?"} exposures`,
+      `${nj.length} sources unjudged: insufficient clean bands, peers or a reliable redshift. Bars show residuals relative to a peer model. ${d.method ?? ""} Model significance is not an identification probability.`, "muted small"));
     const vb = varBlock(d);
     if (vb) parts.push(vb);
   } else {
     parts.push(el("p", { class: "msg msg-warn" }, `Couldn't measure the field: ${d.message ?? d.status}`));
   }
-  body.replaceChildren(...parts);
-  $("#ol-status").textContent = d.status === "ready" && d.items?.length ? `${d.items.length} found` : "";
+  body.replaceChildren(...parts.filter(Boolean));
+  $("#ol-status").textContent = d.status === "ready" && d.items?.length ? `${d.items.length} flagged` : "";
   mapNote();
 }
 
@@ -429,7 +427,7 @@ function mapNote() {
     !st.target ? "open a field first" :
     !d ? "" :
     d.status === "building" ? (d.total ? `measuring ${d.done}/${d.total}…` : "measuring…") :
-    d.status === "ready" ? [d.items?.length ? `${d.items.length} ringed` : "none here",
+    d.status === "ready" ? [d.items?.length ? `${d.items.length} ringed` : "none flagged",
       d.variability?.variables?.length ? `${d.variability.variables.length} changing (dashed, V)` : ""].filter(Boolean).join(", ") :
     d.status === "not_started" ? "" : "failed";
 }
@@ -541,8 +539,8 @@ function fillCard(c, it) {
     el("p", { class: "small muted" }, [it.otype && it.otype !== "*" ? it.otype : "", it.mag != null ? `mag ${fmtNum(it.mag, 1)}` : "",
       `score ${fmtNum(it.score, 0)}`].filter(Boolean).join(" · ")),
     residualChart(it, 260, 44),
-    el("p", { class: "small" }, it.reason),
-    it.caveats?.length ? el("p", { class: "small muted" }, `Caveat: ${it.caveats.join("; ")}.`) : null,
+    analysisNote(outlierCopy(it).brief, outlierCopy(it).detail),
+    it.caveats?.length ? analysisNote("Measurement caveats", it.caveats.join("; ") + ". " + LIMITS, "muted small") : null,
     el("div", { class: "ol-card-actions" }, spec, charts)].filter(Boolean));   // replaceChildren would print "null"
 }
 

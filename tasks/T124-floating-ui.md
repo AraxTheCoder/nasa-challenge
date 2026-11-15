@@ -54,3 +54,18 @@ describe what is already visible are gone.
   `#blink-status` are still in your index.html, so region.js / activity.js work unchanged. Only look: "▭ Select region"
   is `position: absolute; top: 100px; right: 12px` in `#explore` (under 💬; on phones `bottom: 100px`): move it if
   your floating layout puts something there.
+
+- 2026-11-15 [Mati] T137 (on Mati's word, Decision in TEAM.md) added folding to `web/hud.js`: `makeGrip()` (your grip
+  + dblclick, now also used by the folded tab) and `makeFoldable()` (a `.hud-fold` – after the grip; folded =
+  `.hud-folded` on the group, which hides everything but a `.hud-tab` panel, `.messages` and `.job`); `place()` doesn't
+  freeze the width of a folded group. style.css: the T137 block after `.hud-dragging`, and `.hud-fold` added to the
+  "nothing to show yet" row rule. Drag, dock and saved positions are unchanged. Details: tasks/T137.
+- 2026-11-15 [Mati] T137 addition: `place()` now keeps all of a moved group inside the window (`MARGIN` 8 px, below
+  `.app-header`'s height, `max-width` = window − 16 px; `KEEP` is only the narrowest width now), and `initHud()`
+  re-places moved groups on resize and via a ResizeObserver when a group grows (not during a drag). `reset()` also
+  clears `max-width`.
+- 2026-11-15 [Mati] T137 fix: `place()` now measures where the panel landed after setting left/top and shifts them by
+  the difference. Reason: `body:has(.app-header) .hud-moved { margin-top: 54px }` (T133) and, on narrow screens, the dock
+  being the moved panel's containing block made relPos() and left/top disagree (54 px jump on every drag; drift on every
+  re-place). No margins now (edges and the header's bottom are the limits). Hidden panels aren't placed.
+

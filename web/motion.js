@@ -4,6 +4,7 @@
 // measurement (~15 s, a fit to the star and its reference stars in every exposure) and polls until it's done.
 
 import { el, fmtNum } from "./util.js";
+import { analysisNote } from "./analysisnote.js";
 import { currentTarget, targetBase } from "./viewer.js";
 
 // The server decides whether the clicked spot is a moving catalogued star (≥ 0.3″/yr, within 8″): the viewer's
@@ -27,13 +28,12 @@ function body(r, label) {
     const plx = r.parallax;
     return [
       el("p", { class: "ph-motion-big" }, `${fmtNum(r.pm_total_arcsec_yr, 2)} ± ${fmtNum(r.pm_total_err, 2)}″ per year, toward the ${dir(r.pa_deg)}`),
-      el("p", {}, `Catalogue (${cat.source === "simbad" ? "SIMBAD / Gaia" : cat.source ?? "catalogue"}): ${fmtNum(cat.pm_total_arcsec_yr, 2)}″ per year toward the ${dir(cat.pa_deg)}. SPHEREx ${r.verdict}.`),
-      plx?.reliable ? el("p", {}, `Its yearly wobble from Earth's orbit (parallax ${fmtNum(plx.parallax_arcsec, 3)} ± ${fmtNum(plx.parallax_err, 3)}″) puts it at `,
-        el("strong", {}, `${fmtNum(plx.distance_pc, 2)} parsec`), ` (${fmtNum(plx.distance_pc * 3.2616, 1)} light years).`) : null,
-      el("p", { class: "muted small" }, (r.measured_in === "deep stacks"
-        ? `Too faint for a single exposure: measured in deep stacks of ${(r.epochs ?? []).map((e) => e.stacked).join(" / ")} exposures at 3.8–5 µm (one per epoch) over ${fmtNum(r.span_years, 1)} years, `
-        : `Measured in ${r.n_measured} of ${r.n_exposures} exposures over ${fmtNum(r.span_years, 1)} years, `) +
-        `${r.epochs?.length ?? 0} epochs, ${r.n_references} reference stars. ${plx && !plx.reliable ? `Distance: ${plx.note}. ` : ""}${r.method ?? ""}`),
+      analysisNote("Catalogue comparison", `Catalogue (${cat.source === "simbad" ? "SIMBAD / Gaia" : cat.source ?? "catalogue"}): ${fmtNum(cat.pm_total_arcsec_yr, 2)}″ per year toward ${dir(cat.pa_deg)}. SPHEREx ${r.verdict}. Agreement depends on fit errors and source association.`, "muted small"),
+      plx?.reliable ? analysisNote(`${fmtNum(plx.distance_pc, 2)} pc · distance estimate`,
+        `Inferred from fitted parallax ${fmtNum(plx.parallax_arcsec, 3)} ± ${fmtNum(plx.parallax_err, 3)}″. This estimate depends on the astrometric model and can have additional systematic uncertainty.`) : null,
+      analysisNote(r.n_measured != null && r.n_exposures != null ? `${r.n_measured}/${r.n_exposures} exposures · fitted motion` : "Motion fit details",
+        (r.measured_in === "deep stacks" ? "Measured in combined deep images, not individual exposures. " : "Measured against reference stars in individual exposures. ") +
+        `${fmtNum(r.span_years, 1)} years, ${r.epochs?.length ?? 0} epochs, ${r.n_references} references. ${plx && !plx.reliable ? `Distance unresolved: ${plx.note}. ` : ""}${r.method ?? ""} Position errors, blends and calibration can affect the fit.`, "muted small"),
     ];
   }
   if (r.status === "building") return [el("p", { class: "small" }, r.total ? `Measuring… ${r.done}/${r.total} exposures` : "Measuring…")];
@@ -64,12 +64,11 @@ async function fetchMotion(where, start, box, token) {
 }
 
 function fill(box, label, r, where) {
-  const parts = [el("h4", {}, `How fast ${label.name} moves, measured by SPHEREx`)];
+  const parts = [el("h4", {}, `Motion estimate · ${label.name}`)];
   if (r.status === "not_started") {
     const go = el("button", { type: "button" }, "Measure it from SPHEREx (~15 s)");
     go.addEventListener("click", () => fetchMotion(where, true, box, box.dataset.token));
-    parts.push(el("p", { class: "small" }, "It is a catalogued star that moves. SPHEREx can measure how fast on its own: " +
-      "the star's position in every exposure, against fixed background stars."), go);
+    parts.push(analysisNote("Catalogue suggests motion", "This position matches a catalogue source with proper motion. A fit to SPHEREx positions against reference stars can provide an independent comparison; blending and astrometric calibration affect its uncertainty."), go);
   } else {
     parts.push(...body(r, label));
   }

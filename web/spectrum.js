@@ -112,31 +112,22 @@ const amount = (r) => (r.sign > 0 ? (r.ratio >= 1.95 ? `about ${r.ratio.toFixed(
 /** Plain-words hint for a region: {title, text}. */
 export function hint(r, fit) {
   const near = (kinds, pad) => FEATURES.filter((f) => kinds.includes(f.kind) && f.um >= r.umMin - pad && f.um <= r.umMax + pad);
-  const star = fit && !fit.poor ? `${fmtT(fit)} star` : "a plain star";
+  const title = `${r.sign > 0 ? "More" : "Less"} light at ${range(r)} (${amount(r)})`;
+  let text;
   if (r.sign > 0) {
-    const narrow = r.umMax - r.umMin <= 0.12;
-    const lines = narrow ? near(["line", "band"], 0.06) : [];
-    if (lines.length) {
-      const f = lines[0];
-      return { title: `Bright at ${range(r)} (${amount(r)})`, text: `${f.name} sits here: ${f.what}?` };
-    }
+    const lines = r.umMax - r.umMin <= 0.12 ? near(["line", "band"], 0.06) : [];
     const beyond = r.points ? r.points.filter((p) => p.um > FIT_MAX_UM).length : r.nBeyond;
-    if (r.umMax >= 3 && beyond * 2 >= r.n) {
-      return { title: `More light at ${range(r)} than ${star} gives (${amount(r)})`,
-        text: "Warm dust around it (a disk or shell, as around young stars)? Or the source is cooler than it looks: " +
-          "brown dwarfs and giant planets are much brighter at 3–5 µm than a star-like baseline." };
-    }
-    return { title: `Redder than ${star} at ${range(r)} (${amount(r)})`,
-      text: "A cool companion, hot dust close to the star, or dust in front of it that dims the blue end?" };
+    if (lines.length) text = `Possible ${lines[0].name} emission: ${lines[0].what}.`;
+    else if (r.umMax >= 3 && beyond * 2 >= r.n) text = "Possible warm dust or a cool component; an unsuitable stellar baseline can also produce this excess.";
+    else text = "Possible dust, a cooler component or a blend. This slope does not uniquely identify a cause.";
+  } else if (r.umMax - r.umMin <= .45 && r.umMin - .1 <= 3.32 && r.umMax + .1 >= 3.32) {
+    text = "Possible methane absorption near 3.3 µm. PAH emits at similar wavelengths; a dip alone does not establish methane.";
+  } else {
+    const ices = near(["ice"], .1);
+    text = ices.length ? `Possible ${ices[0].name} absorption: ${ices[0].what}.` :
+      "Possible molecular absorption, dust or a mismatch with the stellar baseline.";
   }
-  const ices = near(["ice", "band"], 0.1);
-  if (ices.length) {
-    const f = ices[0];
-    return { title: `Less light at ${range(r)} (${amount(r)})`, text: `${f.name} absorbs here: ${f.what}?` };
-  }
-  return { title: `Less light at ${range(r)} than ${star} gives (${amount(r)})`,
-    text: "Absorption by molecules (water, methane, CO) in a cool star's or brown dwarf's atmosphere, " +
-      "or by ice and dust in a cold cloud in front of it?" };
+  return { title, text: text + " A wavelength match is not an identification. Blending, calibration and variability can affect this comparison." };
 }
 
 /**
