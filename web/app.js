@@ -249,6 +249,9 @@ async function loadField(req, { quiet = false } = {}) {
     };
     const { id, targetUrl } = await requestField(app.api, req, { onProgress, signal });
     if (token !== app.loadToken) return;
+    // T104: a background build that finishes while a map tool (Chemistry) holds the map must not swap in its
+    // field: that threw the chemistry picture away "after some time". It is cached; the blink asks again later.
+    if (quiet && app.mapTool && app.manualMap) { autoField.building = null; autoField.key = null; showBlinkStatus(); return; }
     await openTarget(targetUrl, id, token, signal);
   } catch (err) {
     if (err.name === "AbortError" || token !== app.loadToken) return;

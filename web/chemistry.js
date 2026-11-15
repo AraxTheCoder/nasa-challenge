@@ -162,6 +162,14 @@ export async function initChemistry(api) {
   // T90: the automatic blink took the map back (the view moved to another tile)
   document.addEventListener("map:manual", (e) => { if (!e.detail?.on && st.shown) off(); });
   document.addEventListener("viewer:target", (e) => {
+    // T104: the same field announced again (its labels or known objects arrived, the Labels switch): the picture
+    // stays; only another field (or none) ends it
+    const t = e.detail?.target ?? null;
+    if (t && st.target && t.id === st.target.id) {
+      st.target = t;
+      if (st.shown) explore.showLayer(st.shown).then((ok) => { if (!ok) off(); });
+      return;
+    }
     off();
     st.ready.clear();
     st.target = e.detail?.target ?? null;
