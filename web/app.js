@@ -203,6 +203,20 @@ function setPageUrl(req, push, build = true) {
   else history.replaceState(null, "", url);
 }
 
+/** T95: with the map off (?explore=0, offline ?data=) its screen is hidden, and with it the panels that live on it
+ *  since T90: the synthetic badge, messages, build progress and the quick pick's reason move into the page, under the
+ *  field form. */
+function panelsOffMap() {
+  const anchor = $("#field-form");
+  if (!anchor) return;
+  for (const id of ["pick-why", "job", "messages", "synthetic-badge"]) {   // inserted after the form: last ends up first
+    const node = document.getElementById(id);
+    if (node) anchor.after(node);
+  }
+  const labels = document.getElementById("labels-toggle")?.closest("label");   // works in every mode (T40)
+  if (labels) anchor.after(labels);
+}
+
 /** Do what the page URL asks for: ?ra=&dec=&size= (or &blink=1) builds that field, ?ra=&dec= alone goes
  *  there like Go. Returns false if it asks for nothing. */
 function loadFromUrl() {
@@ -1065,13 +1079,14 @@ async function main() {
   if (p.get("data")) {
     $("#explore").hidden = true; // offline mode has no tile server; an empty map box only confuses
     $("#map-tools").hidden = true;
+    panelsOffMap();
     await startOffline(p.get("data"));
     return;
   }
   await loadPresets();
   // ?explore=0 skips the sky map (embeds, slow connections, and the browser test, which must not
   // depend on external tile servers being up).
-  if (p.get("explore") === "0") { $("#explore").hidden = true; $("#map-tools").hidden = true; }
+  if (p.get("explore") === "0") { $("#explore").hidden = true; $("#map-tools").hidden = true; panelsOffMap(); }
   else startExplore();   // not awaited: the map loads in the background
   initChemistry(app.api);   // T93: the Chemistry selector, for real fields on the map
   const requested = loadFromUrl();

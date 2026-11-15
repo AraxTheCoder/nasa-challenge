@@ -109,12 +109,12 @@ try:
               f"quick picks: 5 official fields + groups from discover.json (T65) {groups}")
         check("fixture mode" in page.text_content("#source-info"), f"footer shows fixture mode ({page.text_content('#source-info')})")
         # Default field pre-filled (T25), but nothing is requested until the user presses Show.
-        check(page.input_value("input[name=ra]") == "269.4463" and page.input_value("input[name=dec]") == "4.7682"
-              and page.input_value("input[name=size]") == "15", "form pre-filled with the default field")
+        check(page.input_value("#field-form input[name=ra]") == "269.4463" and page.input_value("#field-form input[name=dec]") == "4.7682"
+              and page.input_value("#field-form input[name=size]") == "15", "form pre-filled with the default field")
         check(page.eval_on_selector("#preset", "s => s.options[s.selectedIndex].text") == "Barnard's Star",
               "test-field dropdown shows the default")
         check(page.locator("#form-hint").count() == 0, "no inline hint line any more (T29)")
-        page.focus("input[name=dec]")
+        page.focus("#field-form input[name=dec]")
         check(page.is_hidden("#form-tip"), "help bubble is switched off by default (T29)")
         page.click("#form-help")
         check(page.is_visible("#form-tip"), "? button opens the bubble even when it is switched off")
@@ -124,9 +124,9 @@ try:
               "empty state names the pre-filled field")
         check(page.is_hidden("#viewer-body") and page.is_hidden("#job") and "ra=" not in page.url, "default is not loaded automatically")
         page.screenshot(path=str(out / "t20-empty.png"), full_page=True)
-        page.fill("input[name=ra]", "10")
+        page.fill("#field-form input[name=ra]", "10")
         check(page.input_value("#preset") == "" and page.is_hidden("#empty-default"), "typing own coordinates clears the default marker")
-        page.fill("input[name=ra]", "269.4463")
+        page.fill("#field-form input[name=ra]", "269.4463")
         check(page.input_value("#preset") != "", "typing the default back re-selects it")
 
         # 1b. T65: "Surprise me" opens a field from discover.json and says why it is interesting
@@ -136,7 +136,7 @@ try:
         picked = page.eval_on_selector("#preset", "s => s.options[s.selectedIndex].parentElement.label")
         check(picked != "Official test fields" and page.is_visible("#pick-why") and "Moves" in page.text_content("#pick-why")
               and "ra=" in page.url, f"Surprise me loads a discover field with its reason ({picked}: {page.text_content('#pick-why')[:80]})")
-        page.fill("input[name=ra]", "10")
+        page.fill("#field-form input[name=ra]", "10")
         check(page.is_hidden("#pick-why"), "own coordinates hide the reason line")
         page.goto(WEB + "?" + Q)   # back to the bare page, so step 2 waits for its own build
         page.wait_for_function("document.querySelector('#source-info').textContent.includes('Live API')")
@@ -171,13 +171,13 @@ try:
         check(page.is_hidden("#job"), "cached field loads without progress panel")
 
         # 4. typed sexagesimal coordinates, then back button
-        page.fill("input[name=ra]", "08h55m10.831s")
-        page.fill("input[name=dec]", "-7d14m42.53s")
+        page.fill("#field-form input[name=ra]", "08h55m10.831s")
+        page.fill("#field-form input[name=dec]", "-7d14m42.53s")
         label_before = page.text_content("#stage-label")
-        page.focus("input[name=ra]")
+        page.focus("#field-form input[name=ra]")
         page.keyboard.press("x")  # typing must not flip frames
         check(page.text_content("#stage-label") == label_before, "typing x in a text field doesn't flip frames")
-        page.fill("input[name=ra]", "08h55m10.831s")
+        page.fill("#field-form input[name=ra]", "08h55m10.831s")
         page.click("#field-form button[type=submit]")
         page.wait_for_selector("#job:not([hidden])", timeout=5000)
         wait_loaded(page)
@@ -186,12 +186,12 @@ try:
         check("c1337951-m072451-s15" in page.text_content("#target-name") or "133.795" in page.text_content("#target-name"),
               f"server parsed sexagesimal: {page.text_content('#target-name')}")
         page.go_back()
-        page.wait_for_function("document.querySelector('input[name=ra]').value === '133.7598'")
+        page.wait_for_function("document.querySelector('#field-form input[name=ra]').value === '133.7598'")
         check(True, "back button restores the previous field")
         page.go_back()
         page.wait_for_selector("#empty:not([hidden])")
         check(page.is_hidden("#viewer-body"), "back to bare page shows empty state")
-        check(page.input_value("input[name=ra]") == "269.4463", "back to bare page refills the default field")
+        check(page.input_value("#field-form input[name=ra]") == "269.4463", "back to bare page refills the default field")
 
         # 5. stop waiting
         page.goto(WEB + "?ra=10&dec=20&size=20&" + Q)
@@ -218,19 +218,19 @@ try:
         t.goto(WEB + "?tip=1&" + Q)
         t.wait_for_selector("#form-tip:not([hidden])", timeout=5000)
         check("decimal degrees" in t.text_content("#form-tip"), "?tip=1 shows the help bubble on the start page")
-        tip_box, ra_box = t.locator("#form-tip").bounding_box(), t.locator("input[name=ra]").bounding_box()
+        tip_box, ra_box = t.locator("#form-tip").bounding_box(), t.locator("#field-form input[name=ra]").bounding_box()
         check(tip_box["y"] > ra_box["y"] + ra_box["height"] and abs(tip_box["x"] - ra_box["x"]) < 40,
               f"bubble sits under the RA input (tip {tip_box['x']:.0f},{tip_box['y']:.0f}; RA {ra_box['x']:.0f},{ra_box['y']:.0f})")
         t.screenshot(path=str(out / "t29-tip.png"))
         t.keyboard.press("Escape")
         check(t.is_hidden("#form-tip"), "Escape closes the bubble")
-        t.focus("input[name=dec]")
+        t.focus("#field-form input[name=dec]")
         check(t.is_visible("#form-tip"), "focusing RA/Dec opens it again")
         t.click("#form-tip-close")
         check(t.is_hidden("#form-tip"), "Got it closes the bubble")
         t.reload()
         t.wait_for_function("document.querySelector('#source-info').textContent.includes('Live API')")
-        t.focus("input[name=ra]")
+        t.focus("#field-form input[name=ra]")
         check(t.is_hidden("#form-tip"), "Got it is remembered after reload")
         t.click("#form-help")
         check(t.is_visible("#form-tip"), "? button reopens it after Got it")
@@ -255,7 +255,7 @@ try:
         e.goto(WEB + "?ra=abc&dec=20&" + Q)
         e.wait_for_selector(".msg-error")
         check("Can't use these coordinates" in e.text_content(".msg-error"), f"bad coordinates: {e.text_content('.msg-error')}")
-        e.goto(WEB + "?explore=0&ra=10&dec=20&api=http://127.0.0.1:9")
+        e.goto(WEB + "?explore=0&ra=10&dec=20&size=15&api=http://127.0.0.1:9")   # size= asks for a build (T90: ra/dec alone only moves the map)
         e.wait_for_selector(".msg-error")
         check("Can't reach the Live API" in e.text_content(".msg-error"), "unreachable API explained")
         e.goto(WEB + "?explore=0&api=http://127.0.0.1:9")
