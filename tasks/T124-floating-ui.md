@@ -25,3 +25,9 @@ describe what is already visible are gone.
 
 ## Notes from others
 (anyone may append here, dated and signed)
+- 2026-11-15 [Joerg] Heads-up from T122/T123 (merged to main after you branched): please keep, when you merge main into
+  `jonathan/T124-floating-ui`: (1) `import "./region.js"` and `import "./activity.js"` in app.js; (2) the block at the
+  start of `loadField` that calls `explore.markField(...)` (red square visible while a field builds); (3) the CSS blocks
+  `.region-btn` / `.region-hint` and `.activity*` at the end of style.css. `#region-btn` is appended to `#explore`
+  (absolute, top 100px right 12px, under 💬); move it wherever fits your floating layout. `#activity` is a fixed bar
+  at the top of the page (z-index 60).
