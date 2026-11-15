@@ -1,6 +1,6 @@
 # T15: Submission text, data credits and AI-use disclosure
 
-- **Owner:** Mati  ·  **Status:** doing
+- **Owner:** Mati  ·  **Status:** open (on hold: Mati, 2026-11-15: the text changes with every new feature, so it is finished after the feature freeze; same for T14 and T16)
 - **Branch:** `mati/T15-submission`
 - **Depends on / feeds:** needs `docs/CHALLENGE.md`; feeds T16 (demo video and slides), T14 (public URL goes into the text)
 
