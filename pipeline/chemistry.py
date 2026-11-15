@@ -414,14 +414,14 @@ Z_MIN_GALAXY = 0.001         # below this (cz < 300 km/s) a redshift is a Milky 
 Z_LIST = 8
 
 
-REDSHIFT_VERSION = 3     # T112: 2 = galaxies only; T127: 3 = the object at the centre first (older answers asked again)
+REDSHIFT_VERSION = 4     # T131: shared cache retains up to 200 catalogue redshifts
 # SIMBAD object types that are galaxies, quasars or groups / clusters of galaxies (condensed otype codes)
 GALAXY_OTYPES = {"G", "G?", "GiC", "GiG", "GiP", "BiC", "IG", "PaG", "PoG", "SBG", "SyG", "Sy1", "Sy2", "AGN", "AG?",
                  "LIN", "QSO", "Q?", "Bla", "Bz?", "BLL", "BL?", "rG", "H2G", "LSB", "bCG", "EmG", "ClG", "C?G", "GrG",
                  "CGG", "LeG", "LeQ", "LeI", "LI?"}
 
 
-def galaxy_redshifts(target: dict) -> dict:
+def galaxy_redshifts(target: dict, limit: int = Z_LIST) -> dict:
     """Galaxies with a measured redshift in the field, biggest first (they dominate the map), from SIMBAD
     `basic.rvz_redshift`: {"galaxies": [{name, otype, z, cz_km_s, quality, major_arcmin, sep_arcmin, ra_deg,
     dec_deg}], "provenance": {...} | None}. Network errors: empty list, provenance None."""
@@ -456,7 +456,7 @@ def galaxy_redshifts(target: dict) -> dict:
         # in SIMBAD) off the list behind 8 bigger galaxies around it.
         size = [maj[i] if has_maj[i] else 0.0 for i in range(n)]
         covers = [sep[i] <= 1.0 or sep[i] <= size[i] / 2 for i in range(n)]
-        order = sorted(range(n), key=lambda i: (not covers[i], -size[i], sep[i]))[:Z_LIST]
+        order = sorted(range(n), key=lambda i: (not covers[i], -size[i], sep[i]))[:limit]
         gal = [{"name": " ".join(str(cols["main_id"][i]).replace("NAME ", "").split()), "otype": str(cols["otype"][i]),
                 "z": round(float(z[i]), 5), "cz_km_s": round(float(z[i]) * 299792.458),
                 "quality": qual[i] or None, "major_arcmin": round(float(maj[i]), 2) if has_maj[i] else None,

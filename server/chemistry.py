@@ -115,17 +115,10 @@ def redshift(tid: str, request: Request):
     target = json.loads((d / "target.json").read_text(encoding="utf-8"))
     if target.get("synthetic"):
         return {"status": "ready", "id": tid, "galaxies": [], "provenance": None}
-    from pipeline.chemistry import REDSHIFT_VERSION, galaxy_redshifts
-    cache = d / "chemistry" / "redshift.json"
-    if cache.is_file():
-        hit = json.loads(cache.read_text(encoding="utf-8"))
-        if hit.get("version") == REDSHIFT_VERSION:     # T112: answers from before the galaxy-only filter are redone
-            return {"status": "ready", "id": tid, **hit}
-    out = {**galaxy_redshifts(target), "version": REDSHIFT_VERSION}
-    if out["provenance"] is not None:                  # SIMBAD answered: keep it (no answer: ask again next time)
-        cache.parent.mkdir(exist_ok=True)
-        cache.write_text(json.dumps(out, indent=1, ensure_ascii=False), encoding="utf-8")
-    return {"status": "ready", "id": tid, **out}
+    from .redshifts import catalogue
+    from pipeline.chemistry import Z_LIST
+    out = catalogue(d, target)
+    return {"status": "ready", "id": tid, **out, "galaxies": out["galaxies"][:Z_LIST]}
 
 
 @router.get("/api/targets/{tid}/chemistry/candidates")   # T128: before .../chemistry/{name}, which would take it

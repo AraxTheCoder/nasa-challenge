@@ -39,7 +39,7 @@ import numpy as np
 
 from .anomaly import BINS, CLEAN_MASKED
 
-VERSION = 3                  # 3: independent peer groups
+VERSION = 4                  # 4: rest-frame galaxy comparison
 MIN_CELL_SNR = 5.0           # a band's median flux must be this far above its error to count
 MIN_BANDS = 8                # bands (over all epochs) a source needs to be judged
 N_COMPONENTS = 2             # principal shapes on top of the mean shape
@@ -395,7 +395,7 @@ def peer_group(source: dict) -> str:
     from .chemistry import GALAXY_OTYPES
     otype = (source.get("otype") or "").strip()
     kind = (source.get("kind") or "").lower()
-    if otype in GALAXY_OTYPES or any(k in kind for k in ("galaxy", "quasar")):
+    if source.get("spectral_population") == "galaxies" or otype in GALAXY_OTYPES or any(k in kind for k in ("galaxy", "quasar")):
         return "galaxies"
     if "*" in otype or otype in {"BD?", "Y*O", "Y*?"} or any(k in kind for k in ("star", "dwarf")) or source.get("source") in {"gaia_dr3", "vsx"}:
         return "stars"
@@ -406,17 +406,30 @@ def find_outliers(fs: dict, blends=None) -> dict:
     """Learn and score each catalogue population independently; never borrow another population's model."""
     if blends is None:
         blends = _blends(fs["sources"])
+    from .redshift import valid_z
     groups = {}
     items, points, not_judged, scores = [], [], [], {}
     n_judged = n_reference = 0
     for group in dict.fromkeys(peer_group(s) for s in fs["sources"]):
         indices = [i for i, s in enumerate(fs["sources"]) if peer_group(s) == group]
+        group_count = len(indices)
         sub = {k: ([v[i] for i in indices] if k in {
             "sources", "flux_ujy", "err_ujy", "wavelength_um", "bandwidth_um", "masked_fraction"} else v)
                for k, v in fs.items()}
+        if group == "galaxies":
+            known = [j for j, source in enumerate(sub["sources"]) if valid_z(source.get("redshift", source.get("z"))) is not None]
+            unknown = [j for j in range(len(indices)) if j not in known]
+            not_judged.extend({"id": sub["sources"][j]["id"], "name": sub["sources"][j]["name"],
+                               "why": "no reliable redshift for rest-frame peers"} for j in unknown)
+            indices = [indices[j] for j in known]
+            sub = {k: ([v[j] for j in known] if k in {"sources", "flux_ujy", "err_ujy", "wavelength_um", "bandwidth_um", "masked_fraction"} else v)
+                   for k, v in sub.items()}
+            sub["wavelength_um"] = [[None if w is None else w / (1 + valid_z(source.get("redshift", source.get("z")))) for w in row]
+                                    for source, row in zip(sub["sources"], sub["wavelength_um"])]
         result = _find_group(sub, [blends[i] for i in indices])
         groups[group] = {k: result[k] for k in ("summary", "method", "envelope", "n_reference", "components") if k in result}
-        groups[group]["n_sources"] = len(indices)
+        groups[group]["n_sources"] = group_count
+        groups[group]["wavelength_frame"] = "rest" if group == "galaxies" else "observed"
         if "points" not in result:
             not_judged.extend({"id": s["id"], "name": s["name"], "why": f"too few clean, unblended {group} peers (need 3)"} for s in sub["sources"])
             continue
@@ -425,9 +438,12 @@ def find_outliers(fs: dict, blends=None) -> dict:
         for it in result["items"]:
             it["index"] = indices[it["index"]]
             it["peer_group"] = group
+            it["wavelength_frame"] = "rest" if group == "galaxies" else "observed"
             it["reason"] = it["reason"].replace("ordinary sources here", f"ordinary {group} here")
+            if group == "galaxies":
+                it["reason"] += " (Rest-frame wavelengths.)"
             items.append(it)
-        points.extend({**p, "peer_group": group} for p in result["points"])
+        points.extend({**p, "peer_group": group, "wavelength_frame": "rest" if group == "galaxies" else "observed"} for p in result["points"])
         not_judged.extend(result["not_judged"])
         scores.update(result["scores"])
     items.sort(key=lambda it: -it["score"])
@@ -439,7 +455,7 @@ def find_outliers(fs: dict, blends=None) -> dict:
             "summary": (f"{len(items)} of {n_judged} sources stand out within their peer group." if items else
                         f"Nothing out of the ordinary: {n_judged} sources judged within their peer groups." if n_judged else
                         "Not enough clean peers to judge spectra in this field."),
-            "method": "Stars, galaxies/quasars and unclassified sources use separate models and scatter. "
+            "method": "Stars, galaxies/quasars and unclassified sources use separate models and scatter. Galaxies use rest-frame wavelengths; unknown shifts are unjudged. "
                       "Groups with fewer than 3 clean, unblended peers are not scored. "
                       "Shape only, with per-source and epoch brightness removed; deviations require ≥10% and ≥3σ "
                       "in neighbouring bands (or one at ≥6σ), with epoch agreement."}

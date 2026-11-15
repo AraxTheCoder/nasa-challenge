@@ -172,7 +172,7 @@ function shapeChart(d, p, W) {
     g.append(svg("line", { x1: X(u), x2: X(u), y1: m.t, y2: H - m.b, class: "ol-grid" }),
       svg("text", { x: X(u), y: H - m.b + 13, class: "ol-tick", "text-anchor": "middle" }, `${u}`));
   }
-  g.append(svg("text", { x: (m.l + W - m.r) / 2, y: H - 6, class: "ol-axis", "text-anchor": "middle" }, "wavelength (µm)"),
+  g.append(svg("text", { x: (m.l + W - m.r) / 2, y: H - 6, class: "ol-axis", "text-anchor": "middle" }, p.wavelength_frame === "rest" ? "rest-frame wavelength (µm)" : "wavelength (µm)"),
     svg("text", { x: 11, y: (m.t + H - m.b) / 2, class: "ol-axis", "text-anchor": "middle", transform: `rotate(-90 11 ${(m.t + H - m.b) / 2})` },
       "brightness, own level taken out"));
   // field spread: 68 % of the ordinary sources (16th–84th percentile per band)
@@ -214,7 +214,7 @@ function vizBlock(d) {
   const key = (cls, text, color) => el("span", { class: "ol-key" }, el("span", { class: `ol-sw ${cls}`, style: color ? `--c:${color}` : null }), text);
   return el("div", { class: "ol-viz" },
     el("figure", { class: "ol-fig", style: `width:${W}px` },
-      el("figcaption", { class: "small" }, "The field by colour: each dot is a source"),
+      el("figcaption", { class: "small" }, "Colours: galaxies at rest, other sources as observed"),
       colourChart(d, W),
       el("p", { class: "ol-legend small muted" }, key("ol-sw-ord", "ordinary (defines normal)"), key("ol-sw-odd", "stands out", C_ODD),
         key("ol-sw-sel", "selected", C_SEL), " · click a dot")),
@@ -275,6 +275,28 @@ function varBlock(d) {
   return el("div", { class: "ol-var" }, ...parts);
 }
 
+function redshiftBlock(d) {
+  const rank = { estimated: 0, catalogue: 1, ambiguous: 2, insufficient_evidence: 3, insufficient_data: 4 };
+  const shifts = [...(d.redshifts?.sources ?? [])].sort((a, b) => (rank[a.status] ?? 5) - (rank[b.status] ?? 5));
+  if (!shifts.length) return null;
+  const rows = shifts.map((r) => {
+    const name = el("button", { type: "button", class: "link" }, r.name);
+    name.addEventListener("click", () => openSpectrum(r.ra_deg, r.dec_deg, r.name));
+    const text = r.status === "catalogue" ? `z = ${r.z} · catalogue (${r.origin}${r.quality ? `, quality ${r.quality}` : ""})` :
+      r.status === "estimated" ? `z ≈ ${r.z} · experimental spectrum estimate` :
+      r.status === "ambiguous" ? "redshift uncertain · competing shifts or search boundary" : "redshift uncertain · insufficient spectral evidence";
+    return el("li", { class: "ol-item" }, name, ` · ${text}`,
+      r.z_interval ? el("p", { class: "small muted" }, `Local fit range ${r.z_interval[0]}–${r.z_interval[1]}; systematic uncertainty is not included.`) : null,
+      r.alternatives?.length ? el("details", {}, el("summary", { class: "small" }, "Possible shifts and supporting features"),
+        ...r.alternatives.map((a) => el("p", { class: "small" },
+          `z ≈ ${a.z} · ${a.profile_name}: ${a.features.filter((f) => f.status === "detected").map((f) => f.name).join(", ")}`))) : null);
+  });
+  return el("section", {}, el("h4", {}, "Redshifts"),
+    el("p", { class: "small muted" }, "Catalogue values are preferred. Missing values are estimated experimentally from multiple emission features over z = 0–1. Uncertain shifts are left out of chemistry matching and galaxy comparisons."),
+    el("ul", { class: "ol-list" }, ...rows.slice(0, SHOW)),
+    rows.length > SHOW ? el("details", {}, el("summary", {}, `Show ${rows.length - SHOW} more`), el("ul", { class: "ol-list" }, ...rows.slice(SHOW))) : null);
+}
+
 function profileBlock(d) {
   const profiles = d.chemistry_profiles;
   if (!profiles) return null;
@@ -285,12 +307,12 @@ function profileBlock(d) {
     matches.length ? el("ul", { class: "ol-list" }, ...matches.map((m) => {
       const name = el("button", { type: "button", class: "link" }, m.name);
       name.addEventListener("click", () => openSpectrum(m.ra_deg, m.dec_deg, m.name));
-      return el("li", { class: "ol-item" }, name, ` · ${m.profile_name}`,
+      return el("li", { class: "ol-item" }, name, ` · ${m.profile_name}${m.redshift_origin !== "rest" ? ` · z=${m.z} (${m.redshift_origin})` : ""}`,
         el("p", { class: "small" }, m.features.map((f) => f.status === "insufficient_coverage"
           ? `${f.name ?? f.feature}: insufficient coverage` : `${f.name ?? f.feature}: ${f.pct > 0 ? "+" : ""}${f.pct}% (${f.significance}σ, ${f.epochs_agree}/${f.epochs_seen} epochs agree)`).join(" · ")),
         el("p", { class: "small muted" }, m.caveats.join(" ")));
     })) : el("p", { class: "small muted" }, "No multi-feature candidates meet the thresholds. Missing wavelength coverage can prevent a match."),
-    profiles.skipped?.length ? el("p", { class: "small muted" }, "Galaxy and quasar profiles skipped where source redshifts are unknown.") : null);
+    profiles.skipped?.length ? el("p", { class: "small muted" }, "Galaxy and quasar profiles remain unscored where a reliable redshift is unavailable.") : null);
 }
 
 function render() {
@@ -310,6 +332,7 @@ function render() {
     const items = d.items ?? [];
     const nj = d.not_judged ?? [];
     parts.push(el("p", { class: items.length ? "" : "muted" }, d.summary ?? ""));
+    parts.push(redshiftBlock(d));
     parts.push(profileBlock(d));
     parts.push(vizBlock(d));
     if (items.length) {

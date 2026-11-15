@@ -1,4 +1,8 @@
-# Contracts (v0.41)
+# Contracts (v0.42)
+
+v0.42 (T131): spectral-outliers algorithm `version: 4` compares galaxy spectra in the rest frame and adds
+`redshifts`. Automatic chemistry matches (`chemistry_profiles.version: 2`) accept spatially associated
+catalogue redshifts or unambiguous experimental spectral estimates. See T131 below.
 
 v0.41 (T129): community comments add optional kind/title/evidence and recent activity accepts
 `unanswered=true`. Existing discussions migrate in place; saved evidence and direct discussion links
@@ -935,3 +939,49 @@ This searches catalogue-source spectra; T128's image-spot search covers a differ
 Chemistry map reprojections are cached at `<target>/chemistry/samples/*.npz`, keyed by input file path,
 size/mtime, output grid and sampling version. Feature selection and redshift reuse this shared input;
 changing the input or grid regenerates it. These files fall under the existing target-cache eviction policy.
+
+
+### T131: redshift resolution and rest-frame comparison (v0.42)
+
+The ready `/api/targets/<id>/spectral-outliers` result adds
+`redshifts: {version, range: [0, 1], method, catalogue_provenance, sources}`.
+Stars and brown dwarfs are excluded from the search. Eligible sources prefer a valid label redshift,
+then a unique SIMBAD association within 3 arcsec, then a spectrum-based estimate. Existing catalogue
+values are never replaced by spectral guesses. Catalogue and estimated shifts enrich in-memory source
+metadata; raw aperture spectra and target labels are not rewritten.
+
+The map redshift endpoint and automatic source analysis share `chemistry/redshift.json` (cache version 4).
+The cache retains up to 200 query results, while the map endpoint continues returning its first 8 central/
+large galaxies. Failed lookups back off for 60 seconds and do not prevent spectral fitting. Successful
+catalogue responses carry the original query and retrieval timestamp. A change to this cache invalidates
+the derived field analysis, without remeasuring exposures.
+
+Each `redshifts.sources` entry has `id, name, ra_deg, dec_deg, status, origin, alternatives`.
+`status: catalogue` includes `z, quality` with origin `SIMBAD` or `label`.
+`status: estimated` includes `z, z_interval, peak_gap, reason` with origin `spectrum`.
+`status: ambiguous` returns null `z` and the competing alternatives; `insufficient_data` and
+`insufficient_evidence` do not provide a usable shift. Alternatives include
+`z, profile, profile_name, score, reduced_chi2, features, z_interval`. Intervals are local curvature-based
+fit intervals, not calibrated confidence limits; noise/systematic/template errors can exceed them.
+
+The experimental search fits a quadratic log-continuum with separate epoch levels plus nonnegative
+Gaussian emission features for the existing starburst/quasar presets, with widths approximated from
+measured channel bandwidth and intrinsic preset width. It scans log(1+z) with step .004, refines peaks,
+and requires two features >=10% and >=3 sigma plus the existing local-continuum/epoch-agreement check.
+The score is chi-square improvement over continuum, minus active-feature BIC and grid-trial penalties.
+It requires score >=20, rejects a global reduced chi-square >5, and leaves shifts ambiguous near search
+boundaries or when another separated peak is within 10 score units or >=half the best score.
+These thresholds are experimental, not measured purity/completeness claims. This is a restricted emission-
+feature search, not an empirical full-SED redshift library, absorption-only galaxy fitter, or radial-velocity
+measurement. The current z<=1 range is explicit, even though more distant objects exist.
+
+`chemistry_profiles.matches` adds `redshift_origin` (`rest`, `label`, `SIMBAD`, `spectrum`). Galaxy/quasar
+profiles use a reliable resolved shift, including z=0 when supplied; stellar sources are excluded from
+those profiles. Missing/ambiguous shifts are reported in `skipped`. Ordinary stellar/place profiles
+retain their existing rest-wavelength checks.
+
+Spectral outlier `version: 4` divides each galaxy source's measured wavelengths by (1+z) before binning
+and modelling. Galaxy sources without a usable shift go to `not_judged`, rather than being compared in
+observed wavelengths. `items`, `points`, and each group add `wavelength_frame` (`rest` for galaxies,
+`observed` otherwise); the selected shape chart labels rest-frame wavelengths. Group `n_sources` includes
+all members, including those without redshifts; `n_judged` still counts only scored sources.

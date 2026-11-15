@@ -23,7 +23,7 @@ def test_water_and_methane_match_brown_dwarf():
     match = next(m for m in out['matches'] if m['profile'] == 'brown_dwarfs')
     assert all(f['status'] == 'detected' for f in match['features'])
     assert all(f['epochs_agree'] == 3 for f in match['features'])
-    assert out['skipped']
+    assert not any(m['profile'] in ('quasars', 'starburst') for m in out['matches'])
 
 
 def test_emission_does_not_match_absorption_profile():

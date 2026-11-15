@@ -452,6 +452,7 @@ def test_spectral_outliers_job(tmp_path, monkeypatch):
     assert len(list((tmp_path / "spectra").glob("*.json"))) == 60          # clicks on these sources are instant
 
     from server import fieldspectra as api
+    monkeypatch.setattr("server.redshifts.catalogue", lambda *args: {"galaxies": [], "provenance": None})
     assert "chemistry_profiles" in body and "groups" in body
     # Catalogue reclassification invalidates derived analysis without remeasuring images.
     target["labels"][5]["otype"] = "G"
