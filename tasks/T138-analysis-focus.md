@@ -38,4 +38,10 @@ Validation: 11 Node suites pass (including extended field_focus_check and T139 b
   - Not changed: a click still builds a field centred there (your design). Mati's analysis noted the cost on his
     8 GB machine (four overlapping 14′ fields from four clicks near Barnard's Star; no local cap on parallel builds);
     a proposal follows separately.
+- 2026-11-15 [Mati] T142 (on Mati's word, Decision in TEAM.md): your `focusAnalysis()` now first asks
+  `reusableField()`: a click well inside the full field shown (1/4 of its side; not `…-d<n>` tile fields) only opens
+  the spectrum; one well inside a field built / building for an earlier click selects that field again (same req).
+  Builds go through `buildFocus()`: one at a time, newest click next, and `loadField(..., {stillWanted})` doesn't show
+  a build whose click was overtaken. A new field is still centred exactly on the click (your browser test's 1e-5 and
+  5 decimals hold; I reasoned it through, didn't run it). Test: web/tests/click_build_check.mjs.
 

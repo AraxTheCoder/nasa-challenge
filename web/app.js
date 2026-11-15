@@ -251,7 +251,8 @@ function loadFromUrl() {
 
 /** Build (or fetch the cached) field req. quiet (T55 automatic builds): no progress panel, no error popup:
  *  progress and errors go to the blink indicator instead. */
-async function loadField(req, { quiet = false, autoKey = null, preserveView = false, keepFocus = false } = {}) {
+async function loadField(req, { quiet = false, autoKey = null, preserveView = false, keepFocus = false,
+                                stillWanted = null } = {}) {
   if (!quiet && !keepFocus) {
     app.analysisFocus = null;
     document.dispatchEvent(new CustomEvent("analysis:clear"));
@@ -275,6 +276,7 @@ async function loadField(req, { quiet = false, autoKey = null, preserveView = fa
     };
     const { id, targetUrl } = await requestField(app.api, req, { onProgress, signal });
     if (token !== app.loadToken) return;
+    if (stillWanted && !stillWanted()) return;            // T142: a click field whose click was overtaken: cached only
     await openTarget(targetUrl, id, token, signal, autoKey, preserveView);
   } catch (err) {
     if (err.name === "AbortError" || token !== app.loadToken) return;
@@ -473,10 +475,64 @@ function showGoal() {
   openSpectrum(g.ra, g.dec, null, { focusRegion: true });
 }
 
+// T142: T138's click = analyse here, without a field per click (Mati's machine built four nearly identical 14′ fields
+// from four clicks near Barnard's Star, side by side; a build the page stopped waiting for still runs to the end).
+const FOCUS_CORE = 0.25;         // "well inside": within this x side of a field's centre, in RA and in Dec
+const FOCUS_KEEP = 12;           // fields built for clicks this session, remembered for reuse
+const focusFields = [];          // {req, key}, newest last
+const focusBuild = { running: null, next: null };
+
+/** Is (ra, dec) well inside the square field at centre c (deg) with this side (arcmin)? */
+function inCore(c, side, ra, dec) {
+  if (!c || !(side > 0)) return false;
+  const dx = ((((ra - c.ra_deg) % 360) + 540) % 360 - 180) * Math.cos((c.dec_deg * Math.PI) / 180) * 60;
+  return Math.abs(dx) <= FOCUS_CORE * side && Math.abs((dec - c.dec_deg) * 60) <= FOCUS_CORE * side;
+}
+
+/** T142: a field this click can use instead of a new one: "shown" = the full field analysed now (same size) has it
+ *  well inside (one-band automatic tile fields, id …-d<n>, don't count: spectra need every band); else a field built
+ *  or building for an earlier click that has it well inside ({req, key}); else null. */
+function reusableField(ra, dec, size) {
+  const t = app.shownTarget;
+  if (t && !t.synthetic && !/-d\d+$/.test(t.id ?? "") && Number(t.size_arcmin) === Number(size) &&
+      inCore(t.center, size, ra, dec)) return "shown";
+  for (let i = focusFields.length - 1; i >= 0; i--) {
+    const f = focusFields[i];
+    if (Number(f.req.size) === Number(size) &&
+        inCore({ ra_deg: Number(f.req.ra), dec_deg: Number(f.req.dec) }, size, ra, dec)) return f;
+  }
+  return null;
+}
+
+/** T142: one click field builds at a time. A click while one builds waits (a newer click replaces it); the build
+ *  that ends after the selection moved on stays cached on the server but isn't shown, then the waiting one starts. */
+function buildFocus(req, key) {
+  if (!focusFields.some((f) => f.key === key)) focusFields.push({ req, key });
+  if (focusFields.length > FOCUS_KEEP) focusFields.shift();
+  if (focusBuild.running === key) { focusBuild.next = null; return; }   // back to the one building: wait for it
+  if (focusBuild.running) {
+    focusBuild.next = { req, key };
+    explore.markField(Number(req.ra), Number(req.dec), Number(req.size));   // where the next analysis will be
+    return;
+  }
+  focusBuild.running = key;
+  loadField(req, { preserveView: true, keepFocus: true, stillWanted: () => app.analysisFocus?.key === key })
+    .finally(() => {
+      focusBuild.running = null;
+      const next = focusBuild.next;
+      focusBuild.next = null;
+      if (next && app.analysisFocus?.key === next.key) buildFocus(next.req, next.key);
+    });
+}
+
 /** Point selection: the spectrum and region tools refer to the same sky position. */
 function focusAnalysis(ra, dec) {
   if (app.dataRoot || !Number.isFinite(ra) || !Number.isFinite(dec) || dec < -90 || dec > 90) return;
-  const req = { ra: (((ra % 360) + 360) % 360).toFixed(5), dec: dec.toFixed(5), size: readForm().size };
+  const size = readForm().size;
+  // T142: the field analysed now has the click well inside: it covers it, only the spectrum (opened by the caller)
+  const reuse = reusableField(((ra % 360) + 360) % 360, dec, size);
+  if (reuse === "shown") return;
+  const req = reuse?.req ?? { ra: (((ra % 360) + 360) % 360).toFixed(5), dec: dec.toFixed(5), size };
   const key = `${req.ra}|${req.dec}|${req.size}`;
   if (app.analysisFocus?.key === key && (app.explicitLoading || app.shownTarget)) return;
   app.analysisFocus = { key, ra: Number(req.ra), dec: Number(req.dec), size: req.size };
@@ -490,7 +546,7 @@ function focusAnalysis(ra, dec) {
   passes.setMode("passes");
   fillForm(req);
   setPageUrl(req, true, true);
-  loadField(req, { preserveView: true, keepFocus: true });
+  buildFocus(req, key);                                   // T142: was a loadField per click
 }
 
 /** 📍 picks follow the same analysis path as a direct map click. */
