@@ -448,6 +448,7 @@ Things waiting on a human.
   against the new scope: please decide with Mati whether it still goes ahead. Survey pilot results (7 fields,
   for reference): Eps Ind B came out as a brown dwarf by itself, the Barnard field's RR Lyrae and eclipsing
   binary as variables (scatter within an epoch); notes in tasks/T73–T75.
+- 2026-11-15 [Mati (Claude) → Jonathan, all] The four open B tasks (T61 appear/vanish, T62 candidate ranking, T67 detector-artifact rule, T70 motion classes for detections) all need T06's detections, and there are none: no `detections` in any built field, `detect/run.py` step 1 is still a placeholder, no T06 branch on origin. They also sit outside the scope Decision of 2026-11-14 (visualization only, no automatic discovery). I leave them untouched. Jonathan: is T06 still going ahead? If not, these four and T06 could move to Parked.
 
 ## Log
 
