@@ -1,6 +1,6 @@
 # T14: Public deploy at https://nasa.jbarkoczi.de/
 
-- **Owner:** Joerg  ·  **Status:** doing
+- **Owner:** Joerg  ·  **Status:** done
 - **Branch:** `joerg/T14-docker`
 - **Depends on / feeds:** T58 (public limits), T97/T125 (cache sweep), T15 (submission link)
 
@@ -13,7 +13,7 @@ uses the same origin as API, `web/api.js`), public limits on, caches capped.
       --public --trust-proxy`) and `web` (nginx: `/` → `/web/`, static `web/` + `fixtures/`, `/api/` → api)
 - [x] published only on the WireGuard address (10.0.0.2), port 8090; data/ bind-mounted (warm caches)
 - [x] AWS nginx server block for Joerg (`deploy/docker/README.md`); end to end through the stack checked
-- [ ] Joerg: certificate + server block on AWS; then check https://nasa.jbarkoczi.de/ from outside
+- [x] Joerg: certificate + server block on AWS; checked https://nasa.jbarkoczi.de/ from outside
 
 ## Findings / handoff
 - Stack: `deploy/docker/compose.yaml` (`api` = python:3.13-slim + requirements.lock, runs as uid 1001 so data/ files
@@ -27,5 +27,10 @@ uses the same origin as API, `web/api.js`), public limits on, caches capped.
   for reading, and the community database is shared on purpose. Stop them before the judging if in doubt.
 - Gotcha: on a non-default port the viewer looks for the API on :8000 (web/api.js); through the public https URL
   (port 443) it uses the same origin. Testing the stack locally: add `&api=http://10.0.0.2:8090`.
+
+- Live 2026-11-15 ~20:50 CET: AWS nginx (35.157.128.38 / IPv6) uses the `jbarkoczi.de` certificate, now expanded
+  with nasa.jbarkoczi.de (valid to 2027-02-13). From outside: `/` 302 → `/web/`, `/api/health` ok, a 10′ Orion field
+  built in a browser with every request on nasa.jbarkoczi.de, no 5xx, no page errors.
+- Gotcha for the AWS side: nginx refuses its whole config when one certificate file is missing (all sites down).
 
 ## Notes from others
