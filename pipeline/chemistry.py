@@ -35,26 +35,20 @@ import numpy as np
 
 # id: (name, centre µm, half-width µm, kind, what it is). Centres as web/spectrum.js FEATURES (T63) + water bands.
 FEATURES = {
-    "h_alpha": ("Hα", 0.6563, 0.0, "line", "hydrogen's strongest line. At rest it lies below SPHEREx's 0.75 µm: seen in "
-                "galaxies and quasars from z ≈ 0.15 on (T127)"),
-    "pa_beta": ("Pa-β", 1.282, 0.0, "line", "hydrogen emission: hot gas around young or hot stars, emission nebulae"),
-    "h2o_14": ("H₂O 1.4 µm", 1.40, 0.05, "band", "water in cool atmospheres (M/L/T dwarfs), absorption"),
-    "pa_alpha": ("Pa-α", 1.8751, 0.0, "line", "the strongest near-infrared hydrogen line (hidden from the ground by the "
-                 "atmosphere): hot gas around young stars, nebulae, galaxies and quasars (T127)"),
-    "h2o_19": ("H₂O 1.9 µm", 1.90, 0.06, "band", "water in cool atmospheres (M/L/T dwarfs), absorption"),
-    "br_gamma": ("Br-γ", 2.166, 0.0, "line", "hydrogen emission: hot gas around young or hot stars, emission nebulae"),
-    "co_23": ("CO 2.3 µm", 2.34, 0.05, "band", "carbon-monoxide band heads (2.29–2.39 µm) in the atmospheres of cool "
-              "giants and brown dwarfs, absorption (T127)"),
-    "h2o_ice": ("H₂O ice", 3.05, 0.08, "ice", "water ice on cold dust grains, seen against the stars behind a cold "
-                "cloud. Inside bright nebulae the broad PAH emission (3.2–3.6 µm) raises the continuum: dark there "
-                "can mean PAH, not ice"),
+    "h_alpha": ("Hα", 0.6563, 0.0, "line", "hydrogen's strongest line; at rest below SPHEREx's 0.75 µm, reached from z ≈ 0.15"),
+    "pa_beta": ("Pa-β", 1.282, 0.0, "line", "hydrogen emission: hot gas around young or hot stars, nebulae"),
+    "h2o_14": ("H₂O 1.4 µm", 1.40, 0.05, "band", "water absorption in cool atmospheres (M/L/T dwarfs)"),
+    "pa_alpha": ("Pa-α", 1.8751, 0.0, "line", "strongest near-infrared hydrogen line (blocked from the ground): young stars, nebulae, galaxies, quasars"),
+    "h2o_19": ("H₂O 1.9 µm", 1.90, 0.06, "band", "water absorption in cool atmospheres (M/L/T dwarfs)"),
+    "br_gamma": ("Br-γ", 2.166, 0.0, "line", "hydrogen emission: hot gas around young or hot stars, nebulae"),
+    "co_23": ("CO 2.3 µm", 2.34, 0.05, "band", "CO absorption (2.29–2.39 µm) in cool giants and brown dwarfs"),
+    "h2o_ice": ("H₂O ice", 3.05, 0.08, "ice", "water ice on cold dust, against light behind a cloud; in bright nebulae dark can be PAH, not ice"),
     "pah": ("PAH", 3.29, 0.03, "band", "PAH molecules glowing in UV light (star-forming regions, galaxies)"),
-    "ch4": ("CH₄", 3.32, 0.08, "band", "methane in the atmospheres of cool brown dwarfs (T and Y types) and giant "
-            "planets, absorption. Same wavelengths as the PAH glow: in a nebula, bright = PAH, not methane (T127)"),
-    "ch3oh_ice": ("CH₃OH ice", 3.53, 0.03, "ice", "methanol ice on cold dust grains"),
-    "br_alpha": ("Br-α", 4.052, 0.0, "line", "hydrogen emission: hot gas around young or hot stars, emission nebulae"),
-    "co2_ice": ("CO₂ ice", 4.27, 0.03, "ice", "carbon-dioxide ice on cold dust grains (one of SPHEREx's main science goals)"),
-    "co_ice": ("CO", 4.67, 0.03, "ice", "carbon-monoxide ice on very cold grains; CO gas absorbs here in cool atmospheres"),
+    "ch4": ("CH₄", 3.32, 0.08, "band", "methane absorption in T/Y brown dwarfs and giant planets; in nebulae bright = PAH"),
+    "ch3oh_ice": ("CH₃OH ice", 3.53, 0.03, "ice", "methanol ice on cold dust"),
+    "br_alpha": ("Br-α", 4.052, 0.0, "line", "hydrogen emission: hot gas around young or hot stars, nebulae"),
+    "co2_ice": ("CO₂ ice", 4.27, 0.03, "ice", "CO₂ ice on cold dust (a main SPHEREx goal)"),
+    "co_ice": ("CO", 4.67, 0.03, "ice", "CO ice on very cold dust; CO gas in cool atmospheres"),
 }
 # T107: ready-made combinations for kinds of places, each tried on real fields (tasks/T107). Visualization only
 # (Decision 2026-11-14): `looks_for` says where to look, `read` what the colours mean, `caveats` what fools it;
@@ -64,85 +58,63 @@ FEATURES = {
 # none at all are listed first.
 PRESETS = [
     {"id": "brown_dwarfs", "group": "object", "expects": ["BD*", "BD?", "LM*", "LM?"], "name": "Brown dwarfs", "features": ["h2o_14", "h2o_19", "ch4"],
-     "looks_for": "brown dwarfs: too cool to be stars, with water and methane in their atmospheres",
-     "read": "A dot dark at all three = white: water (1.4 and 1.9 µm) and methane, a T or Y dwarf. Water only "
-             "(blue + green = cyan): an M or L dwarf, or a cool giant. Red alone: methane only shows, as for the "
-             "coldest ones, too faint at short wavelengths.",
-     "caveats": "Very bright stars leave black-and-white pairs (sharpness differences). In a nebula red is the PAH "
-                "glow, not methane.",
+     "looks_for": "brown dwarfs: too cool to be stars; water and methane in their atmospheres",
+     "read": "White = water + methane (T/Y dwarf) · cyan = water only (M/L dwarf, cool giant) · red only = methane (coldest)",
+     "caveats": "black/white pairs at bright stars (sharpness); red in nebulae = PAH glow",
      "try": {"name": "Epsilon Indi B (two brown dwarfs)", "ra": 331.0966, "dec": -56.8007, "size": 15},
      "tested": "Epsilon Indi B: a white dot at the centre (dark at all three); the bright star Eps Ind A beside it "
                "leaves a big cyan halo (its light). WISE 0855: nothing, too faint for these maps"},
     {"id": "young_stars", "group": "object", "expects": ["TT*", "TT?", "Y*O", "Y*?", "Or*", "Ae*", "Ae?", "pr*", "pr?", "Em*"], "name": "Young stars still growing", "features": ["pa_beta", "pa_alpha", "br_alpha"],
-     "looks_for": "young stars that still pull in gas from their disk (T Tauri stars): it glows in hydrogen lines "
-                  "as it falls onto the star",
-     "read": "A bright dot in all three (white) = hydrogen glowing at the star; often only Pa-α, the strongest, "
-             "shows (green). Redder = more dust in front.",
-     "caveats": "A one-colour halo around a very bright star is its light, not gas; such stars also vary, so a dot "
-                "can be weaker in some exposures.",
+     "looks_for": "young stars still pulling in gas, which glows in hydrogen lines",
+     "read": "Bright dot = hydrogen glowing at the star, often Pa-α only (green) · redder = more dust in front",
+     "caveats": "a one-colour halo around a bright star is its light; these stars vary",
      "try": {"name": "RW Aurigae", "ra": 76.9566, "dec": 30.4013, "size": 15},
      "tested": "RW Aurigae: a green dot (Pa-α) on the star; some other bright stars leave small green dots too"},
     {"id": "cool_giants", "group": "object", "expects": ["Mi*", "Mi?", "LP*", "LP?", "AB*", "AB?", "C*", "C*?", "S*", "S*?", "RG*", "OH*", "OH?", "sr*", "s*r"], "name": "Pulsating cool giants", "features": ["h2o_14", "h2o_19", "co_23"],
-     "looks_for": "cool giant stars near the end of their lives (Miras): water and carbon monoxide in their huge "
-                  "atmospheres",
-     "read": "A dot dark in all three = white: water (blue, green) and CO (red). A Mira is one of the brightest "
-             "stars in the field: the glow of its light around it carries its colours too. Brown dwarfs show water "
-             "as well but are faint.",
-     "caveats": "The brightest giants saturate SPHEREx's detectors: their core is flagged and left empty (a hole "
-                "with a ring).",
+     "looks_for": "cool giants near their end (Miras): water and CO in their atmospheres",
+     "read": "White = water + CO · cyan = water · their glow carries the colours too",
+     "caveats": "the brightest saturate: empty core with a ring",
      "try": {"name": "R Draconis", "ra": 248.1672, "dec": 66.755, "size": 15},
      "tested": "R Draconis: the core saturates (hole); the glow of its light around it is green / cyan (deep water "
                "absorption); CO (red) unclear there"},
     {"id": "protostars", "group": "object", "expects": ["Y*O", "Y*?", "TT*", "TT?", "Or*", "pr*", "pr?", "Ae*", "Ae?", "HH", "IR", "MIR", "FIR", "smm"], "name": "Protostars in ice clouds", "features": ["h2o_ice", "br_alpha", "co2_ice"],
-     "looks_for": "stars being born deep inside a cold cloud: ice in the envelope around them absorbs their "
-                  "light, gas falling onto them glows",
-     "read": "Blue + red = magenta: water and CO₂ ice toward the star; green: hydrogen glowing at it (Br-α, which "
-             "gets through the dust). A green dot inside magenta = a protostar still growing.",
-     "caveats": "Ice shows only against something bright behind or inside it. Blue alone in a bright nebula is the "
-                "PAH glow, not ice.",
+     "looks_for": "stars forming inside cold clouds: ice around them absorbs, infalling gas glows",
+     "read": "Magenta = water + CO₂ ice toward a star · green = hydrogen (Br-α) · green in magenta = a growing protostar",
+     "caveats": "ice shows only against light behind it; blue alone in a nebula = PAH glow",
      "try": {"name": "ρ Ophiuchi dark cloud (L1688)", "ra": 246.79, "dec": -24.54, "size": 30},
      "tested": "ρ Oph: red (CO₂ ice) along the dark filaments with magenta dots on them: stars seen through or inside "
                "the ice; the nebula at the top right white (Br-α with the others); blue stripes are exposure edges"},
     {"id": "starburst", "group": "object", "expects": "galaxies", "name": "Star-forming galaxies", "features": ["pa_beta", "pah", "br_alpha"],
      "needs_z": True,
-     "looks_for": "galaxies forming many stars: young stars light up hydrogen gas and PAH molecules",
-     "read": "Blue = Pa-β, green = PAH, red = Br-α, at the galaxy's redshift (filled in from SIMBAD). White = all "
-             "three: a starburst; green alone = PAH glow without much ionised gas.",
-     "caveats": "Needs the galaxy's redshift (the z box). A galaxy smaller than a few pixels is one dot.",
+     "looks_for": "galaxies forming many stars: hydrogen gas and PAH lit by young stars",
+     "read": "White = all three (starburst) · green only = PAH without much ionised gas",
+     "caveats": "needs the galaxy's redshift; a small galaxy is one dot",
      "try": {"name": "NGC 6240 (two merging galaxies)", "ra": 253.2454, "dec": 2.4009, "size": 15},
      "tested": "NGC 6240 at z = 0.0247 (filled in from SIMBAD): a yellow-green dot (PAH and Br-α), Pa-β weak"},
     {"id": "quasars", "group": "object", "expects": ["QSO", "Q?", "Bla", "Bz?", "BLL", "BL?", "AGN", "AG?", "Sy1", "Sy2", "SyG", "LIN", "LeQ"], "name": "Quasars", "features": ["h_alpha", "pa_beta", "pa_alpha"],
      "needs_z": True,
-     "looks_for": "quasars: hot gas swirling around a giant black hole shines in broad hydrogen lines, shifted to "
-                  "longer wavelengths by the expansion of the universe",
-     "read": "At the quasar's redshift: a dot bright in Hα (blue), Pa-β (green) and Pa-α (red) = white. A quasar "
-             "looks like a star in an image; only its lines at the shifted wavelengths give it away.",
-     "caveats": "Needs the quasar's redshift (the z box; SIMBAD fills it in for a quasar at the centre). Hα reaches "
-                "SPHEREx only from z ≈ 0.15 on.",
+     "looks_for": "quasars: gas around a giant black hole shining in broad, redshifted hydrogen lines",
+     "read": "White dot = all three lines at the quasar's redshift; otherwise it looks like a star",
+     "caveats": "needs the quasar's redshift (z box); Hα only from z ≈ 0.15",
      "try": {"name": "3C 273 (the first quasar found)", "ra": 187.2779, "dec": 2.0524, "size": 15},
      "tested": "3C 273 at z = 0.158 (filled in from SIMBAD): a white dot in all three lines, alone in the field"},
     {"id": "ionised_gas", "group": "place", "name": "Ionised gas", "features": ["pa_beta", "br_gamma", "br_alpha"],
-     "looks_for": "hot hydrogen gas around young or hot stars: emission nebulae, H II regions",
-     "read": "Three hydrogen lines. White = gas in the open. Dust dims the short wavelengths most, so the more dust "
-             "lies in front, the redder: red alone (Br-α) = gas deep inside a cloud, invisible to the eye.",
-     "caveats": "A one-colour halo around a very bright star is the star's light, not gas; the brightest nebula "
-                "cores saturate (black).",
+     "looks_for": "hot hydrogen gas around young or hot stars (H II regions)",
+     "read": "White = gas in the open · redder = more dust in front · red only = gas deep in a cloud",
+     "caveats": "a one-colour halo around a bright star is its light; the brightest cores saturate (black)",
      "try": {"name": "Orion Nebula (M42 and M43)", "ra": 83.8221, "dec": -5.3911, "size": 20},
      "tested": "Orion: M42 white, M43 redder; ρ Oph: only Br-α (red) around the embedded star S1"},
     {"id": "cloud_ices", "group": "place", "name": "Ices in cold clouds", "features": ["h2o_ice", "co2_ice", "co_ice"],
-     "looks_for": "ice on dust grains in dark clouds, seen against the light behind them",
-     "read": "Brighter = deeper absorption. CO₂ (green) and CO (red) together = yellow: the cold dense parts of a "
-             "cloud; white = all three ices.",
-     "caveats": "Blue alone (water ice) inside a bright nebula is the PAH glow, not ice: trust it where green or "
-                "red show too. Straight stripes are exposure edges. A cloud with nothing bright behind it shows nothing.",
+     "looks_for": "ice on dust in dark clouds, against the light behind",
+     "read": "Brighter = deeper · yellow (CO₂ + CO) = cold dense parts · white = all three",
+     "caveats": "blue alone in a nebula = PAH glow; straight stripes = exposure edges; nothing behind = nothing shows",
      "try": {"name": "ρ Ophiuchi dark cloud (L1688)", "ra": 246.79, "dec": -24.54, "size": 30},
      "tested": "ρ Oph: green/yellow along the dense filaments of the dark cloud; Orion and NGC 7023: blue or green "
                "over the bright nebula (PAH, the caveat)"},
     {"id": "cloud_edge", "group": "place", "name": "Lit cloud edges", "features": ["pah", "br_alpha", "co2_ice"],
-     "looks_for": "the layers where starlight meets a cloud: the glowing surface, ionised gas, the icy inside",
-     "read": "Blue = PAH glowing in UV light on the lit surfaces, green = ionised gas (Br-α), red = CO₂ ice in the "
-             "shielded inside. Blue + green = cyan close to the stars.",
-     "caveats": "In the bright cores of big H II regions (Orion) the colours mix and saturate.",
+     "looks_for": "where starlight meets a cloud: lit surface, ionised gas, icy inside",
+     "read": "Blue = PAH on lit surfaces · green = ionised gas (Br-α) · red = CO₂ ice inside · cyan = near the stars",
+     "caveats": "colours mix and saturate in big H II region cores (Orion)",
      "try": {"name": "Iris Nebula (NGC 7023)", "ra": 315.40, "dec": 68.17, "size": 20},
      "tested": "NGC 7023: PAH (blue) fills the reflection nebula, ice (red) in the cloud beside it; ρ Oph: ice "
                "inside the cloud, PAH on the side facing the bright stars; Orion: unclear"},
