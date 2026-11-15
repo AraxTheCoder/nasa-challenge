@@ -852,7 +852,10 @@ function showBlinkStatus() {
   else if (app.manualMap) text = "Blink: map tools / frame viewer below (move to another tile to resume)";
   else if (!passes.passesOn()) text = "Blink: zoom in to level 6";
   else if (key === null) text = "Blink: survey passes · field epochs at level 7";
-  else if (passes.mode() === "epochs") text = "Blink: field epochs";
+  else if (passes.mode() === "epochs") {
+    // T126: a field the zoom built is the map tile in the shown band only (~6 images, to blink); say how to get more
+    text = explicitHere() ? "Blink: field epochs" : "Blink: field epochs, this band only · ▭ Select region to analyse all bands";
+  }
   else {
     text = "Blink: survey passes";
     if (autoField.building === key) {
