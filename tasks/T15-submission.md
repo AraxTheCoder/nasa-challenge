@@ -1,6 +1,6 @@
 # T15: Submission text, data credits and AI-use disclosure
 
-- **Owner:** Mati  ·  **Status:** open (on hold: Mati, 2026-11-15: the text changes with every new feature, so it is finished after the feature freeze; same for T14 and T16)
+- **Owner:** Mati  ·  **Status:** review (final text written 2026-11-15 evening; open items need humans, see Handoff)
 - **Branch:** `mati/T15-submission`
 - **Depends on / feeds:** needs `docs/CHALLENGE.md`; feeds T16 (demo video and slides), T14 (public URL goes into the text)
 
@@ -13,7 +13,12 @@ summary, detailed description, data used, references, AI-use disclosure, links. 
 - [x] Find what the 2026 project page asks for and the deadline; fill the two TODOs in `docs/CHALLENGE.md`
 - [x] `docs/SUBMISSION.md`: one section per form field, text checked against what the tool really does today (first draft)
 - [x] README "Data credits": exact data set names, releases, DOIs, acknowledgement texts (SPHEREx/IRSA, Gaia, SIMBAD, JPL, MPC, SkyBoT, 2MASS, AllWISE)
-- [ ] README "AI-use disclosure" and "Team": final wording, names from the humans
+- [x] README "AI-use disclosure": Claude Code + OpenAI Codex (T129–T140), no AI-generated media
+- [x] README "Team" + "License": team `_P$YcHoNaUt$_` (Jonathan, Jörg, Mateusz); GPL-3.0-or-later
+- [x] Demo video checked (30.0 s, 1080p); picture and sound AI-generated (Mati) → copy marked "AI-generated video and audio" for its whole length
+- [x] Public demo link: video in `docs/demo/`, served by jsDelivr pinned to commit 725e92d (plays in the browser; GitHub's own page only offers a download)
+- [ ] Live URL (T14) into `docs/SUBMISSION.md`
+- [x] Final text (2026-11-15 ~18:30 UTC): every claim checked against the code on main, every Objective and Consideration answered
 - [x] Map each challenge objective / consideration to the feature that covers it (for the description and for T16)
 
 ## Findings
@@ -36,6 +41,23 @@ summary, detailed description, data used, references, AI-use disclosure, links. 
 - The other acknowledgement texts (Gaia, SIMBAD, MPC, 2MASS, WISE, IRSA) are the standard ones, written
   from memory; fine for the project page, compare with the archive pages before a paper.
 
+- **Final pass, 2026-11-15 ~18:30 UTC** (checked against the code on main, commit d77383b, and the task files):
+  - The repository moved: `jabra11/nasa-challenge` redirects to <https://github.com/AraxTheCoder/nasa-challenge>,
+    which is **public** (GitHub API: `visibility: public`, same HEAD as our main). No licence yet.
+  - The click panel has no light curve since T140: a spectrum per visit and "Changes between visits" at matched
+    wavelengths. Text changed accordingly.
+  - Stacks (T59/T69) and the hatched no-data background draw on the frame image, which is hidden in the default
+    map view (`body.map-only #stage`); they show with `?frames=1`. The text says "in the frame view".
+  - Quick picks: 5 official (`web/presets.json`) + 20 (`web/discover.json`: 10 fastest-moving stars, 10 brown dwarfs).
+  - Chemistry: 14 features, 9 presets (6 objects, 3 places), `pipeline/chemistry.py`.
+  - WISE 0855 is now measured (T119: 7.22 ± 1.02″/yr vs 8.15), so it is back in the results (Joerg's correction
+    of the earlier draft no longer applies).
+  - "Codex" sessions (T129–T140, Joerg's machine, branches `codex/…`) are AI-assisted work too; the AI section
+    names OpenAI Codex. Joerg to confirm the tool name.
+  - Aladin Lite is only in `pipeline/reference/` prototypes; the map is our own WebGL HiPS renderer.
+  - The official guide still can't be opened from this machine (TLS); a search on 2026-11-15 found no character
+    limit for the summary. Field lengths now: summary 1,120 characters, detailed description ~10,900.
+
 ## Questions / needs from others
 - [to Joerg, Jonathan] the name each of you wants printed under Team (README + project page).
 - [to Joerg, Jonathan] project title: README says "Planet X and SPHEREx (working title)". Proposals welcome; otherwise Mati picks one.
@@ -50,9 +72,20 @@ summary, detailed description, data used, references, AI-use disclosure, links. 
   the listed libraries (the form asks for all of them).
 
 ## Handoff
-- `docs/SUBMISSION.md`: one section per form field. Search it for **OPEN** to see what is missing
-  (project name, demo link, live URL, team names, flags row, AI field name).
+- `docs/SUBMISSION.md`: one section per form field, final. Its top list "Still open before submitting" names
+  what only humans can fill: demo link (T16), live URL (T14), team names, Codex tool name (Joerg), licence, and a
+  look at the live form's limits. Project name: "SPHEREx Blink", as in the viewer's title and the pitch deck.
 - Whoever pastes the text into the form: paste, then compare with the live form's limits.
+
+- **Live form seen (2026-11-15 ~20:00 CET, Mati's screenshots):** Project Summary (Project Name; Summary: plain
+  text, limit 1500 characters, 50–200 words suggested), Project Links (Project Demonstration: public link, no login;
+  Project: public link, Mati: **the deployed tool**), Project Information (Project Details: rich-text editor; asks
+  what it does, benefits, intended impact, tools/languages/hardware/software, creativity, factors considered), NASA
+  Data and Space Agency Partner & Other Data (rows of Link Text + Link Url; "all code, text and images used").
+  `docs/SUBMISSION.md` follows this structure now; new sections Intended impact, What is creative, Factors we
+  considered; every URL opened on 2026-11-15.
+- Paste helper: `spherex-blink-form-text.html` in Mati's Downloads (generated from `docs/SUBMISSION.md`; one box per
+  field with a Copy button; Project Details copies as rich text). Regenerate after the live URL is in.
 
 ## Notes from others
 - 2026-11-15 [Joerg (Claude) → Mati] For the submission, from my side:

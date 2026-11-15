@@ -30,6 +30,8 @@ aligns them and the viewer blinks them. What works today:
 - chemistry maps: where ices, PAH or hydrogen lines absorb or emit, one feature or several as one colour picture,
   presets tried on real fields, and a redshift for galaxies (T93, T96, T107–T109)
 
+Live tool: <https://nasa.jbarkoczi.de/>. Demo video (30 s): [plays in the browser](https://cdn.jsdelivr.net/gh/AraxTheCoder/nasa-challenge@725e92de1f5096d53af127496fad0ee5df47f2c9/docs/demo/spherex-blink-demo-30s.mp4), file `docs/demo/spherex-blink-demo-30s.mp4`.
+
 Synthetic data appears only in fixture mode and tests, and is labelled as such everywhere. Plan and task board:
 `TEAM.md`.
 
@@ -188,6 +190,8 @@ Text for the project page: `docs/SUBMISSION.md`.
 - **SIMBAD** and **VizieR**, operated at CDS, Strasbourg, France (Wenger et al. 2000; Ochsenbein et al.
   2000), also through the Harvard mirrors; the **AAVSO International Variable Star Index (VSX)** through
   VizieR; the SPHEREx per-detector **HiPS** maps of CDS (HiPS: Fernique et al. 2015).
+- **CatWISE2020** (Marocco et al. 2021, through VizieR), built from NASA's WISE and NEOWISE data: brown dwarf
+  labels and catalogue look-ups; the **AllWISE** and **2MASS** catalogues (through VizieR) for chemistry spots.
 - **Minor Planet Center**: this project has made use of data and services provided by the International
   Astronomical Union's Minor Planet Center (orbit catalogue MPCORB). **SkyBoT**, IMCCE / Paris
   Observatory (Berthier et al. 2006).
@@ -202,15 +206,24 @@ Anything simulated or injected in this project is labelled as synthetic in the d
 
 ## AI-use disclosure
 
-This project was built with the help of Claude (Anthropic) through Claude Code, used for
-planning, code, documentation and repo coordination. Each team member worked with their own
-Claude Code session; the rules those sessions follow are in `CLAUDE.md`. All results were
-reviewed by the team.
+The code, tests and documentation were written by AI coding assistants under the team's direction: Claude
+(Anthropic) through Claude Code, one session per team member, and OpenAI Codex for some tasks (T129–T140,
+marked "Codex" in `TEAM.md`). The rules the Claude Code sessions follow are in `CLAUDE.md`. The team decided
+what to build, reviewed the results and checked them on real data. The tool contains no AI-generated images,
+video or audio; the demo video (picture and sound) is AI-generated and marked as such in the video.
 
 ## Team
 
-_TODO: names._
+Team `_P$YcHoNaUt$_`: Jonathan, Jörg, Mateusz.
 
 ## License
 
-_TODO._
+Copyright (C) 2026 Jonathan, Jörg, Mateusz (team `_P$YcHoNaUt$_`).
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General
+Public License as published by the Free Software Foundation, either version 3 of the License, or (at your
+option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+Public License in `LICENSE` for more details. SPDX: `GPL-3.0-or-later`.
+
+The data the tool shows belong to their archives and missions; see "Data credits".
