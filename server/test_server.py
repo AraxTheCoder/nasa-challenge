@@ -579,3 +579,12 @@ def test_fields_from_before_t06_get_only_the_mover_search(tmp_path, monkeypatch)
     assert t["known_objects"][0]["name"] == "433 Eros"                      # kept, not looked up again
     assert any(p["service"] == "detect.movers (T06)" for p in t["provenance"])
     assert client.get(f"/api/targets/{tid}/objects").json() == {"status": "ready", "n": 1}   # once only
+
+
+def test_bad_input_is_400_not_500(client):
+    """T114: NaN coordinates and a settings body that is not a JSON object."""
+    assert client.get("/api/sky-labels", params={"ra": "nan", "dec": 0}).status_code == 400
+    assert client.get("/api/pass-dates", params={"ra": "nan", "dec": 0}).status_code == 400
+    assert client.get("/api/pass-dates", params={"ra": 0, "dec": "nan"}).status_code == 400
+    assert client.post("/api/settings", content=b"notjson").status_code == 400
+    assert client.post("/api/settings", json=[1, 2]).status_code == 400

@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
 import json
+import math
 import threading
 
 # T105: imported here, once, before any request: the pipeline imports these inside functions, and two request
@@ -126,7 +127,7 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
         """T55: dates SPHEREx imaged this point in each survey pass (labels for the map's pass blink)."""
         from pipeline.mirror import IndexNotReady
         from tilegen.render import pass_dates as compute
-        if not (-90 <= dec <= 90):
+        if not (math.isfinite(ra) and -90 <= dec <= 90):       # T114: NaN passes a range check
             raise HTTPException(400, "bad ra/dec")
         try:
             return {"ra": ra % 360, "dec": dec, "passes": compute(ra, dec)}
@@ -138,7 +139,7 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
         """T72: catalogue labels for any patch of the map (SIMBAD, VSX, CatWISE), snapped to a grid
         and cached in memory + data/sky_labels/. ~2-4 s the first time, instant after."""
         from pipeline.labels import sky_labels as compute, sky_region
-        if not (-90 <= dec <= 90) or not (0 < radius <= 5):
+        if not (math.isfinite(ra) and -90 <= dec <= 90) or not (0 < radius <= 5):   # T114: NaN too
             raise HTTPException(400, "bad ra/dec/radius")
         r_ra, r_dec, r_rad = sky_region(ra % 360, dec, radius)
         key = f"{r_ra:.4f}_{r_dec:+.4f}_{r_rad:.2f}"
@@ -294,7 +295,12 @@ def create_app(cache_root: Path = REPO / "data" / "targets", fixture: bool = Fal
     async def set_settings(request: Request):
         if not limits.is_admin(request):                 # T58: a public server's tile mode is not for visitors
             return JSONResponse({"error": "changing settings needs the admin token"}, status_code=403)
-        body = await request.json()
+        try:
+            body = await request.json()
+        except ValueError:                               # T114: not JSON was a 500
+            body = None
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "the body must be a JSON object, e.g. {\"tiles\": \"balanced\"}"}, status_code=400)
         if "tiles" in body:
             try:
                 sky.tiles.set_mode(body["tiles"])      # T55: local | remote | balanced
