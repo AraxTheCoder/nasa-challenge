@@ -18,8 +18,9 @@ const STOPS = [
     text: "Too cold to be stars, too heavy to be planets. SPHEREx measures how they move and, from the wobble Earth's " +
       "orbit gives them, how far away they are.", action: "Show its motion and distance", measure: true },
   { title: "WISE 0855: the coldest brown dwarf known", ra: 133.7598, dec: -7.2422,
-    text: "Colder than the North Pole and invisible to our eyes: it only glows at the red end of SPHEREx's colours. " +
-      "Slide the band towards 4.5 µm: that's where such cold objects shine." },
+    text: "Colder than the North Pole and invisible to our eyes: it only glows at the red end of SPHEREx's colours " +
+      "(slide the band towards 4.5 µm). Too faint for one image, SPHEREx still measures how it moves by stacking them.",
+    action: "Measure its motion (stacked images)", measure: true },
   { title: "RW Aurigae: a star still being born", ra: 76.9566, dec: 30.4013,
     text: "Gas and dust still fall onto it, so its brightness changes from visit to visit. Its spectrum shows each " +
       "visit separately.", action: "Show its spectrum over time" },

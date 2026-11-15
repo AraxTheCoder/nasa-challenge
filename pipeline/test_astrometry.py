@@ -27,11 +27,11 @@ def _wcs(shift_px=(0.0, 0.0)):
     return w
 
 
-def _write(path, stars, pointing_err_px, rng):
+def _write(path, stars, pointing_err_px, rng, noise=0.002):
     """stars: [(ra, dec, flux)]. The header WCS is off by pointing_err_px (what the references must take out)."""
     true = _wcs()
     yy, xx = np.mgrid[0:N, 0:N]
-    img = 0.5 + rng.normal(0, 0.002, (N, N))
+    img = 0.5 + rng.normal(0, noise, (N, N))
     for ra, dec, f in stars:
         x, y = true.all_world2pix(ra, dec, 0)
         img += f * np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * 1.1 ** 2))
@@ -40,8 +40,9 @@ def _write(path, stars, pointing_err_px, rng):
                   fits.ImageHDU(np.zeros((N, N), np.int32), name="FLAGS")]).writeto(path, overwrite=True)
 
 
-def _setup(tmp_path, monkeypatch, pm_arcsec_yr=(3.0, -4.0), star_flux=0.5, neighbour=None):
-    rng = np.random.default_rng(7)
+def _setup(tmp_path, monkeypatch, pm_arcsec_yr=(3.0, -4.0), star_flux=0.5, neighbour=None, detector=1, per_epoch=6,
+           noise=0.002, seed=7):
+    rng = np.random.default_rng(seed)
     refs = [(RA0 + dx / 3600 / math.cos(math.radians(DEC0)), DEC0 + dy / 3600)
             for dx, dy in [(-200, -150), (180, -160), (-170, 170), (160, 190), (0, -220), (-230, 10), (220, 30), (60, 120)]]
     labels = [{"id": f"r{k}", "name": f"Gaia DR3 {k}", "source": "gaia_dr3", "mag": 12.0 + 0.1 * k,
@@ -57,16 +58,16 @@ def _setup(tmp_path, monkeypatch, pm_arcsec_yr=(3.0, -4.0), star_flux=0.5, neigh
               "frames": [{"id": f"f{k}", "mjd": m} for k, m in enumerate((60800.0, 61000.0, 61200.0))], "labels": labels}
     exps, files = [], {}
     for ep, base in enumerate((60800.0, 61000.0, 61200.0), start=1):
-        for k in range(6):
+        for k in range(per_epoch):
             mjd = base + k * 0.5
             url = f"https://x/{ep}-{k}.fits"
             stars = [(ra, dec, 0.3) for ra, dec in refs] + [(*star_at(mjd), star_flux)]
             if neighbour:
                 stars.append((RA0 + neighbour[0] / 3600 / math.cos(math.radians(DEC0)), DEC0 + neighbour[1] / 3600, 0.3))
             p = tmp_path / f"{ep}-{k}.fits"
-            _write(p, stars, pointing_err_px=tuple(rng.normal(0, 0.3, 2)), rng=rng)
+            _write(p, stars, pointing_err_px=tuple(rng.normal(0, 0.3, 2)), rng=rng, noise=noise)
             files[url] = p
-            exps.append(Exposure(obs_id=f"o{ep}{k}", collection="spherex_dr1", detector=1, mjd_start=mjd, mjd_mid=mjd,
+            exps.append(Exposure(obs_id=f"o{ep}{k}", collection="spherex_dr1", detector=detector, mjd_start=mjd, mjd_mid=mjd,
                                  time_utc="", exptime_s=100, wave_min_um=0.7, wave_max_um=1.0, epoch=ep,
                                  fits_url=url, publisher_did=url))
     monkeypatch.setattr(AS.build, "cached_exposures", lambda ra, dec: (exps, {}))
@@ -96,3 +97,14 @@ def test_faint_star_next_to_a_neighbour_is_not_found(tmp_path, monkeypatch):
 def test_parallax_factor_is_about_one_au():
     e, n = AS.parallax_factors(270.0, 66.56, 61000.0)        # near the ecliptic pole: always ~1 AU of wobble
     assert 0.9 < math.hypot(e, n) < 1.1
+
+
+def test_faint_star_measured_from_deep_stacks(tmp_path, monkeypatch):
+    """T119: too faint for good single-exposure fits; each epoch's stack of long-wavelength exposures gives the
+    motion, within its (half-split) error bars."""
+    target = _setup(tmp_path, monkeypatch, pm_arcsec_yr=(-8.0, 1.0), star_flux=0.02, detector=5, per_epoch=25,
+                    noise=0.012, seed=3)
+    r = AS.measure_motion(target, "Test Star", processes=0)
+    assert r["status"] == "ready" and r["measured_in"] == "deep stacks", r.get("message")
+    assert abs(r["pm_east_arcsec_yr"] + 8.0) < 3 * r["err_east"] and abs(r["pm_north_arcsec_yr"] - 1.0) < 3 * r["err_north"]
+    assert all(e["stacked"] == 25 for e in r["epochs"]) and r["err_east"] < 1.5
