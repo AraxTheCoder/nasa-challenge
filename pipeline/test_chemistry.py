@@ -78,7 +78,8 @@ def test_strength_floor_and_direction():
     assert ab[0] == 0 and ab[2] == 0 and ab[3] > 0.99                         # absorption = darker than 128
 
 
-def test_combined_map_colours_and_coverage(tmp_path):
+def test_combined_map_colours_and_coverage(tmp_path, monkeypatch):
+    monkeypatch.setattr(C, "SMOOTH_PX", 0)                                   # the colour logic, unsmoothed (T121)
     n = 8
     # Br-α (4.05 µm, emission): bright in the left half; H₂O ice (3.05 µm, absorption): dark in the top half
     _map(tmp_path, "br_alpha", np.where(np.arange(n)[None, :] < n // 2, 255, 128).repeat(n, 0))
@@ -182,3 +183,24 @@ def test_z_must_be_finite():
             continue
         raise AssertionError(bad)
     assert C.z_of(0.02472) == 0.0247
+
+
+def test_smooth_removes_speckle_keeps_edges_and_big_holes():
+    """T121: a single hot pixel goes, a sharp edge between two regions stays where it is, a one-pixel hole is
+    filled from its neighbours, a big hole (saturated core) stays empty, and nothing outside the coverage leaks in."""
+    n = 40
+    grey = np.full((n, n), 128.0, np.float32)
+    grey[:, 20:] = 200.0                                   # emission region on the right half
+    grey[10, 5] = 255.0                                    # hot pixel
+    cov = np.ones((n, n), bool)
+    cov[30, 8] = False                                     # one-pixel hole
+    cov[25:35, 25:35] = False                              # big hole
+    cov[:, :2] = False                                     # outside the field
+    out, c = C.smooth(grey, cov)
+    assert abs(out[10, 5] - 128) < 5                       # speckle gone
+    assert out[5, 17] < 135 and out[5, 22] > 193           # edge stays sharp to within ~2 pixels
+    assert c[30, 8] and abs(out[30, 8] - 128) < 2          # small hole filled with its neighbours' value
+    assert not c[30, 30] and not c[:, :2].any()            # big hole and outside stay empty
+    assert c[cov].all()                                    # nothing that had data is lost
+    same, c0 = C.smooth(grey, cov, 0)                      # sigma 0: unchanged
+    assert (same == grey).all() and (c0 == cov).all()

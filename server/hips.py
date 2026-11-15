@@ -211,7 +211,7 @@ def layer_image(target_dir: str, mtime: float, key: str) -> tuple[np.ndarray, np
         _, a, b = key.split("-")
         return diff_image(target_dir, mtime, a, b)
     if key.startswith("x-"):
-        return chemistry_image(target_dir, key[2:])
+        return chemistry_image(target_dir, mtime, key[2:])
     return frame_image(target_dir, mtime, key)
 
 
@@ -221,10 +221,12 @@ def _chem_mtime(target_dir: Path, key: str) -> float:
     return max(p.stat().st_mtime for p in ps) if all(p.is_file() for p in ps) else 0.0
 
 
-def chemistry_image(target_dir: str, feature: str) -> tuple[np.ndarray, np.ndarray]:
+@lru_cache(maxsize=32)
+def chemistry_image(target_dir: str, mtime: float, feature: str) -> tuple[np.ndarray, np.ndarray]:
     """T93: the chemistry map (grey 128 = like the continuum) and its coverage; empty if not made yet.
-    T96: feature "a-b[-c]" = those maps as one colour picture (RGB)."""
-    from PIL import Image
+    T96: feature "a-b[-c]" = those maps as one colour picture (RGB). T121: smoothed (pipeline.chemistry.load_map),
+    so kept in memory per map version (mtime) instead of being read again for every tile."""
+    from pipeline.chemistry import load_map
 
     if "-" in feature:
         from pipeline.chemistry import combined_map
@@ -237,8 +239,7 @@ def chemistry_image(target_dir: str, feature: str) -> tuple[np.ndarray, np.ndarr
         t = json.loads((Path(target_dir) / "target.json").read_text(encoding="utf-8"))
         n = int(t["image"]["width"])
         return np.full((n, n), 128.0, np.float32), np.zeros((n, n), bool)
-    a = np.asarray(Image.open(p).convert("LA"), np.float32)
-    return a[..., 0], a[..., 1] > 0
+    return load_map(p)
 
 
 def _grid_wcs(target: dict):
@@ -338,16 +339,26 @@ def _render_tile(target_dir: Path, ep, order: int, npix: int) -> bytes | None:
     alpha = np.zeros(TILE * TILE, np.uint8)
     rr, cc = row[ok], col[ok]
     alpha[ok] = np.where(cov[rr, cc], 255, 0)
+    if key.startswith("x-"):                           # T121: chemistry maps bilinear (no 6″ blocks when zoomed in)
+        from scipy.ndimage import map_coordinates
+        fr, fc = np.clip((h - 1 - y)[ok], 0, h - 1), np.clip(x[ok], 0, w - 1)
+
+        def at(img):
+            return np.clip(map_coordinates(np.asarray(img, np.float32), [fr, fc], order=1, mode="nearest").round(), 0, 255)
+        alpha[ok] = np.where(at(cov * 255.0) >= 128, 255, 0)   # coverage edge at sub-pixel positions, not in steps
+    else:
+        def at(img):
+            return img[rr, cc]
     buf = io.BytesIO()
     if lrgb and mean is None:
         Image.fromarray(np.dstack([rgb.astype(np.uint8).reshape(TILE, TILE, 3), alpha.reshape(TILE, TILE)]), "RGBA").save(buf, "PNG")
         return buf.getvalue()
     if mean.ndim == 3:                                 # T89 false colour: RGBA
         rgb = np.zeros((TILE * TILE, 3), np.uint8)
-        rgb[ok] = mean[rr, cc].astype(np.uint8)
+        rgb[ok] = np.stack([at(mean[..., k]) for k in range(3)], axis=-1).astype(np.uint8)
         Image.fromarray(np.dstack([rgb.reshape(TILE, TILE, 3), alpha.reshape(TILE, TILE)]), "RGBA").save(buf, "PNG")
         return buf.getvalue()
     grey = np.zeros(TILE * TILE, np.uint8)
-    grey[ok] = mean[rr, cc].astype(np.uint8)
+    grey[ok] = at(mean).astype(np.uint8)
     Image.fromarray(np.dstack([grey.reshape(TILE, TILE), alpha.reshape(TILE, TILE)]), "LA").save(buf, "PNG")
     return buf.getvalue()

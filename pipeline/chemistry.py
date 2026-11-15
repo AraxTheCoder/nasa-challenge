@@ -28,6 +28,7 @@ import math
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -214,6 +215,43 @@ def to_grey(diff: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
     return grey, ok, sigma
 
 
+SMOOTH_PX = 0.8              # T121: Gaussian sigma (field pixels, 6.15″) after a 3 × 3 median
+HOLE_FILL = 0.6              # T121: a pixel without data is filled when this much of its Gaussian neighbourhood has data
+
+
+def smooth(grey: np.ndarray, cov: np.ndarray, sigma: float = SMOOTH_PX) -> tuple[np.ndarray, np.ndarray]:
+    """T121: a grey map (128 = like the continuum) without its pixel speckle, for display: a 3 × 3 median (single
+    hot / cold pixels, star residuals; outside the coverage counts as 128) and a light Gaussian normalised over the
+    covered pixels, so edges stay where they are. Holes of a pixel or two inside the coverage are filled from their
+    neighbours; big ones (saturated nebula cores) stay empty. Returns (grey, coverage); ~0.4 s for an 86′ field."""
+    from scipy.ndimage import gaussian_filter, median_filter
+    if sigma <= 0 or not cov.any():
+        return grey, cov
+    med = median_filter(np.where(cov, grey, 128.0).astype(np.float32), 3, mode="nearest")
+    num = gaussian_filter(np.where(cov, med - 128.0, 0.0).astype(np.float32), sigma)
+    den = gaussian_filter(cov.astype(np.float32), sigma)
+    out_cov = cov | (den >= HOLE_FILL)
+    # values also just past the coverage (from the covered neighbours): the map tiles sample bilinearly, and a
+    # neutral 128 there would draw a grey rim around holes and edges
+    out = np.where(den > 1e-3, 128.0 + num / np.maximum(den, 1e-3), 128.0).astype(np.float32)
+    return out, out_cov
+
+
+def load_map(path: Path) -> tuple[np.ndarray, np.ndarray]:
+    """T121: a saved grey map as shown (smoothed): (grey float32, coverage bool); kept in memory per file version."""
+    path = Path(path)
+    return _load_map(str(path), path.stat().st_mtime, SMOOTH_PX)
+
+
+@lru_cache(maxsize=32)
+def _load_map(path: str, mtime: float, sigma: float):
+    from PIL import Image
+    a = np.asarray(Image.open(path).convert("LA"), np.float32)
+    grey, cov = smooth(a[..., 0], a[..., 1] > 0, sigma)
+    grey.flags.writeable = cov.flags.writeable = False          # shared between callers
+    return grey, cov
+
+
 def relevant(exposures, lam0: float, half: float):
     """Exposures whose detector reaches the feature and its continuum (channel ~ λ/40, generous)."""
     reach = half + (CONT_CHANNELS + 1) * lam0 / 35
@@ -388,9 +426,8 @@ def strength(grey: np.ndarray, shows: str) -> np.ndarray:
 
 def combined_map(target_dir: Path, features) -> tuple[np.ndarray, np.ndarray]:
     """(RGB uint8 (h, w, 3), coverage) of 2 or more features' maps, which compute() made first (LookupError if not).
-    Each feature adds its colour times its strength; coverage = where all of them have data."""
-    from PIL import Image
-
+    Each feature adds its colour times its strength; coverage = where all of them have data. T121: from the
+    smoothed maps (load_map)."""
     fs = combo(features)
     rgb = cov = None
     for f, colour in zip(fs, COMBINE_COLOURS[len(fs)]):
@@ -398,14 +435,14 @@ def combined_map(target_dir: Path, features) -> tuple[np.ndarray, np.ndarray]:
         feat = parse_key(f)[0]
         if not p.is_file():
             raise LookupError(f"no {FEATURES[feat][0]} map made yet")
-        a = np.asarray(Image.open(p).convert("LA"), np.float32)
-        s = strength(a[..., 0], SHOWS[feat])
+        grey, has = load_map(p)
+        s = strength(grey, SHOWS[feat])
         if rgb is None:
             rgb, cov = np.zeros(s.shape + (3,), np.float32), np.ones(s.shape, bool)
         if s.shape != cov.shape:
             raise LookupError("the maps were made on different grids (field rebuilt?): make them again")
         rgb += s[..., None] * np.asarray(colour, np.float32)
-        cov &= a[..., 1] > 0
+        cov &= has
     return np.clip(rgb * 255.0, 0, 255).round().astype(np.uint8), cov
 
 
