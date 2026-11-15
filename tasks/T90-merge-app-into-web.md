@@ -57,3 +57,6 @@ Mati's Decision, T76, while this was being merged). Nothing of
   `currentTarget()` has 0 labels for a field whose target.json has 60 (eps Ind field), so anything reading
   `currentTarget().labels` sees none. I worked around (3) for my T91 box (it asks the server by position now);
   (1) and (2) are in your code, so I left them.
+- (Mati, 2026-11-15) Seen in the browser check: in a fresh browser (no localStorage) the Debug box is ticked, so a
+  first-time visitor sees the tile grid, tile ids and the "in flight …" line over the map. +1 to Joerg's note: off by
+  default before the public site / demo video (`?debug=1` to switch on). Left to Jonathan.

@@ -111,10 +111,12 @@ function showLoadError(err) {
 // ---------- loading (shared) ----------
 
 /** Start a new load: cancels the previous one. Returns its token + abort signal. */
-function beginLoad() {
+function beginLoad({ quiet = false } = {}) {
   app.abort?.abort();
   app.abort = new AbortController();
-  clearMessages();
+  // T116: an automatic (quiet) tile build reports to the blink indicator only; it must not wipe the message of
+  // the user's own request (a link with bad coordinates, a failed build) ~2 s after it appeared
+  if (!quiet) clearMessages();
   return { token: ++app.loadToken, signal: app.abort.signal };
 }
 
@@ -237,7 +239,7 @@ function loadFromUrl() {
 /** Build (or fetch the cached) field req. quiet (T55 automatic builds): no progress panel, no error popup:
  *  progress and errors go to the blink indicator instead. */
 async function loadField(req, { quiet = false } = {}) {
-  const { token, signal } = beginLoad();
+  const { token, signal } = beginLoad({ quiet });
   if (!quiet) stopBlink();
   $("#empty-default").hidden = true;
   app.request = req;
@@ -797,7 +799,10 @@ function decideSource() {
   const moved = key !== autoField.key;
   autoField.key = key;
   if (moved && app.manualMap) setManual(false);          // another tile / zoom level: automatic again
-  const ready = (key && autoField.ready.get(key)) || explicitHere();
+  // T115: the asked-for field first while the view is on it. A field built earlier for the same tile (the default
+  // view's tile at Barnard's Star is always built first) replaced it at once: the tour's first stop and a link
+  // to Barnard's Star showed the 86' tile field
+  const ready = explicitHere() || (key && autoField.ready.get(key));
   if (ready && ready !== app.shownTarget) {               // a field built earlier for this tile + band: show it
     app.shownTarget = ready;
     app.shownTargetUrl = new URL(`/api/targets/${encodeURIComponent(ready.id)}/target.json`, app.api).href;

@@ -531,6 +531,13 @@ body.map-only #ph-measure { display: none !important; }
 .chem-list .chem-row:has(input:disabled) { opacity: 0.5; }
 .chem-list p { order: -1; margin: 0 0 4px; white-space: normal; }
 .chem-line { display: block; margin: 2px 0; }
+/* T117: on a phone the list opened at the summary's x and ran off the right edge (and a fixed list is placed by
+   the panel, whose backdrop-filter makes it the containing block): there it opens inside the panel, full width */
+@media (max-width: 600px) {
+  .chem-pick[open] { flex: 1 1 100%; }
+  .chem-list { position: static; margin-top: 6px; max-height: 55vh; overflow-y: auto; }
+  .chem-list .chem-row, .chem-preset { white-space: normal; }
+}
 /* T109: redshift of the object */
 .chem-zrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
 .chem-zrow input { width: 7em; }
