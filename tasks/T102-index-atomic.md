@@ -1,6 +1,6 @@
 # T102: A broken image index repairs itself
 
-- **Owner:** Mati  ·  **Status:** doing
+- **Owner:** Mati  ·  **Status:** done
 - **Branch:** `mati/T102-index-atomic`
 - **Depends on / feeds:** T31 (local SPHEREx image index), T71 (data set up by itself)
 
@@ -23,6 +23,10 @@ missing on the map, the startup line still says "SPHEREx image index ok".
 ## Questions / needs from others
 
 ## Handoff
+- `pipeline/mirror.py`: `build()` writes `index.npz.part` and renames it; `available()` checks once per file
+  version that the zip is complete (reads only its end), renames a broken one to `index.npz.broken` and
+  returns False, so `ensure_background()` and the startup data setup build it again (~3 min).
+- Nothing to do by hand: a machine with a broken index repairs itself at the next start or request.
 
 ## Notes from others
 (anyone may append here, dated and signed)
