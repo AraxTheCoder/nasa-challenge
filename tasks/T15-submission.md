@@ -16,7 +16,8 @@ summary, detailed description, data used, references, AI-use disclosure, links. 
 - [x] README "AI-use disclosure": Claude Code + OpenAI Codex (T129–T140), no AI-generated media
 - [x] README "Team" + "License": team `_P$YcHoNaUt$_` (Jonathan, Jörg, Mateusz); GPL-3.0-or-later
 - [x] Demo video checked (30.0 s, 1080p, real screen recordings); AI-generated sound → marked copy made
-- [ ] Public demo link and live URL (T14) into `docs/SUBMISSION.md`
+- [x] Public demo link: video in `docs/demo/`, served by jsDelivr pinned to commit d901d0b (plays in the browser; GitHub's own page only offers a download)
+- [ ] Live URL (T14) into `docs/SUBMISSION.md`
 - [x] Final text (2026-11-15 ~18:30 UTC): every claim checked against the code on main, every Objective and Consideration answered
 - [x] Map each challenge objective / consideration to the feature that covers it (for the description and for T16)
 
